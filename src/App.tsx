@@ -6,6 +6,8 @@ import { ChatLayout } from './pages/Chat/ChatLayout';
 import { MonitorPage } from './pages/Monitor/MonitorPage';
 import { RemitosList } from './pages/RemitosList';
 import { RemitoEdit } from './pages/RemitoEdit';
+import { ChoferesManager } from './pages/ChoferesManager';
+import PersonalManager from './components/PersonalManager';
 
 function App() {
   return (
@@ -18,6 +20,8 @@ function App() {
             <Route path="/monitor" element={<MonitorPage />} />
             <Route path="/remitos" element={<RemitosList />} />
             <Route path="/remitos/:id" element={<RemitoEdit />} />
+            <Route path="/choferes" element={<ChoferesManager />} />
+            <Route path="/personal" element={<PersonalManager />} />
           </Route>
         </Routes>
       </Router>

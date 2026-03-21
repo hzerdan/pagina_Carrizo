@@ -16,8 +16,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: 'Atención de Chat', path: '/', icon: MessageSquare, disabled: false },
         { name: 'Monitor de Instancias', path: '/monitor', icon: LayoutDashboard, disabled: false },
         { name: 'Monitor de Remitos', path: '/remitos', icon: Truck, disabled: false },
-        { name: 'Choferes', path: '/choferes', icon: Truck, disabled: true },
-        { name: 'Personal AC', path: '/personal', icon: UserCog, disabled: true },
+        { name: 'Choferes', path: '/choferes', icon: Truck, disabled: false },
+        { name: 'Personal AC', path: '/personal', icon: UserCog, disabled: false },
     ];
 
     return (
