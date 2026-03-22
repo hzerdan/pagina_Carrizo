@@ -7,6 +7,11 @@ import { MonitorPage } from './pages/Monitor/MonitorPage';
 import { RemitosList } from './pages/RemitosList';
 import { RemitoEdit } from './pages/RemitoEdit';
 import { ChoferesManager } from './pages/ChoferesManager';
+import { ClientesManager } from './pages/ClientesManager';
+import { ProveedoresManager } from './pages/ProveedoresManager';
+import { TransportistasManager } from './pages/TransportistasManager';
+import { LugaresPesajeManager } from './pages/LugaresPesajeManager';
+import { ArticulosManager } from './pages/ArticulosManager';
 import PersonalManager from './components/PersonalManager';
 
 function App() {
@@ -22,6 +27,11 @@ function App() {
             <Route path="/remitos/:id" element={<RemitoEdit />} />
             <Route path="/choferes" element={<ChoferesManager />} />
             <Route path="/personal" element={<PersonalManager />} />
+            <Route path="/clientes" element={<ClientesManager />} />
+            <Route path="/proveedores" element={<ProveedoresManager />} />
+            <Route path="/transportistas" element={<TransportistasManager />} />
+            <Route path="/lugares-pesaje" element={<LugaresPesajeManager />} />
+            <Route path="/articulos" element={<ArticulosManager />} />
           </Route>
         </Routes>
       </Router>

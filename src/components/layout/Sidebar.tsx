@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, UserCog, LogOut, Truck, X, LayoutDashboard } from 'lucide-react';
+import { MessageSquare, LogOut, Truck, X, LayoutDashboard, Database, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 
@@ -12,12 +13,22 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     const { pathname } = useLocation();
     const { signOut, user } = useAuth();
 
+    const [isMaestrosOpen, setIsMaestrosOpen] = useState(false);
+
     const navLinks = [
         { name: 'Atención de Chat', path: '/', icon: MessageSquare, disabled: false },
         { name: 'Monitor de Instancias', path: '/monitor', icon: LayoutDashboard, disabled: false },
         { name: 'Monitor de Remitos', path: '/remitos', icon: Truck, disabled: false },
-        { name: 'Choferes', path: '/choferes', icon: Truck, disabled: false },
-        { name: 'Personal AC', path: '/personal', icon: UserCog, disabled: false },
+    ];
+
+    const maestrosLinks = [
+        { name: 'Clientes', path: '/clientes', disabled: false },
+        { name: 'Proveedores', path: '/proveedores', disabled: false },
+        { name: 'Empresas Transp.', path: '/transportistas', disabled: false },
+        { name: 'Lugares Pesaje', path: '/lugares-pesaje', disabled: false },
+        { name: 'Artículos', path: '/articulos', disabled: false },
+        { name: 'Choferes', path: '/choferes', disabled: false },
+        { name: 'Personal AC', path: '/personal', disabled: false },
     ];
 
     return (
@@ -63,17 +74,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                         const Icon = link.icon;
                         const isActive = pathname === link.path;
 
-                        return link.disabled ? (
-                            <div
-                                key={link.name}
-                                className="flex items-center px-4 py-3 text-sm font-medium rounded-xl text-gray-400 bg-gray-50 cursor-not-allowed group relative"
-                                title="Próximamente"
-                            >
-                                <Icon className="mr-3 flex-shrink-0 h-5 w-5 text-gray-400" />
-                                {link.name}
-                                <span className="absolute right-4 text-[10px] font-bold uppercase tracking-wider bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full">Prox</span>
-                            </div>
-                        ) : (
+                        return (
                             <Link
                                 key={link.name}
                                 to={link.path}
@@ -93,6 +94,43 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                             </Link>
                         );
                     })}
+
+                    {/* Maestros Collapsible Menu */}
+                    <div>
+                        <button
+                            onClick={() => setIsMaestrosOpen(!isMaestrosOpen)}
+                            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium rounded-xl text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                            <div className="flex items-center">
+                                <Database className="mr-3 flex-shrink-0 h-5 w-5 text-gray-400 group-hover:text-gray-500" />
+                                Entidades Maestras
+                            </div>
+                            {isMaestrosOpen ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                        </button>
+
+                        {isMaestrosOpen && (
+                            <div className="pl-11 pr-4 py-1 flex flex-col space-y-1">
+                                {maestrosLinks.map((link) => {
+                                    const isActive = pathname === link.path;
+                                    return (
+                                        <Link
+                                            key={link.name}
+                                            to={link.path}
+                                            onClick={() => onClose()}
+                                            className={cn(
+                                                "block px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                                                isActive
+                                                    ? "bg-brand-50 text-brand-700"
+                                                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                                            )}
+                                        >
+                                            {link.name}
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </nav>
 
                 {/* Logout area */}
