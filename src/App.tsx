@@ -13,6 +13,8 @@ import { TransportistasManager } from './pages/TransportistasManager';
 import { LugaresPesajeManager } from './pages/LugaresPesajeManager';
 import { ArticulosManager } from './pages/ArticulosManager';
 import PersonalManager from './components/PersonalManager';
+import { PlantillasManager } from './pages/PlantillasManager';
+import { InspeccionesKanbanPage } from './pages/Inspecciones/InspeccionesKanbanPage';
 
 function App() {
   return (
@@ -32,6 +34,8 @@ function App() {
             <Route path="/transportistas" element={<TransportistasManager />} />
             <Route path="/lugares-pesaje" element={<LugaresPesajeManager />} />
             <Route path="/articulos" element={<ArticulosManager />} />
+            <Route path="/plantillas" element={<PlantillasManager />} />
+            <Route path="/inspecciones" element={<InspeccionesKanbanPage />} />
           </Route>
         </Routes>
       </Router>

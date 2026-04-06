@@ -96,8 +96,10 @@ export function RemitoEdit() {
       setRemito({
         id: ctx.remito?.id || null,
         ref: ctx.remito?.remito_ref_externa || 'Sin ref',
-        pedido_id: ctx.pedido?.id || null,
-        pedido: ctx.pedido?.pedido_ref_externa || 'Sin ref',
+        pedido_id: null,
+        pedido: ctx.pedidos && ctx.pedidos.length > 0
+          ? ctx.pedidos.map((p: any) => p.pedido_ref).join(', ')
+          : 'Sin ref',
         estado: ctx.remito?.estado_asignacion || 'Datos Faltantes',
         chofer_id: ctx.remito?.chofer_id || null,
         camion_id: ctx.remito?.camion_id || null,

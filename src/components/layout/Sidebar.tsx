@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, LogOut, Truck, X, LayoutDashboard, Database, ChevronDown, ChevronRight } from 'lucide-react';
+import { MessageSquare, LogOut, Truck, X, LayoutDashboard, Database, ChevronDown, ChevronRight, ClipboardCheck } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 
@@ -19,6 +19,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: 'Atención de Chat', path: '/', icon: MessageSquare, disabled: false },
         { name: 'Monitor de Instancias', path: '/monitor', icon: LayoutDashboard, disabled: false },
         { name: 'Monitor de Remitos', path: '/remitos', icon: Truck, disabled: false },
+        { name: 'Inspecciones Documentales', path: '/inspecciones', icon: ClipboardCheck, disabled: false },
     ];
 
     const maestrosLinks = [
@@ -29,6 +30,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: 'Artículos', path: '/articulos', disabled: false },
         { name: 'Choferes', path: '/choferes', disabled: false },
         { name: 'Personal AC', path: '/personal', disabled: false },
+        { name: 'Plantillas Documentales', path: '/plantillas', disabled: false },
     ];
 
     return (

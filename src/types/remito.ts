@@ -1,5 +1,7 @@
 export interface PedidoVinculado {
   id_instancia?: number;
+  pedido_id?: number;
+  oc_id?: number;
   pedido_ref?: string;
   oc_ref?: string;
   cliente?: string;
@@ -9,6 +11,7 @@ export interface PedidoVinculado {
 export interface RemitoActivo {
   id: number;
   nro_remito: string;
+  archivo_url: string | null;
   chofer_nombre: string | null;
   chofer_telefono: string | null;
   instancias_vinculadas: PedidoVinculado[];
@@ -16,7 +19,7 @@ export interface RemitoActivo {
 
 export interface RemitoContext {
   remito: any;
-  pedido: any;
+  pedidos: Array<{ cliente: string; cantidad: number; pedido_ref: string }>;
   catalogos: Catalogos;
   contexto: any;
 }
