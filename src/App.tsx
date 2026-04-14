@@ -15,6 +15,7 @@ import { ArticulosManager } from './pages/ArticulosManager';
 import PersonalManager from './components/PersonalManager';
 import { PlantillasManager } from './pages/PlantillasManager';
 import { InspeccionesKanbanPage } from './pages/Inspecciones/InspeccionesKanbanPage';
+import { PublicInspectPage } from './pages/PublicInspect/PublicInspectPage';
 
 function App() {
   return (
@@ -22,6 +23,7 @@ function App() {
       <Router>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/inspect/:token" element={<PublicInspectPage />} />
           <Route element={<MainLayout />}>
             <Route path="/" element={<ChatLayout />} />
             <Route path="/monitor" element={<MonitorPage />} />

@@ -8,7 +8,7 @@ export interface InspeccionKanban {
   fecha_pactada: string;
   export_doc_status: string;
   state_code: string;
-  planilla_url: string | null;
+  planilla_completada_url: string | null;
   pedidos: PedidoVinculado[];
 }
 
