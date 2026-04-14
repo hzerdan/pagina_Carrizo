@@ -68,11 +68,11 @@ export function PublicInspectPage() {
       const timestamp = Date.now();
       const storagePath = `resultados/resultado_ins_${data.id}_${timestamp}.${ext}`;
 
-      const { error: uploadError } = await supabase.storage
+      const { error: storageError } = await supabase.storage
         .from(STORAGE_BUCKET)
         .upload(storagePath, selectedFile, { upsert: false });
 
-      if (uploadError) throw uploadError;
+      if (storageError) throw storageError;
 
       const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
       const publicUrl = urlData.publicUrl;
@@ -264,6 +264,13 @@ export function PublicInspectPage() {
                     </button>
                  </div>
                  
+                 {uploadError && (
+                    <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-lg text-red-600 text-xs font-medium animate-in fade-in slide-in-from-top-1">
+                      <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                      {uploadError}
+                    </div>
+                  )}
+                  
                </div>
 
             </div>
