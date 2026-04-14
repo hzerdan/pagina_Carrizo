@@ -68,6 +68,9 @@ export function InspeccionDetailDrawer({
     fecha_hora_carga_pactada: ''
   });
   const [isSavingData, setIsSavingData] = useState(false);
+  const [validationNotes, setValidationNotes] = useState('');
+  const [isFinalizing, setIsFinalizing] = useState(false);
+
 
   useEffect(() => {
     if (isOpen && inspeccion) {
@@ -132,13 +135,17 @@ export function InspeccionDetailDrawer({
       fetchAll();
     } else {
       setDbData(null);
+      setValidationNotes('');
     }
+
   }, [isOpen, inspeccion]);
 
   if (!inspeccion) return null;
 
   const currentState = stateDefs.find(s => s.state_code === inspeccion.state_code);
   const isEditablePhase = ['3.D0', '3.D1', '3.D2'].includes(inspeccion.state_code);
+  const isTerminalState = ['3.D4', '3.D5'].includes(inspeccion.state_code);
+
 
   const fechaFormatted = (() => {
     try {
@@ -324,6 +331,35 @@ export function InspeccionDetailDrawer({
     }
   };
 
+  const handleFinalize = async (resultado: 'OK' | 'NO_CONFORME') => {
+    if (!inspeccion) return;
+    if (resultado === 'NO_CONFORME' && !validationNotes.trim()) {
+      showToast('error', 'Las notas de validación son obligatorias para marcar como No Conforme.');
+      return;
+    }
+
+    try {
+      setIsFinalizing(true);
+      const { error } = await supabase.rpc('finalizar_inspeccion', {
+        p_id: inspeccion.id,
+        p_resultado: resultado,
+        p_observaciones: validationNotes,
+        p_usuario: usuarioActor
+      });
+
+      if (error) throw error;
+
+      showToast('success', resultado === 'OK' ? 'Inspección aprobada con éxito' : 'Inspección marcada como No Conforme');
+      onDataChanged();
+      onClose();
+    } catch (err: any) {
+      showToast('error', `Error al finalizar la inspección: ${err.message}`);
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
+
   return (
     <>
       {isOpen && (
@@ -371,6 +407,33 @@ export function InspeccionDetailDrawer({
             </div>
           </div>
           
+          {isTerminalState && (
+            <div className={cn(
+              "rounded-xl p-5 border flex flex-col gap-3 shadow-md border-opacity-60",
+              inspeccion.state_code === '3.D4' 
+                ? "bg-emerald-50 border-emerald-200 text-emerald-900" 
+                : "bg-orange-50 border-orange-200 text-orange-900"
+            )}>
+              <div className="flex items-center gap-2 font-black uppercase tracking-widest text-[10px]">
+                {inspeccion.state_code === '3.D4' 
+                  ? <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  : <AlertTriangle className="w-4 h-4 text-orange-600" />
+                }
+                Veredicto Final: {inspeccion.state_code === '3.D4' ? 'APROBADO' : 'NO CONFORME'}
+              </div>
+              {dbData?.current_data?.observaciones_finales ? (
+                <div className="bg-white/50 p-3 rounded-lg border border-current border-opacity-10">
+                  <p className="text-sm font-medium leading-relaxed">
+                    {dbData.current_data.observaciones_finales}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm italic opacity-60">Sin observaciones adicionales.</p>
+              )}
+            </div>
+          )}
+
+          
           {inspeccion.state_code === '3.D1' && (
              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col gap-3">
                 <p className="text-sm text-amber-800 font-medium">La inspección está actualmente coordinada. Una vez que inicie o finalice físicamente, confírmalo para moverla al estado de espera de resultados (3.D2).</p>
@@ -384,6 +447,62 @@ export function InspeccionDetailDrawer({
                 </button>
              </div>
           )}
+
+          {inspeccion.state_code === '3.D3' && (
+            <div className="bg-white border-2 border-brand-200 rounded-xl p-5 space-y-4 shadow-md bg-gradient-to-b from-brand-50/20 to-white">
+              <div className="flex items-center gap-2 text-brand-700 mb-1">
+                <FileCheck2 className="w-5 h-5" />
+                <h3 className="text-sm font-bold uppercase tracking-wider">Módulo de Validación</h3>
+              </div>
+
+              {dbData?.planilla_completada_url && (
+                <div className="flex items-center justify-between p-3 bg-white border border-brand-100 rounded-lg shadow-sm">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-brand-500" />
+                    <span className="text-sm font-semibold text-gray-700">Planilla de Inspección</span>
+                  </div>
+                  <a 
+                    href={dbData.planilla_completada_url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-600 text-white rounded-md text-xs font-bold hover:bg-brand-700 transition flex-shrink-0"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Ver Reporte
+                  </a>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Notas de Validación</label>
+                <textarea
+                  value={validationNotes}
+                  onChange={(e) => setValidationNotes(e.target.value)}
+                  placeholder="Escribe aquí los motivos de la decisión o comentarios adicionales..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none min-h-[100px] resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button
+                  onClick={() => handleFinalize('NO_CONFORME')}
+                  disabled={isFinalizing}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-red-50 text-red-700 border border-red-200 rounded-xl font-bold hover:bg-red-100 transition disabled:opacity-50 text-sm"
+                >
+                  {isFinalizing ? <Loader2 className="animate-spin w-4 h-4"/> : <X className="w-4 h-4" />}
+                  No Conforme
+                </button>
+                <button
+                  onClick={() => handleFinalize('OK')}
+                  disabled={isFinalizing}
+                  className="flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition disabled:opacity-50 text-sm"
+                >
+                  {isFinalizing ? <Loader2 className="animate-spin w-4 h-4"/> : <CheckCircle2 className="w-4 h-4" />}
+                  Aprobar
+                </button>
+              </div>
+            </div>
+          )}
+
 
           {/* EDITABLE FIELDS IN D0, D1, D2 */}
           {isEditablePhase ? (
@@ -494,7 +613,7 @@ export function InspeccionDetailDrawer({
           </div>
 
           <div>
-            {isEditablePhase ? (
+            {isEditablePhase && (
               <div className="space-y-6">
                 
                 <div>
@@ -588,109 +707,115 @@ export function InspeccionDetailDrawer({
                 </div>
 
               </div>
-            ) : (
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">
-                    Recepción de Planilla Final
-                  </h3>
+            )}
 
-                  {loadingDbData && <div className="text-sm text-gray-400 mb-3">Cargando URLs documentales...</div>}
-
-                  {dbData?.planilla_completada_url ? (
-                    <div className="flex items-center gap-2 mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-                      <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-                      <span className="text-sm text-emerald-700 font-medium flex-1 truncate">
-                        Planilla cargada
-                      </span>
-                      <a
-                        href={dbData.planilla_completada_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-emerald-600 hover:text-emerald-800 p-1"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                      <FileText className="w-5 h-5 text-amber-500 flex-shrink-0" />
-                      <span className="text-sm text-amber-700 font-medium">
-                        Sin planilla cargada externamente ni subida manual.
-                      </span>
-                    </div>
-                  )}
-
-                  {selectedFile && (
-                    <div className="flex items-center gap-2 mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
-                      <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                      <span className="text-blue-700 truncate flex-1">
-                        {selectedFile.name}{' '}
-                        <span className="text-blue-500">({(selectedFile.size / 1024).toFixed(0)} KB)</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedFile(null);
-                          if (fileInputRef.current) fileInputRef.current.value = '';
-                        }}
-                        className="text-blue-500 hover:text-blue-700"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.xlsx,.xls"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading}
-                      className="flex items-center gap-2 flex-1 justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50/30 transition disabled:opacity-50"
-                    >
-                      <Upload className="w-4 h-4" />
-                      {selectedFile ? 'Cambiar archivo' : 'Forzar Subida Manual'}
-                    </button>
-
-                    {selectedFile && (
-                      <button
-                        type="button"
-                        onClick={handleUploadPlanilla}
-                        disabled={uploading}
-                        className="flex items-center gap-2 px-5 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition text-sm font-medium disabled:opacity-50"
-                      >
-                        {uploading ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Subiendo...
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="w-4 h-4" />
-                            Subir
-                          </>
+            {!isEditablePhase && (
+                 <div className="space-y-4">
+                   <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">
+                     {isTerminalState ? "Documentación Final Cargada" : "Recepción de Planilla Final"}
+                   </h3>
+ 
+                   {loadingDbData && <div className="text-sm text-gray-400 mb-3">Cargando URLs documentales...</div>}
+ 
+                   {dbData?.planilla_completada_url ? (
+                     <div className="flex items-center gap-2 mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                       <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+                       <span className="text-sm text-emerald-700 font-medium flex-1 truncate">
+                         Planilla cargada correctamente
+                       </span>
+                       <a
+                         href={dbData.planilla_completada_url}
+                         target="_blank"
+                         rel="noopener noreferrer"
+                         className="text-emerald-600 hover:text-emerald-800 p-1.5 bg-white border border-emerald-200 rounded-md shadow-sm hover:shadow transition"
+                       >
+                         <Download className="w-4 h-4" />
+                       </a>
+                     </div>
+                   ) : (
+                     <div className="flex items-center gap-2 mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                       <FileText className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                       <span className="text-sm text-amber-700 font-medium">
+                         Sin planilla cargada externamente ni subida manual.
+                       </span>
+                     </div>
+                   )}
+ 
+                   {!isTerminalState && (
+                     <>
+                        {selectedFile && (
+                          <div className="flex items-center gap-2 mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                            <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                            <span className="text-blue-700 truncate flex-1">
+                              {selectedFile.name}{' '}
+                              <span className="text-blue-500">({(selectedFile.size / 1024).toFixed(0)} KB)</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedFile(null);
+                                if (fileInputRef.current) fileInputRef.current.value = '';
+                              }}
+                              className="text-blue-500 hover:text-blue-700"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
                         )}
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-2">
-                    Esto intenta avanzar al estado <span className="font-semibold">3.D3 (Validación)</span>.
-                  </p>
-                </div>
+      
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".pdf,.xlsx,.xls"
+                          className="hidden"
+                          onChange={handleFileChange}
+                        />
+      
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={uploading}
+                            className="flex items-center gap-2 flex-1 justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50/30 transition disabled:opacity-50"
+                          >
+                            <Upload className="w-4 h-4" />
+                            {selectedFile ? 'Cambiar archivo' : 'Forzar Subida Manual'}
+                          </button>
+      
+                          {selectedFile && (
+                            <button
+                              type="button"
+                              onClick={handleUploadPlanilla}
+                              disabled={uploading}
+                              className="flex items-center gap-2 px-5 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition text-sm font-medium disabled:opacity-50"
+                            >
+                              {uploading ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                  Subiendo...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload className="w-4 h-4" />
+                                  Subir
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-gray-500 mt-2">
+                          Esto intenta avanzar al estado <span className="font-semibold">3.D3 (Validación)</span>.
+                        </p>
+                     </>
+                   )}
+                 </div>
             )}
           </div>
 
-          <div className="pt-6 mt-6 border-t border-gray-100">
-            <h3 className="text-sm font-semibold text-red-600 mb-3 uppercase tracking-wider flex items-center gap-2">
+          <div className="pt-8 mt-8 border-t-2 border-dashed border-gray-100">
+            <h3 className="text-sm font-bold text-red-600 mb-4 uppercase tracking-[0.2em] flex items-center gap-2">
               <AlertTriangle className="w-4 h-4" />
-              Administración
+              Zona de Peligro
             </h3>
             <div className="bg-red-50 border border-red-100 rounded-xl p-4">
               <p className="text-xs text-red-700 mb-3">
