@@ -109,12 +109,27 @@ export function RemitoEdit() {
         supervisor_id: ctx.remito?.supervisor_id || null,
       });
 
-      let rawList = (ctx.remito?.protocolo_control && ctx.remito.protocolo_control.length > 0)
-        ? ctx.remito.protocolo_control
-        : ctx.catalogos.tareas_control;
+      const savedProtocol = ctx.remito?.protocolo_control || [];
+      const catalogTasks = ctx.catalogos.tareas_control || [];
+      
+      // Unificamos el protocolo guardado con el catálogo para asegurar que 
+      // si se guardó solo pesaje (por inspector), las tareas de carga sigan apareciendo en la UI.
+      const mergedList = [...savedProtocol];
+      catalogTasks.forEach((catTask: any) => {
+        const taskName = catTask.tarea_template || catTask.tarea;
+        const isPresent = mergedList.some(s => 
+          (s.tarea_template === taskName) || (s.tarea === taskName)
+        );
+        if (!isPresent) {
+          mergedList.push({
+            ...catTask,
+            estado: 'PENDIENTE'
+          });
+        }
+      });
 
-      if (rawList) {
-        setChecklist(rawList.map((item: any) => ({
+      if (mergedList.length > 0) {
+        setChecklist(mergedList.map((item: any) => ({
           ...item,
           tarea_template: item.tarea_template || item.tarea,
           done: item.estado === 'COMPLETADO',
@@ -230,12 +245,20 @@ export function RemitoEdit() {
     return '...';
   }, [pesaje.bruto.lugar_id, nuevoLugarBruto.nombre, resolvedTaraStr, lugaresPesaje]);
 
-  const instruccionesGeneradas = useMemo(() => {
+  const instruccionesData = useMemo(() => {
+    const hasInspector = !!remito.inspector_id;
+    const pesajeText = `Pesaje:\n1. Hacer Tara (${pesaje.tara.momento}) en ${resolvedTaraStr}.\n2. Pesar Bruto (${pesaje.bruto.momento}) en ${resolvedBrutoStr}.`;
+    
     const checklistText = displayedChecklist.map(t => `   [${t.done ? 'X' : ' '}] ${t.tarea}`).join('\n');
-    return `1. Hacer Tara (${pesaje.tara.momento}) en ${resolvedTaraStr}.\n` +
-      `2. Proceder a la carga del material con el siguiente Checklist de Control (General):\n${checklistText}\n` +
-      `3. Pesar Bruto (${pesaje.bruto.momento}) en ${resolvedBrutoStr}.`;
-  }, [pesaje.tara.momento, resolvedTaraStr, pesaje.bruto.momento, resolvedBrutoStr, displayedChecklist]);
+    const cargaText = `Proceso de carga:\n${checklistText}`;
+
+    // Lo que se guarda en DB: si hay inspector solo pesaje, sino ambos.
+    const savedText = hasInspector ? pesajeText : `${pesajeText}\n\n${cargaText}`;
+
+    return { pesajeText, cargaText, savedText, hasInspector };
+  }, [pesaje.tara.momento, resolvedTaraStr, pesaje.bruto.momento, resolvedBrutoStr, displayedChecklist, remito.inspector_id]);
+
+  const instruccionesGeneradas = instruccionesData.savedText;
 
   const toggleChecklist = (index: number) => {
     const newList = [...checklist];
@@ -385,24 +408,32 @@ export function RemitoEdit() {
       const taraLugarNombre = finalTaraId ? (lugaresPesaje.find(l=>l.id === finalTaraId)?.nombre || nuevoLugarTara.nombre) : '...';
       const brutoLugarNombre = finalBrutoId ? (lugaresPesaje.find(l=>l.id === finalBrutoId)?.nombre || (pesaje.bruto.lugar_id==='IGUAL'?taraLugarNombre:nuevoLugarBruto.nombre)) : '...';
 
-      const processedChecklist = checklist.map(item => {
-        let finalTarea = item.tarea;
-        let finalEstado = item.done ? 'COMPLETADO' : 'PENDIENTE';
+      const processedChecklist = checklist
+        .filter(item => {
+          // Si hay inspector, solo guardamos las tareas de pesaje en el protocolo del chofer
+          if (instruccionesData.hasInspector) {
+            return item.tipo_tarea === 'PESAJE_TARA' || item.tipo_tarea === 'PESAJE_BRUTO';
+          }
+          return true;
+        })
+        .map(item => {
+          let finalTarea = item.tarea;
+          let finalEstado = item.done ? 'COMPLETADO' : 'PENDIENTE';
 
-        if (item.tipo_tarea === 'PESAJE_TARA') {
-          finalTarea = (item.tarea_template || item.tarea).replace('{lugar}', taraLugarNombre);
-          finalEstado = finalTaraId ? 'COMPLETADO' : 'PENDIENTE';
-        } else if (item.tipo_tarea === 'PESAJE_BRUTO') {
-          finalTarea = (item.tarea_template || item.tarea).replace('{lugar}', brutoLugarNombre);
-          finalEstado = finalBrutoId ? 'COMPLETADO' : 'PENDIENTE';
-        }
+          if (item.tipo_tarea === 'PESAJE_TARA') {
+            finalTarea = (item.tarea_template || item.tarea).replace('{lugar}', taraLugarNombre);
+            finalEstado = finalTaraId ? 'COMPLETADO' : 'PENDIENTE';
+          } else if (item.tipo_tarea === 'PESAJE_BRUTO') {
+            finalTarea = (item.tarea_template || item.tarea).replace('{lugar}', brutoLugarNombre);
+            finalEstado = finalBrutoId ? 'COMPLETADO' : 'PENDIENTE';
+          }
 
-        return {
-          ...item,
-          tarea: finalTarea,
-          estado: finalEstado
-        };
-      });
+          return {
+            ...item,
+            tarea: finalTarea,
+            estado: finalEstado
+          };
+        });
 
       const textoFinal = observacionesExtras.trim() ? `${instruccionesGeneradas}\n\nObservaciones Extra:\n${observacionesExtras}` : instruccionesGeneradas;
 
@@ -413,8 +444,8 @@ export function RemitoEdit() {
         celular_chofer_nuevo: remito.chofer_id === 0 ? celularChoferNuevo : null,
         camion_id: finalCamionId,
         acoplado_id: finalAcopladoId,
-        supervisor_id: Number(remito.supervisor_id),
-        inspector_id: Number(remito.inspector_id),
+        supervisor_id: remito.supervisor_id ? Number(remito.supervisor_id) : null,
+        inspector_id: remito.inspector_id ? Number(remito.inspector_id) : null,
         instrucciones_texto: textoFinal,
         protocolo_control: processedChecklist,
         tara_pesaje_momento: pesaje.tara.momento,
@@ -833,12 +864,19 @@ export function RemitoEdit() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 flex flex-col">
               <label className="block text-sm font-bold text-gray-800 mb-2">Instrucciones Generadas</label>
-              <textarea 
-                readOnly
-                value={instruccionesGeneradas}
-                rows={4}
-                className="w-full p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 outline-none select-none flex-1"
-              />
+              <div className="w-full p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 outline-none select-none flex-1 overflow-y-auto whitespace-pre-wrap min-h-[120px]">
+                <div className="font-sans leading-relaxed">
+                  <div className="font-bold text-gray-400 mb-1 text-[10px] uppercase tracking-wider">Sección Pesaje</div>
+                  {instruccionesData.pesajeText}
+                  
+                  <div className="mt-4">
+                    <div className="font-bold text-gray-400 mb-1 text-[10px] uppercase tracking-wider">Sección Carga</div>
+                    <div className={instruccionesData.hasInspector ? 'line-through opacity-40' : ''}>
+                      {instruccionesData.cargaText}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             
             <div className="bg-blue-50/30 p-5 rounded-xl border border-blue-100 flex flex-col">
@@ -857,14 +895,24 @@ export function RemitoEdit() {
             <h3 className="text-sm font-bold mb-4 text-gray-800">Checklist de Control (General)</h3>
             <div className="space-y-3">
               {displayedChecklist.map((task, index) => (
-                <label key={index} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100 hover:border-marca-200 cursor-pointer transition shadow-sm">
+                <label 
+                  key={index} 
+                  className={`flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100 transition shadow-sm ${
+                    instruccionesData.hasInspector 
+                      ? 'opacity-60 cursor-not-allowed bg-gray-50/50' 
+                      : 'hover:border-brand-200 cursor-pointer'
+                  }`}
+                >
                   <input 
                     type="checkbox" 
                     checked={task.done} 
-                    onChange={() => toggleChecklist(index)}
-                    className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500" 
+                    onChange={() => !instruccionesData.hasInspector && toggleChecklist(index)}
+                    disabled={instruccionesData.hasInspector}
+                    className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50" 
                   />
-                  <span className="text-sm text-gray-700 select-none">{task.tarea}</span>
+                  <span className={`text-sm text-gray-700 select-none ${instruccionesData.hasInspector ? 'line-through' : ''}`}>
+                    {task.tarea}
+                  </span>
                 </label>
               ))}
             </div>
