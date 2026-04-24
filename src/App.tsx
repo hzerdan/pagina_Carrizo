@@ -12,8 +12,10 @@ import { ProveedoresManager } from './pages/ProveedoresManager';
 import { TransportistasManager } from './pages/TransportistasManager';
 import { LugaresPesajeManager } from './pages/LugaresPesajeManager';
 import { ArticulosManager } from './pages/ArticulosManager';
+import { DepositosManager } from './pages/DepositosManager';
 import PersonalManager from './components/PersonalManager';
 import { PlantillasManager } from './pages/PlantillasManager';
+import { CatalogoTareasManager } from './pages/CatalogoTareasManager';
 import { InspeccionesKanbanPage } from './pages/Inspecciones/InspeccionesKanbanPage';
 import { PublicInspectPage } from './pages/PublicInspect/PublicInspectPage';
 
@@ -36,7 +38,9 @@ function App() {
             <Route path="/transportistas" element={<TransportistasManager />} />
             <Route path="/lugares-pesaje" element={<LugaresPesajeManager />} />
             <Route path="/articulos" element={<ArticulosManager />} />
+            <Route path="/depositos" element={<DepositosManager />} />
             <Route path="/plantillas" element={<PlantillasManager />} />
+            <Route path="/catalogo-tareas" element={<CatalogoTareasManager />} />
             <Route path="/inspecciones" element={<InspeccionesKanbanPage />} />
           </Route>
         </Routes>

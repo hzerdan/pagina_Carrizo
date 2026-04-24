@@ -8,6 +8,7 @@ interface InspeccionTemplate {
   id: number;
   codigo: string;
   nombre: string;
+  tipo: string;
   archivo_url: string;
   activo: boolean;
   updated_at: string;
@@ -17,6 +18,7 @@ interface FormData {
   id?: number;
   codigo: string;
   nombre: string;
+  tipo: string;
   activo: boolean;
   archivo_url: string;
 }
@@ -24,9 +26,12 @@ interface FormData {
 const initialFormData: FormData = {
   codigo: '',
   nombre: '',
+  tipo: 'Consolidación',
   activo: true,
   archivo_url: '',
 };
+
+const TIPOS_PLANTILLA = ['Consolidación', 'Reembolse', 'Genérica'];
 
 const STORAGE_BUCKET = 'templates';
 const ACCEPTED_FILE_TYPES = '.pdf,.xlsx,.xls,.txt';
@@ -103,6 +108,7 @@ export function PlantillasManager() {
         id: tpl.id,
         codigo: tpl.codigo,
         nombre: tpl.nombre,
+        tipo: tpl.tipo || 'Consolidación',
         activo: tpl.activo,
         archivo_url: tpl.archivo_url,
       });
@@ -187,6 +193,7 @@ export function PlantillasManager() {
       const payload = {
         codigo: formData.codigo.trim().toUpperCase(),
         nombre: formData.nombre.trim(),
+        tipo: formData.tipo,
         activo: formData.activo,
         archivo_url: archivoUrl,
       };
@@ -241,11 +248,28 @@ export function PlantillasManager() {
     }
   };
 
+  // ── Update tipo inline ─────────────────────────────────────────────
+  const handleUpdateTipo = async (tpl: InspeccionTemplate, nuevoTipo: string) => {
+    try {
+      const { error } = await supabase
+        .from('inspeccion_templates')
+        .update({ tipo: nuevoTipo })
+        .eq('id', tpl.id);
+      if (error) throw error;
+      showToast('success', 'Tipo de plantilla actualizado.');
+      fetchData();
+    } catch (err: any) {
+      console.error('Error updating template tipo:', err);
+      showToast('error', 'Error al actualizar el tipo de la plantilla.');
+    }
+  };
+
   // ── Filtered list ──────────────────────────────────────────────────
   const filteredTemplates = templates.filter(
     (t) =>
       t.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.nombre.toLowerCase().includes(searchTerm.toLowerCase())
+      t.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.tipo?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // ── File icon helper ───────────────────────────────────────────────
@@ -318,6 +342,7 @@ export function PlantillasManager() {
               <thead>
                 <tr className="bg-gray-50 border-b">
                   <th className="p-4 font-semibold text-gray-600 text-sm">Código</th>
+                  <th className="p-4 font-semibold text-gray-600 text-sm">Tipo</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Nombre</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Estado</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Archivo</th>
@@ -328,6 +353,19 @@ export function PlantillasManager() {
                 {filteredTemplates.map((tpl) => (
                   <tr key={tpl.id} className="border-b hover:bg-gray-50 transition-colors">
                     <td className="p-4 font-mono text-sm font-medium text-gray-900">{tpl.codigo}</td>
+                    <td className="p-4">
+                      <select
+                        value={tpl.tipo || 'Consolidación'}
+                        onChange={(e) => handleUpdateTipo(tpl, e.target.value)}
+                        className="text-xs font-semibold bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer"
+                      >
+                        {TIPOS_PLANTILLA.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="p-4 text-sm text-gray-700">{tpl.nombre}</td>
                     <td className="p-4">
                       <button
@@ -378,7 +416,7 @@ export function PlantillasManager() {
                 ))}
                 {filteredTemplates.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-12 text-center text-gray-500">
+                    <td colSpan={6} className="p-12 text-center text-gray-500">
                       <FileText className="w-10 h-10 mx-auto mb-3 text-gray-300" />
                       <p className="font-medium">No se encontraron plantillas.</p>
                       <p className="text-sm mt-1">Haga clic en "Nueva Plantilla" para crear una.</p>
@@ -450,6 +488,26 @@ export function PlantillasManager() {
                     value={formData.nombre}
                     onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
                   />
+                </div>
+
+                {/* Tipo */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tipo *
+                  </label>
+                  <select
+                    id="input-tipo"
+                    required
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm"
+                    value={formData.tipo}
+                    onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
+                  >
+                    {TIPOS_PLANTILLA.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Activo toggle */}

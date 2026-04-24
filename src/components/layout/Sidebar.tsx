@@ -29,8 +29,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: 'Lugares Pesaje', path: '/lugares-pesaje', disabled: false },
         { name: 'Artículos', path: '/articulos', disabled: false },
         { name: 'Choferes', path: '/choferes', disabled: false },
+        { name: 'Depósitos', path: '/depositos', disabled: false },
         { name: 'Personal AC', path: '/personal', disabled: false },
         { name: 'Plantillas Documentales', path: '/plantillas', disabled: false },
+        { name: 'Catálogo Tareas', path: '/catalogo-tareas', disabled: false },
     ];
 
     return (
