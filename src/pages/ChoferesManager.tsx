@@ -129,10 +129,18 @@ export function ChoferesManager() {
       return;
     }
 
+    const normalizePhone = (phone: string | null) => {
+      if (!phone) return null;
+      const clean = phone.replace(/\D/g, '');
+      if (!clean) return null;
+      if (clean.startsWith('549')) return clean;
+      return '549' + clean;
+    };
+
     const payload = {
       nombre_completo: formData.nombre_completo,
       dni: formData.dni || null,
-      telefono: formData.telefono || null,
+      telefono: normalizePhone(formData.telefono),
       email: formData.email || null,
       transportista_id: formData.transportista_id ? Number(formData.transportista_id) : null,
     };

@@ -1,21 +1,44 @@
-import { Filter } from 'lucide-react';
+import { Filter, Search } from 'lucide-react';
 
 interface MonitorFiltersProps {
   tipoMercado: string;
   setTipoMercado: (value: string) => void;
   colorAlerta: string;
   setColorAlerta: (value: string) => void;
+  searchPedido: string;
+  setSearchPedido: (value: string) => void;
 }
 
-export function MonitorFilters({ tipoMercado, setTipoMercado, colorAlerta, setColorAlerta }: MonitorFiltersProps) {
+export function MonitorFilters({ 
+  tipoMercado, 
+  setTipoMercado, 
+  colorAlerta, 
+  setColorAlerta,
+  searchPedido,
+  setSearchPedido
+}: MonitorFiltersProps) {
   return (
-    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4 items-center justify-between mb-6">
+    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col lg:flex-row gap-4 items-center justify-between mb-6">
       <div className="flex items-center gap-2 text-gray-700 font-medium">
         <Filter className="w-5 h-5 text-gray-500" />
         <span>Filtros</span>
       </div>
       
-      <div className="flex flex-wrap gap-4 w-full sm:w-auto">
+      <div className="flex flex-wrap gap-4 w-full lg:w-auto items-center">
+        {/* Búsqueda por Pedido */}
+        <div className="relative flex-1 min-w-[200px] sm:flex-initial">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <Search className="h-4 w-4 text-gray-400" />
+          </div>
+          <input
+            type="text"
+            value={searchPedido}
+            onChange={(e) => setSearchPedido(e.target.value)}
+            placeholder="Buscar por Nº Pedido..."
+            className="block w-full pl-10 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-gray-50 hover:bg-white transition-colors"
+          />
+        </div>
+
         <div className="flex items-center gap-2">
           <label className="text-sm text-gray-600 font-medium">Mercado:</label>
           <select 

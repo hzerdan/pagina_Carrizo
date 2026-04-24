@@ -67,6 +67,7 @@ export function RemitoEdit() {
   const [showChoferList, setShowChoferList] = useState(false);
   const [dniChoferNuevo, setDniChoferNuevo] = useState('');
   const [celularChoferNuevo, setCelularChoferNuevo] = useState('');
+  const [isConfirmingChofer, setIsConfirmingChofer] = useState(false);
 
   const [searchCamion, setSearchCamion] = useState('');
   const [showCamionList, setShowCamionList] = useState(false);
@@ -279,10 +280,72 @@ export function RemitoEdit() {
     return null;
   };
 
+  const resolveChoferId = async (nombre: string, dni: string, celular: string): Promise<number | null> => {
+    if (!nombre || !dni) return null;
+    
+    const cleanDni = dni.replace(/\D/g, '');
+    
+    // Primero intentamos buscarlo por DNI para evitar duplicados
+    const { data: existing, error: searchError } = await supabase
+      .from('choferes')
+      .select('id')
+      .eq('dni', cleanDni)
+      .maybeSingle();
+      
+    if (searchError) throw new Error(`Error al buscar chofer: ${searchError.message}`);
+    
+    const normalizePhone = (phone: string) => {
+      const clean = phone.replace(/\D/g, '');
+      if (!clean) return '';
+      if (clean.startsWith('549')) return clean;
+      return '549' + clean;
+    };
+
+    const normalizedCelular = normalizePhone(celular);
+    
+    if (existing) {
+      // Si ya existe, lo actualizamos con los nuevos datos (opcional, pero recomendado)
+      const { error: updateError } = await supabase
+        .from('choferes')
+        .update({
+          nombre_completo: nombre.toUpperCase(),
+          telefono: normalizedCelular
+        })
+        .eq('id', existing.id);
+        
+      if (updateError) throw new Error(`Error al actualizar chofer: ${updateError.message}`);
+      return existing.id;
+    }
+    
+    // Si no existe, lo insertamos
+    const { data: newData, error: insertError } = await supabase
+      .from('choferes')
+      .insert({
+        nombre_completo: nombre.toUpperCase(),
+        dni: cleanDni,
+        telefono: normalizedCelular
+      })
+      .select('id')
+      .single();
+    
+    if (insertError) {
+      throw new Error(`No se pudo crear el chofer ${nombre}: ${insertError.message}`);
+    }
+
+    // Actualizar catálogo local
+    setCatalogs(prev => ({
+      ...prev,
+      choferes: [...prev.choferes, { id: newData.id, nombre: nombre.toUpperCase(), dni: cleanDni, telefono: normalizedCelular }]
+    }));
+
+    return newData.id;
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
       // Resolver chofer nuevo o existente
+      let finalChoferId = remito.chofer_id;
       if (remito.chofer_id === 0) {
         if (!searchChofer || !dniChoferNuevo || !celularChoferNuevo) {
           alert("Por favor complete nombre, DNI y celular del nuevo chofer.");
@@ -291,6 +354,11 @@ export function RemitoEdit() {
         }
         if (dniExistenteError) {
           alert(dniExistenteError);
+          setIsSubmitting(false);
+          return;
+        }
+        finalChoferId = await resolveChoferId(searchChofer, dniChoferNuevo, celularChoferNuevo);
+        if (!finalChoferId) {
           setIsSubmitting(false);
           return;
         }
@@ -339,7 +407,7 @@ export function RemitoEdit() {
       const textoFinal = observacionesExtras.trim() ? `${instruccionesGeneradas}\n\nObservaciones Extra:\n${observacionesExtras}` : instruccionesGeneradas;
 
       const p_updates = {
-        chofer_id: Number(remito.chofer_id),
+        chofer_id: Number(finalChoferId),
         nombre_chofer_nuevo: remito.chofer_id === 0 ? searchChofer : null,
         dni_chofer_nuevo: remito.chofer_id === 0 ? dniChoferNuevo : null,
         celular_chofer_nuevo: remito.chofer_id === 0 ? celularChoferNuevo : null,
@@ -530,6 +598,36 @@ export function RemitoEdit() {
                       className="w-full p-2 text-sm bg-white border border-gray-200 rounded outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
+                </div>
+                <div className="flex justify-end pt-2 border-t border-blue-100/50">
+                  <button 
+                    type="button"
+                    disabled={isConfirmingChofer || !!dniExistenteError || !dniChoferNuevo || !celularChoferNuevo}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      setIsConfirmingChofer(true);
+                      try {
+                        const id = await resolveChoferId(searchChofer, dniChoferNuevo, celularChoferNuevo);
+                        if (id) {
+                          setRemito(prev => ({ ...prev, chofer_id: id }));
+                          setSearchChofer(searchChofer.toUpperCase());
+                          setShowChoferList(false);
+                        }
+                      } catch (err: any) {
+                        alert("Error: " + err.message);
+                      } finally {
+                        setIsConfirmingChofer(false);
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-xs font-bold rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
+                  >
+                    {isConfirmingChofer ? (
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                    ) : (
+                      <CheckCircle className="w-3 h-3" />
+                    )}
+                    Confirmar Chofer
+                  </button>
                 </div>
               </div>
             )}

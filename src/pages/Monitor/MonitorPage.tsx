@@ -19,6 +19,7 @@ export function MonitorPage() {
 
   const [tipoMercado, setTipoMercado] = useState<string>('TODOS');
   const [colorAlerta, setColorAlerta] = useState<string>('TODOS');
+  const [searchPedido, setSearchPedido] = useState<string>('');
   const [selectedInstance, setSelectedInstance] = useState<InstanceData | null>(null);
 
   // Transition State
@@ -60,9 +61,11 @@ export function MonitorPage() {
     return data.filter(instance => {
       const matchMercado = tipoMercado === 'TODOS' || instance.tipo_mercado === tipoMercado;
       const matchAlerta = colorAlerta === 'TODOS' || instance.color_alerta === colorAlerta;
-      return matchMercado && matchAlerta;
+      const matchPedido = !searchPedido || (instance.nro_pedido && instance.nro_pedido.toLowerCase().includes(searchPedido.toLowerCase()));
+      
+      return matchMercado && matchAlerta && matchPedido;
     });
-  }, [data, tipoMercado, colorAlerta]);
+  }, [data, tipoMercado, colorAlerta, searchPedido]);
 
   const toggleRefresh = () => {
     setSelectedInstance(null); // Optional: close drawer on refresh
@@ -170,6 +173,8 @@ export function MonitorPage() {
             setTipoMercado={setTipoMercado}
             colorAlerta={colorAlerta}
             setColorAlerta={setColorAlerta}
+            searchPedido={searchPedido}
+            setSearchPedido={setSearchPedido}
           />
         </div>
 
