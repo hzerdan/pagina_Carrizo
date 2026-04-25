@@ -2,7 +2,8 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Scale, Package, AlertTriangle, AlertCircle, CheckCircle, ChevronDown, ChevronUp, Plus, UserPlus, X } from 'lucide-react';
+import { Scale, Package, AlertTriangle, AlertCircle, CheckCircle, ChevronDown, ChevronUp, Plus, UserPlus, X, MessageSquare } from 'lucide-react';
+import { WhatsAppModal } from '../components/WhatsAppModal';
 
 interface RemitoState {
   id: number | null;
@@ -76,6 +77,7 @@ export function RemitoEdit() {
   const [showAcopladoList, setShowAcopladoList] = useState(false);
 
   const [observacionesExtras, setObservacionesExtras] = useState('');
+  const [showWpModal, setShowWpModal] = useState(false);
 
   useEffect(() => {
     fetchContext();
@@ -579,7 +581,7 @@ export function RemitoEdit() {
                 <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-b-lg shadow-xl max-h-[250px] overflow-y-auto">
                   {filteredChoferes.map(c => (
                     <div 
-                      key={c.id} 
+                      key={`ch-${c.id}`} 
                       onClick={() => { setRemito({...remito, chofer_id: c.id}); setSearchChofer(c.nombre || ''); setShowChoferList(false); }}
                       className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 flex justify-between items-center"
                     >
@@ -680,7 +682,7 @@ export function RemitoEdit() {
                 <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-b-lg shadow-xl max-h-[200px] overflow-y-auto">
                   {filteredCamiones.map(c => (
                     <div 
-                      key={c.id} 
+                      key={`ca-${c.id}`} 
                       onClick={() => { setRemito({...remito, camion_id: c.id}); setSearchCamion(c.patente || ''); setShowCamionList(false); }}
                       className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100"
                     >{c.patente}</div>
@@ -703,7 +705,7 @@ export function RemitoEdit() {
                 <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-b-lg shadow-xl max-h-[200px] overflow-y-auto">
                   {filteredAcoplados.map(c => (
                     <div 
-                      key={c.id} 
+                      key={`ac-${c.id}`} 
                       onClick={() => { setRemito({...remito, acoplado_id: c.id}); setSearchAcoplado(c.patente || ''); setShowAcopladoList(false); }}
                       className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100"
                     >{c.patente}</div>
@@ -724,7 +726,7 @@ export function RemitoEdit() {
               >
                 <option value="">Seleccionar...</option>
                 {inspectors.map(p => (
-                  <option key={p.id} value={p.id}>{p.nombre}</option>
+                  <option key={`insp-${p.id}`} value={p.id}>{p.nombre}</option>
                 ))}
               </select>
             </div>
@@ -737,7 +739,7 @@ export function RemitoEdit() {
               >
                 <option value="">Seleccionar...</option>
                 {supervisors.map(p => (
-                  <option key={p.id} value={p.id}>{p.nombre}</option>
+                  <option key={`sup-${p.id}`} value={p.id}>{p.nombre}</option>
                 ))}
             </select>
             </div>
@@ -923,30 +925,62 @@ export function RemitoEdit() {
 
       {/* Floating Footer Toolbar */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-gray-200 z-50">
-        <div className="max-w-4xl mx-auto flex justify-end gap-4">
-          <button 
-            type="button" 
-            onClick={() => navigate('/remitos')}
-            className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl shadow-sm hover:bg-gray-50 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button 
-            onClick={handleSubmit} 
-            disabled={isSubmitting}
-            className="px-8 py-3 bg-gray-900 text-white font-bold rounded-xl shadow-xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-2 min-w-[200px]"
-          >
-            {isSubmitting ? (
-              <span className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                Guardando...
-              </span>
-            ) : (
-              "Guardar y Confirmar Datos"
-            )}
-          </button>
+        <div className="max-w-4xl mx-auto flex justify-between gap-4">
+          <div className="flex gap-4">
+            <button 
+              type="button" 
+              onClick={() => setShowWpModal(true)}
+              className="px-6 py-3 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold rounded-xl shadow-sm hover:bg-emerald-100 transition-colors flex items-center gap-2"
+              title="Enviar instrucciones por WhatsApp"
+            >
+              <MessageSquare className="w-5 h-5" />
+              WhatsApp
+            </button>
+          </div>
+
+          <div className="flex gap-4">
+            <button 
+              type="button" 
+              onClick={() => navigate('/remitos')}
+              className="px-6 py-3 bg-white border border-gray-300 text-gray-700 font-bold rounded-xl shadow-sm hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button 
+              onClick={handleSubmit} 
+              disabled={isSubmitting}
+              className="px-8 py-3 bg-gray-900 text-white font-bold rounded-xl shadow-xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-2 min-w-[200px]"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  Guardando...
+                </span>
+              ) : (
+                "Guardar y Confirmar Datos"
+              )}
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* WhatsApp Modal */}
+      {showWpModal && (
+        <WhatsAppModal
+          isOpen={showWpModal}
+          onClose={() => setShowWpModal(false)}
+          remitoData={{
+            id: Number(id),
+            ref: remito.ref,
+            chofer_id: Number(remito.chofer_id),
+            chofer_nombre: searchChofer,
+            chofer_telefono: catalogs.choferes.find(c => c.id === remito.chofer_id)?.telefono || celularChoferNuevo || '',
+            inspector_nombre: inspectors.find(i => i.id === remito.inspector_id)?.nombre || 'Sin inspector',
+            balanza_nombre: resolvedTaraStr,
+            tareas: `${instruccionesData.savedText}${observacionesExtras ? '\n\nObservaciones Extra:\n' + observacionesExtras : ''}`
+          }}
+        />
+      )}
 
       </div>
     </div>
