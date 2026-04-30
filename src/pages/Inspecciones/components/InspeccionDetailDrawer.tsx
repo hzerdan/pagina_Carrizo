@@ -44,7 +44,8 @@ export function InspeccionDetailDrawer({
   usuarioActor,
 }: InspeccionDetailDrawerProps) {
   const [uploading, setUploading] = useState(false);
-  const [sendingEmaill, setSendingEmail] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [showEmailConfirm, setShowEmailConfirm] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -79,7 +80,11 @@ export function InspeccionDetailDrawer({
       
       const fetchAll = async () => {
         try {
-          const { data } = await supabase.from('inspecciones').select('*').eq('id', inspeccion.id).single();
+          const { data } = await supabase
+            .from('inspecciones')
+            .select('*, inspector:personal_ac(id, nombre_completo, email)')
+            .eq('id', inspeccion.id)
+            .single();
           let template_url = null;
           if (data && data.template_id) {
             const { data: tData } = await supabase.from('inspeccion_templates').select('archivo_url').eq('id', data.template_id).single();
@@ -176,22 +181,51 @@ export function InspeccionDetailDrawer({
     window.open(dbData.template_url, '_blank');
   };
 
-  const handeEdgeFunctionEmail = async () => {
+  const handleEdgeFunctionEmail = async () => {
     if (!inspeccion) return;
+    
+    const inspectorEmail = dbData?.inspector?.email;
+    const inspectorNombre = dbData?.inspector?.nombre_completo || inspeccion.inspector_nombre;
+
+    console.log("=== INICIO ENVÍO EMAIL INSPECCIÓN ===");
+    console.log("Inspección ID:", inspeccion.id);
+    console.log("Inspector:", inspectorNombre);
+    console.log("Email Destino:", inspectorEmail);
+    console.log("Origin:", window.location.origin);
+    console.log("Planilla URL:", dbData?.planilla_personalizada_url);
+
+    if (!inspectorEmail) {
+      console.error("Error: No se encontró email para el inspector.");
+      showToast('error', 'El inspector no tiene un email configurado en el sistema.');
+      return;
+    }
+
     try {
       setSendingEmail(true);
-      const { error } = await supabase.functions.invoke('send-inspection-email', {
-        body: { 
-          inspeccionId: inspeccion.id,
-          origin: window.location.origin
-        },
+      setShowEmailConfirm(false);
+      
+      const payload = { 
+        inspeccionId: inspeccion.id,
+        origin: window.location.origin
+      };
+      
+      console.log("Invocando Edge Function 'send-inspection-email' con payload:", payload);
+      
+      const { data, error } = await supabase.functions.invoke('send-inspection-email', {
+        body: payload,
       });
-      if (error) throw error;
 
+      if (error) {
+        console.error("Error retornado por Edge Function:", error);
+        throw error;
+      }
+
+      console.log("Respuesta exitosa de Edge Function:", data);
       showToast('success', 'Correo enviado al inspector. Enlace mágico re-generado.');
       onDataChanged();
       setTimeout(() => onClose(), 1500);
     } catch (err: any) {
+      console.error("Excepción en handleEdgeFunctionEmail:", err);
       showToast('error', `Error al enviar correo: ${err.message}`);
     } finally {
       setSendingEmail(false);
@@ -693,12 +727,12 @@ export function InspeccionDetailDrawer({
                         <p className="text-xs text-brand-700">Notifica al inspector vía email con un enlace seguro (Edge Function) a la planilla personalizada.</p>
                       </div>
                       <button
-                        onClick={handeEdgeFunctionEmail}
-                        disabled={sendingEmaill || !dbData?.planilla_personalizada_url}
+                        onClick={() => setShowEmailConfirm(true)}
+                        disabled={sendingEmail || !dbData?.planilla_personalizada_url}
                         className="w-full flex justify-center items-center gap-2 px-4 py-3 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700 disabled:opacity-50 disabled:bg-brand-300 transition"
                       >
-                        {sendingEmaill ? <Loader2 className="animate-spin w-5 h-5"/> : <Mail className="w-5 h-5" />}
-                        {sendingEmaill ? 'Enviando...' : 'Enviar al Inspector'}
+                        {sendingEmail ? <Loader2 className="animate-spin w-5 h-5"/> : <Mail className="w-5 h-5" />}
+                        {sendingEmail ? 'Enviando...' : 'Enviar al Inspector'}
                       </button>
                       {!dbData?.planilla_personalizada_url && (
                           <p className="text-xs text-center text-brand-600 font-semibold mt-1">Sube la planilla personalizada para habilitar el envío.</p>
@@ -833,6 +867,45 @@ export function InspeccionDetailDrawer({
           </div>
         </div>
       </div>
+      {/* Email Confirmation Modal */}
+      {showEmailConfirm && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full overflow-hidden border border-gray-100 scale-in-center">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-brand-50 text-brand-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Mail className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Confirmar Envío</h3>
+              <p className="text-sm text-gray-500 mb-6">
+                Se enviará un correo con el acceso a la inspección <span className="font-bold">#INS-{inspeccion.id}</span> a:
+              </p>
+              
+              <div className="bg-gray-50 rounded-xl p-4 mb-6 text-left border border-gray-100">
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Inspector</p>
+                <p className="text-sm font-bold text-gray-900 mb-2">{dbData?.inspector?.nombre_completo || inspeccion.inspector_nombre}</p>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Email Destino</p>
+                <p className="text-sm font-medium text-brand-600 break-all">{dbData?.inspector?.email || 'No configurado'}</p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowEmailConfirm(false)}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleEdgeFunctionEmail}
+                  disabled={!dbData?.inspector?.email}
+                  className="flex-1 px-4 py-2.5 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 transition shadow-lg shadow-brand-200 disabled:opacity-50"
+                >
+                  Enviar Ahora
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
