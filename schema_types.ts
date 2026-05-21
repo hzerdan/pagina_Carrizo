@@ -122,6 +122,7 @@ export type Database = {
       }
       catalogo_tareas_control: {
         Row: {
+          estado: string | null
           id: number
           orden_sugerido: number | null
           requiere_aviso: boolean | null
@@ -130,6 +131,7 @@ export type Database = {
           tipo_tarea: string | null
         }
         Insert: {
+          estado?: string | null
           id?: number
           orden_sugerido?: number | null
           requiere_aviso?: boolean | null
@@ -138,6 +140,7 @@ export type Database = {
           tipo_tarea?: string | null
         }
         Update: {
+          estado?: string | null
           id?: number
           orden_sugerido?: number | null
           requiere_aviso?: boolean | null
@@ -329,13 +332,18 @@ export type Database = {
           direction: string
           from_address: string | null
           id: number
+          is_system_requirement: boolean | null
           media_urls: string[] | null
           message_type: string
           provider: string
           provider_message_id: string | null
           raw_payload: Json | null
+          remito_id: number | null
+          requirement_status: string | null
+          response_to_id: number | null
           sender_id: number | null
           sender_role: string
+          template_code: string | null
           to_address: string | null
         }
         Insert: {
@@ -345,13 +353,18 @@ export type Database = {
           direction: string
           from_address?: string | null
           id?: number
+          is_system_requirement?: boolean | null
           media_urls?: string[] | null
           message_type?: string
           provider?: string
           provider_message_id?: string | null
           raw_payload?: Json | null
+          remito_id?: number | null
+          requirement_status?: string | null
+          response_to_id?: number | null
           sender_id?: number | null
           sender_role?: string
+          template_code?: string | null
           to_address?: string | null
         }
         Update: {
@@ -361,13 +374,18 @@ export type Database = {
           direction?: string
           from_address?: string | null
           id?: number
+          is_system_requirement?: boolean | null
           media_urls?: string[] | null
           message_type?: string
           provider?: string
           provider_message_id?: string | null
           raw_payload?: Json | null
+          remito_id?: number | null
+          requirement_status?: string | null
+          response_to_id?: number | null
           sender_id?: number | null
           sender_role?: string
+          template_code?: string | null
           to_address?: string | null
         }
         Relationships: [
@@ -376,6 +394,27 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_messages_remito_id_fkey"
+            columns: ["remito_id"]
+            isOneToOne: false
+            referencedRelation: "remitos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_messages_response_to_id_fkey"
+            columns: ["response_to_id"]
+            isOneToOne: false
+            referencedRelation: "conversation_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversation_messages_response_to_id_fkey"
+            columns: ["response_to_id"]
+            isOneToOne: false
+            referencedRelation: "v_conversation_messages_basic"
             referencedColumns: ["id"]
           },
           {
@@ -504,6 +543,7 @@ export type Database = {
         Row: {
           calle: string | null
           codigo_postal: string | null
+          estado: string | null
           id: number
           latitude: number | null
           localidad: string | null
@@ -517,6 +557,7 @@ export type Database = {
         Insert: {
           calle?: string | null
           codigo_postal?: string | null
+          estado?: string | null
           id?: number
           latitude?: number | null
           localidad?: string | null
@@ -530,6 +571,7 @@ export type Database = {
         Update: {
           calle?: string | null
           codigo_postal?: string | null
+          estado?: string | null
           id?: number
           latitude?: number | null
           localidad?: string | null
@@ -951,6 +993,137 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "inspeccion_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      logistica_politicas_notificacion: {
+        Row: {
+          activa: boolean
+          created_at: string
+          descripcion: string | null
+          enviar_recordatorios_carga: boolean
+          escalar_sin_respuesta: boolean
+          espera_respuesta_minutos: number
+          id: number
+          intervalo_recordatorio_carga_corta_minutos: number
+          intervalo_recordatorio_carga_larga_minutos: number
+          max_recordatorios_sin_respuesta: number
+          nombre: string
+          pedir_confirmacion_fecha_carga: boolean
+          pedir_estimacion_demora_carga: boolean
+          umbral_carga_larga_minutos: number
+          updated_at: string
+        }
+        Insert: {
+          activa?: boolean
+          created_at?: string
+          descripcion?: string | null
+          enviar_recordatorios_carga?: boolean
+          escalar_sin_respuesta?: boolean
+          espera_respuesta_minutos?: number
+          id?: number
+          intervalo_recordatorio_carga_corta_minutos?: number
+          intervalo_recordatorio_carga_larga_minutos?: number
+          max_recordatorios_sin_respuesta?: number
+          nombre: string
+          pedir_confirmacion_fecha_carga?: boolean
+          pedir_estimacion_demora_carga?: boolean
+          umbral_carga_larga_minutos?: number
+          updated_at?: string
+        }
+        Update: {
+          activa?: boolean
+          created_at?: string
+          descripcion?: string | null
+          enviar_recordatorios_carga?: boolean
+          escalar_sin_respuesta?: boolean
+          espera_respuesta_minutos?: number
+          id?: number
+          intervalo_recordatorio_carga_corta_minutos?: number
+          intervalo_recordatorio_carga_larga_minutos?: number
+          max_recordatorios_sin_respuesta?: number
+          nombre?: string
+          pedir_confirmacion_fecha_carga?: boolean
+          pedir_estimacion_demora_carga?: boolean
+          umbral_carga_larga_minutos?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      logistica_politicas_notificacion_override: {
+        Row: {
+          creado_por_email: string | null
+          creado_por_id: number | null
+          created_at: string
+          enviar_recordatorios_carga: boolean | null
+          escalar_sin_respuesta: boolean | null
+          espera_respuesta_minutos: number | null
+          id: number
+          intervalo_recordatorio_carga_corta_minutos: number | null
+          intervalo_recordatorio_carga_larga_minutos: number | null
+          max_recordatorios_sin_respuesta: number | null
+          motivo: string | null
+          omitir_confirmacion_fecha_carga: boolean | null
+          omitir_estimacion_demora_carga: boolean | null
+          omitir_notificaciones_chofer: boolean | null
+          omitir_recordatorios_carga: boolean | null
+          pedir_confirmacion_fecha_carga: boolean | null
+          pedir_estimacion_demora_carga: boolean | null
+          remito_id: number
+          umbral_carga_larga_minutos: number | null
+          vigente: boolean
+        }
+        Insert: {
+          creado_por_email?: string | null
+          creado_por_id?: number | null
+          created_at?: string
+          enviar_recordatorios_carga?: boolean | null
+          escalar_sin_respuesta?: boolean | null
+          espera_respuesta_minutos?: number | null
+          id?: number
+          intervalo_recordatorio_carga_corta_minutos?: number | null
+          intervalo_recordatorio_carga_larga_minutos?: number | null
+          max_recordatorios_sin_respuesta?: number | null
+          motivo?: string | null
+          omitir_confirmacion_fecha_carga?: boolean | null
+          omitir_estimacion_demora_carga?: boolean | null
+          omitir_notificaciones_chofer?: boolean | null
+          omitir_recordatorios_carga?: boolean | null
+          pedir_confirmacion_fecha_carga?: boolean | null
+          pedir_estimacion_demora_carga?: boolean | null
+          remito_id: number
+          umbral_carga_larga_minutos?: number | null
+          vigente?: boolean
+        }
+        Update: {
+          creado_por_email?: string | null
+          creado_por_id?: number | null
+          created_at?: string
+          enviar_recordatorios_carga?: boolean | null
+          escalar_sin_respuesta?: boolean | null
+          espera_respuesta_minutos?: number | null
+          id?: number
+          intervalo_recordatorio_carga_corta_minutos?: number | null
+          intervalo_recordatorio_carga_larga_minutos?: number | null
+          max_recordatorios_sin_respuesta?: number | null
+          motivo?: string | null
+          omitir_confirmacion_fecha_carga?: boolean | null
+          omitir_estimacion_demora_carga?: boolean | null
+          omitir_notificaciones_chofer?: boolean | null
+          omitir_recordatorios_carga?: boolean | null
+          pedir_confirmacion_fecha_carga?: boolean | null
+          pedir_estimacion_demora_carga?: boolean | null
+          remito_id?: number
+          umbral_carga_larga_minutos?: number | null
+          vigente?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "logistica_politicas_notificacion_override_remito_id_fkey"
+            columns: ["remito_id"]
+            isOneToOne: false
+            referencedRelation: "remitos"
             referencedColumns: ["id"]
           },
         ]
@@ -1494,6 +1667,7 @@ export type Database = {
         Row: {
           acoplado_id: number | null
           archivo_url: string | null
+          bot_status: Json | null
           bruto_pesaje_lugar_id: number | null
           bruto_pesaje_momento: string | null
           camion_id: number | null
@@ -1504,8 +1678,10 @@ export type Database = {
           contexto_asignacion: Json | null
           cotizacion_url: string | null
           created_at: string | null
+          debe_pasar_por_reembolse: boolean | null
           email_remitente: string | null
           estado_asignacion: string | null
+          fecha_hora_estimada_carga: string | null
           id: number
           inspector_id: number | null
           instrucciones_texto: string | null
@@ -1522,6 +1698,7 @@ export type Database = {
         Insert: {
           acoplado_id?: number | null
           archivo_url?: string | null
+          bot_status?: Json | null
           bruto_pesaje_lugar_id?: number | null
           bruto_pesaje_momento?: string | null
           camion_id?: number | null
@@ -1532,8 +1709,10 @@ export type Database = {
           contexto_asignacion?: Json | null
           cotizacion_url?: string | null
           created_at?: string | null
+          debe_pasar_por_reembolse?: boolean | null
           email_remitente?: string | null
           estado_asignacion?: string | null
+          fecha_hora_estimada_carga?: string | null
           id?: number
           inspector_id?: number | null
           instrucciones_texto?: string | null
@@ -1550,6 +1729,7 @@ export type Database = {
         Update: {
           acoplado_id?: number | null
           archivo_url?: string | null
+          bot_status?: Json | null
           bruto_pesaje_lugar_id?: number | null
           bruto_pesaje_momento?: string | null
           camion_id?: number | null
@@ -1560,8 +1740,10 @@ export type Database = {
           contexto_asignacion?: Json | null
           cotizacion_url?: string | null
           created_at?: string | null
+          debe_pasar_por_reembolse?: boolean | null
           email_remitente?: string | null
           estado_asignacion?: string | null
+          fecha_hora_estimada_carga?: string | null
           id?: number
           inspector_id?: number | null
           instrucciones_texto?: string | null
@@ -1756,25 +1938,31 @@ export type Database = {
           contacto_principal_id: number | null
           created_at: string | null
           cuit: string | null
+          email_general: string | null
           estado: string | null
           id: number
-          nombre_empresa: string
+          razon_social: string
+          telefono_general: string | null
         }
         Insert: {
           contacto_principal_id?: number | null
           created_at?: string | null
           cuit?: string | null
+          email_general?: string | null
           estado?: string | null
           id?: number
-          nombre_empresa: string
+          razon_social: string
+          telefono_general?: string | null
         }
         Update: {
           contacto_principal_id?: number | null
           created_at?: string | null
           cuit?: string | null
+          email_general?: string | null
           estado?: string | null
           id?: number
-          nombre_empresa?: string
+          razon_social?: string
+          telefono_general?: string | null
         }
         Relationships: [
           {
@@ -2407,6 +2595,10 @@ export type Database = {
       get_instance_requirements: {
         Args: { p_instance_id: number; p_type: string }
         Returns: Json
+      }
+      get_or_create_conversation_for_remito: {
+        Args: { p_chofer_id: number; p_phone: string; p_remito_id: number }
+        Returns: number
       }
       get_pedido_instance_for_manual_action: {
         Args: { p_identificador_compuesto: string }

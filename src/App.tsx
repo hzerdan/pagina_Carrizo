@@ -16,6 +16,7 @@ import { DepositosManager } from './pages/DepositosManager';
 import PersonalManager from './components/PersonalManager';
 import { PlantillasManager } from './pages/PlantillasManager';
 import { CatalogoTareasManager } from './pages/CatalogoTareasManager';
+import { LogisticaPoliticasManager } from './pages/LogisticaPoliticasManager';
 import { InspeccionesKanbanPage } from './pages/Inspecciones/InspeccionesKanbanPage';
 import { PublicInspectPage } from './pages/PublicInspect/PublicInspectPage';
 
@@ -41,6 +42,7 @@ function App() {
             <Route path="/depositos" element={<DepositosManager />} />
             <Route path="/plantillas" element={<PlantillasManager />} />
             <Route path="/catalogo-tareas" element={<CatalogoTareasManager />} />
+            <Route path="/logistica-politicas" element={<LogisticaPoliticasManager />} />
             <Route path="/inspecciones" element={<InspeccionesKanbanPage />} />
           </Route>
         </Routes>

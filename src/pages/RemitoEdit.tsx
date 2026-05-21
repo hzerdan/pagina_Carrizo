@@ -2,7 +2,26 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Scale, Package, AlertTriangle, AlertCircle, CheckCircle, ChevronDown, ChevronUp, Plus, UserPlus, X, MessageSquare } from 'lucide-react';
+import { 
+  Scale, 
+  Package, 
+  AlertTriangle, 
+  AlertCircle, 
+  CheckCircle, 
+  ChevronDown, 
+  ChevronUp, 
+  Plus, 
+  UserPlus, 
+  X, 
+  MessageSquare, 
+  Settings, 
+  Clock, 
+  Info, 
+  Loader2,
+  Zap,
+  Truck
+} from 'lucide-react';
+import { cn } from '../lib/utils';
 import { WhatsAppModal } from '../components/WhatsAppModal';
 
 interface RemitoState {
@@ -10,18 +29,60 @@ interface RemitoState {
   ref: string;
   pedido_id: number | null;
   pedido: string;
+  cliente: string;
   estado: string;
   chofer_id: number | null;
   camion_id: number | null;
   acoplado_id: number | null;
   inspector_id: number | null;
   supervisor_id: number | null;
+  fecha_hora_estimada_carga: string | null;
+  debe_pasar_por_reembolse: boolean;
+}
+
+export interface LogisticaPolitica {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  activa: boolean;
+  espera_respuesta_minutos: number;
+  umbral_carga_larga_minutos: number;
+  intervalo_recordatorio_carga_corta_minutos: number;
+  intervalo_recordatorio_carga_larga_minutos: number;
+  max_recordatorios_sin_respuesta: number;
+  pedir_confirmacion_fecha_carga: boolean;
+  pedir_estimacion_demora_carga: boolean;
+  enviar_recordatorios_carga: boolean;
+  escalar_sin_respuesta: boolean;
+}
+
+export interface LogisticaOverride {
+  id: number;
+  remito_id: number;
+  vigente: boolean;
+  espera_respuesta_minutos: number | null;
+  umbral_carga_larga_minutos: number | null;
+  intervalo_recordatorio_carga_corta_minutos: number | null;
+  intervalo_recordatorio_carga_larga_minutos: number | null;
+  max_recordatorios_sin_respuesta: number | null;
+  pedir_confirmacion_fecha_carga: boolean | null;
+  pedir_estimacion_demora_carga: boolean | null;
+  enviar_recordatorios_carga: boolean | null;
+  escalar_sin_respuesta: boolean | null;
+  omitir_notificaciones_chofer: boolean | null;
+  omitir_confirmacion_fecha_carga: boolean | null;
+  omitir_estimacion_demora_carga: boolean | null;
+  omitir_recordatorios_carga: boolean | null;
+  motivo: string | null;
+  creado_por_id: number | null;
+  creado_por_email: string | null;
+  created_at: string;
 }
 
 export function RemitoEdit() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, personalAcId } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -34,12 +95,15 @@ export function RemitoEdit() {
     ref: 'Cargando...',
     pedido_id: null,
     pedido: '...',
+    cliente: '...',
     estado: 'Datos Faltantes',
     chofer_id: null,
     camion_id: null,
     acoplado_id: null,
     inspector_id: null,
     supervisor_id: null,
+    fecha_hora_estimada_carga: null,
+    debe_pasar_por_reembolse: false,
   });
 
   const [catalogs, setCatalogs] = useState({
@@ -79,6 +143,31 @@ export function RemitoEdit() {
   const [observacionesExtras, setObservacionesExtras] = useState('');
   const [showWpModal, setShowWpModal] = useState(false);
 
+  // Logistics Config / Override State
+  const [defaultPolicy, setDefaultPolicy] = useState<LogisticaPolitica | null>(null);
+  const [currentOverride, setCurrentOverride] = useState<LogisticaOverride | null>(null);
+  const [isConfigExpanded, setIsConfigExpanded] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [overrideHistory, setOverrideHistory] = useState<LogisticaOverride[]>([]);
+  const [isSavingOverride, setIsSavingOverride] = useState(false);
+
+  const [overrideForm, setOverrideForm] = useState({
+    espera_respuesta_minutos: '' as string | number,
+    umbral_carga_larga_minutos: '' as string | number,
+    intervalo_recordatorio_carga_corta_minutos: '' as string | number,
+    intervalo_recordatorio_carga_larga_minutos: '' as string | number,
+    max_recordatorios_sin_respuesta: '' as string | number,
+    pedir_confirmacion_fecha_carga: null as boolean | null,
+    pedir_estimacion_demora_carga: null as boolean | null,
+    enviar_recordatorios_carga: null as boolean | null,
+    escalar_sin_respuesta: null as boolean | null,
+    omitir_notificaciones_chofer: false,
+    omitir_confirmacion_fecha_carga: false,
+    omitir_estimacion_demora_carga: false,
+    omitir_recordatorios_carga: false,
+    motivo: '',
+  });
+
   useEffect(() => {
     fetchContext();
   }, [id]);
@@ -103,12 +192,15 @@ export function RemitoEdit() {
         pedido: ctx.pedidos && ctx.pedidos.length > 0
           ? ctx.pedidos.map((p: any) => p.pedido_ref).join(', ')
           : 'Sin ref',
+        cliente: ctx.pedidos && ctx.pedidos.length > 0 ? ctx.pedidos[0].cliente : 'No informado',
         estado: ctx.remito?.estado_asignacion || 'Datos Faltantes',
         chofer_id: ctx.remito?.chofer_id || null,
         camion_id: ctx.remito?.camion_id || null,
         acoplado_id: ctx.remito?.acoplado_id || null,
         inspector_id: ctx.remito?.inspector_id || null,
         supervisor_id: ctx.remito?.supervisor_id || null,
+        fecha_hora_estimada_carga: ctx.remito?.fecha_hora_estimada_carga || null,
+        debe_pasar_por_reembolse: ctx.remito?.debe_pasar_por_reembolse || false,
       });
 
       const savedProtocol = ctx.remito?.protocolo_control || [];
@@ -131,12 +223,26 @@ export function RemitoEdit() {
       });
 
       if (mergedList.length > 0) {
-        setChecklist(mergedList.map((item: any) => ({
-          ...item,
-          tarea_template: item.tarea_template || item.tarea,
-          done: item.estado === 'COMPLETADO',
-          tarea: item.tarea || item.tarea_template
-        })));
+        const hasInspector = !!ctx.remito?.inspector_id;
+        setChecklist(mergedList.map((item: any) => {
+          let isAsignadaChofer = true;
+          if (item.asignada_a_chofer !== undefined) {
+            isAsignadaChofer = !!item.asignada_a_chofer;
+          } else {
+            if (item.tipo_tarea === 'CONTROL_GENERAL') {
+              isAsignadaChofer = !hasInspector;
+            } else {
+              isAsignadaChofer = true;
+            }
+          }
+          return {
+            ...item,
+            tarea_template: item.tarea_template || item.tarea,
+            done: item.estado === 'COMPLETADO',
+            tarea: item.tarea || item.tarea_template,
+            asignada_a_chofer: isAsignadaChofer
+          };
+        }));
       }
 
       // Obtener lugares de pesaje para los dropdowns
@@ -182,6 +288,58 @@ export function RemitoEdit() {
       if (ctx.remito?.acoplado_id) {
         const c = ctx.catalogos.camiones.find((x: any) => x.id === ctx.remito.acoplado_id);
         if (c) setSearchAcoplado(c.patente);
+      }
+
+      // 4. Cargar Políticas Logísticas y Overrides
+      const [policyRes, overrideRes] = await Promise.all([
+        supabase
+          .from('logistica_politicas_notificacion')
+          .select('*')
+          .eq('nombre', 'default')
+          .eq('activa', true)
+          .maybeSingle(),
+        supabase
+          .from('logistica_politicas_notificacion_override')
+          .select('*')
+          .eq('remito_id', Number(id))
+          .eq('vigente', true)
+          .maybeSingle()
+      ]);
+
+      if (policyRes.data) setDefaultPolicy(policyRes.data);
+      if (overrideRes.data) {
+        setCurrentOverride(overrideRes.data);
+        // Inicializar form con valores del override
+        setOverrideForm({
+          espera_respuesta_minutos: overrideRes.data.espera_respuesta_minutos ?? '',
+          umbral_carga_larga_minutos: overrideRes.data.umbral_carga_larga_minutos ?? '',
+          intervalo_recordatorio_carga_corta_minutos: overrideRes.data.intervalo_recordatorio_carga_corta_minutos ?? '',
+          intervalo_recordatorio_carga_larga_minutos: overrideRes.data.intervalo_recordatorio_carga_larga_minutos ?? '',
+          max_recordatorios_sin_respuesta: overrideRes.data.max_recordatorios_sin_respuesta ?? '',
+          pedir_confirmacion_fecha_carga: overrideRes.data.pedir_confirmacion_fecha_carga,
+          pedir_estimacion_demora_carga: overrideRes.data.pedir_estimacion_demora_carga,
+          enviar_recordatorios_carga: overrideRes.data.enviar_recordatorios_carga,
+          escalar_sin_respuesta: overrideRes.data.escalar_sin_respuesta,
+          omitir_notificaciones_chofer: !!overrideRes.data.omitir_notificaciones_chofer,
+          omitir_confirmacion_fecha_carga: !!overrideRes.data.omitir_confirmacion_fecha_carga,
+          omitir_estimacion_demora_carga: !!overrideRes.data.omitir_estimacion_demora_carga,
+          omitir_recordatorios_carga: !!overrideRes.data.omitir_recordatorios_carga,
+          motivo: '',
+        });
+      } else if (policyRes.data) {
+        // Inicializar form con valores de la política default si no hay override
+        setOverrideForm(prev => ({
+          ...prev,
+          espera_respuesta_minutos: policyRes.data.espera_respuesta_minutos,
+          umbral_carga_larga_minutos: policyRes.data.umbral_carga_larga_minutos,
+          intervalo_recordatorio_carga_corta_minutos: policyRes.data.intervalo_recordatorio_carga_corta_minutos,
+          intervalo_recordatorio_carga_larga_minutos: policyRes.data.intervalo_recordatorio_carga_larga_minutos,
+          max_recordatorios_sin_respuesta: policyRes.data.max_recordatorios_sin_respuesta,
+          pedir_confirmacion_fecha_carga: policyRes.data.pedir_confirmacion_fecha_carga,
+          pedir_estimacion_demora_carga: policyRes.data.pedir_estimacion_demora_carga,
+          enviar_recordatorios_carga: policyRes.data.enviar_recordatorios_carga,
+          escalar_sin_respuesta: policyRes.data.escalar_sin_respuesta,
+        }));
       }
 
     } catch (err: any) {
@@ -248,16 +406,15 @@ export function RemitoEdit() {
   }, [pesaje.bruto.lugar_id, nuevoLugarBruto.nombre, resolvedTaraStr, lugaresPesaje]);
 
   const instruccionesData = useMemo(() => {
-    const hasInspector = !!remito.inspector_id;
     const pesajeText = `Pesaje:\n1. Hacer Tara (${pesaje.tara.momento}) en ${resolvedTaraStr}.\n2. Pesar Bruto (${pesaje.bruto.momento}) en ${resolvedBrutoStr}.`;
     
-    const checklistText = displayedChecklist.map(t => `   [${t.done ? 'X' : ' '}] ${t.tarea}`).join('\n');
-    const cargaText = `Proceso de carga:\n${checklistText}`;
+    const driverTasks = displayedChecklist.filter(t => t.asignada_a_chofer);
+    const checklistText = driverTasks.map(t => `   [${t.done ? 'X' : ' '}] ${t.tarea}`).join('\n');
+    const cargaText = driverTasks.length > 0 ? `Proceso de carga:\n${checklistText}` : '';
 
-    // Lo que se guarda en DB: si hay inspector solo pesaje, sino ambos.
-    const savedText = hasInspector ? pesajeText : `${pesajeText}\n\n${cargaText}`;
+    const savedText = cargaText ? `${pesajeText}\n\n${cargaText}` : pesajeText;
 
-    return { pesajeText, cargaText, savedText, hasInspector };
+    return { pesajeText, cargaText, savedText, hasInspector: !!remito.inspector_id };
   }, [pesaje.tara.momento, resolvedTaraStr, pesaje.bruto.momento, resolvedBrutoStr, displayedChecklist, remito.inspector_id]);
 
   const instruccionesGeneradas = instruccionesData.savedText;
@@ -267,6 +424,15 @@ export function RemitoEdit() {
     const itemIndex = checklist.findIndex(c => c.tarea === displayedChecklist[index].tarea);
     if(itemIndex > -1) {
       newList[itemIndex].done = !newList[itemIndex].done;
+      setChecklist(newList);
+    }
+  };
+
+  const toggleAsignadaChofer = (index: number) => {
+    const newList = [...checklist];
+    const itemIndex = checklist.findIndex(c => c.tarea === displayedChecklist[index].tarea);
+    if(itemIndex > -1) {
+      newList[itemIndex].asignada_a_chofer = !newList[itemIndex].asignada_a_chofer;
       setChecklist(newList);
     }
   };
@@ -366,6 +532,140 @@ export function RemitoEdit() {
     return newData.id;
   };
 
+  const fetchOverrideHistory = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('logistica_politicas_notificacion_override')
+        .select('*')
+        .eq('remito_id', Number(id))
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setOverrideHistory(data || []);
+      setIsHistoryModalOpen(true);
+    } catch (err: any) {
+      alert("Error al cargar historial: " + err.message);
+    }
+  };
+
+  const handleSaveOverride = async () => {
+    if (!overrideForm.motivo.trim()) {
+      alert("El motivo del cambio es obligatorio.");
+      return;
+    }
+
+    // Validaciones numéricas
+    const numFields = ['espera_respuesta_minutos', 'umbral_carga_larga_minutos', 'intervalo_recordatorio_carga_corta_minutos', 'intervalo_recordatorio_carga_larga_minutos'];
+    for (const f of numFields) {
+      if (Number(overrideForm[f as keyof typeof overrideForm]) <= 0) {
+        alert(`El campo ${f.replace(/_/g, ' ')} debe ser mayor a 0.`);
+        return;
+      }
+    }
+    if (Number(overrideForm.max_recordatorios_sin_respuesta) < 0) {
+      alert("El máximo de recordatorios no puede ser negativo.");
+      return;
+    }
+
+    setIsSavingOverride(true);
+    try {
+      // 1. Desactivar cualquier override vigente previo para este remito
+      // Esto asegura que el índice único logistica_politicas_notificacion_override_one_active no bloquee el insert
+      const { error: updateError } = await supabase
+        .from('logistica_politicas_notificacion_override')
+        .update({ vigente: false })
+        .eq('remito_id', Number(id))
+        .eq('vigente', true);
+
+      if (updateError) {
+        console.error("Error desactivando override previo:", updateError);
+        // No lanzamos error aquí por si no existía ninguno previo, pero lo logueamos
+      }
+
+      // 2. Insertar nuevo
+      const payload = {
+        remito_id: Number(id),
+        vigente: true,
+        espera_respuesta_minutos: Number(overrideForm.espera_respuesta_minutos),
+        umbral_carga_larga_minutos: Number(overrideForm.umbral_carga_larga_minutos),
+        intervalo_recordatorio_carga_corta_minutos: Number(overrideForm.intervalo_recordatorio_carga_corta_minutos),
+        intervalo_recordatorio_carga_larga_minutos: Number(overrideForm.intervalo_recordatorio_carga_larga_minutos),
+        max_recordatorios_sin_respuesta: Number(overrideForm.max_recordatorios_sin_respuesta),
+        pedir_confirmacion_fecha_carga: overrideForm.pedir_confirmacion_fecha_carga,
+        pedir_estimacion_demora_carga: overrideForm.pedir_estimacion_demora_carga,
+        enviar_recordatorios_carga: overrideForm.enviar_recordatorios_carga,
+        escalar_sin_respuesta: overrideForm.escalar_sin_respuesta,
+        omitir_notificaciones_chofer: overrideForm.omitir_notificaciones_chofer,
+        omitir_confirmacion_fecha_carga: overrideForm.omitir_confirmacion_fecha_carga,
+        omitir_estimacion_demora_carga: overrideForm.omitir_estimacion_demora_carga,
+        omitir_recordatorios_carga: overrideForm.omitir_recordatorios_carga,
+        motivo: overrideForm.motivo.trim(),
+        creado_por_id: personalAcId,
+        creado_por_email: user?.email || 'admin'
+      };
+
+      const { data, error } = await supabase
+        .from('logistica_politicas_notificacion_override')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error al insertar override en DB:", error);
+        throw error;
+      }
+      
+      setCurrentOverride(data);
+      setOverrideForm(prev => ({ ...prev, motivo: '' }));
+      alert("Configuración personalizada guardada correctamente.");
+    } catch (err: any) {
+      console.error("Error completo handleSaveOverride:", err);
+      alert("Error al guardar override: " + (err.message || "Error desconocido"));
+    } finally {
+      setIsSavingOverride(false);
+    }
+  };
+
+  const handleResetToDefault = async () => {
+    if (!currentOverride) return;
+    if (!window.confirm("¿Estás seguro de volver a la configuración estándar? Se desactivará el override actual.")) return;
+
+    setIsSavingOverride(true);
+    try {
+      const { error } = await supabase
+        .from('logistica_politicas_notificacion_override')
+        .update({ vigente: false })
+        .eq('id', currentOverride.id);
+      
+      if (error) throw error;
+      
+      setCurrentOverride(null);
+      // Reset form a default values
+      if (defaultPolicy) {
+        setOverrideForm({
+          espera_respuesta_minutos: defaultPolicy.espera_respuesta_minutos,
+          umbral_carga_larga_minutos: defaultPolicy.umbral_carga_larga_minutos,
+          intervalo_recordatorio_carga_corta_minutos: defaultPolicy.intervalo_recordatorio_carga_corta_minutos,
+          intervalo_recordatorio_carga_larga_minutos: defaultPolicy.intervalo_recordatorio_carga_larga_minutos,
+          max_recordatorios_sin_respuesta: defaultPolicy.max_recordatorios_sin_respuesta,
+          pedir_confirmacion_fecha_carga: defaultPolicy.pedir_confirmacion_fecha_carga,
+          pedir_estimacion_demora_carga: defaultPolicy.pedir_estimacion_demora_carga,
+          enviar_recordatorios_carga: defaultPolicy.enviar_recordatorios_carga,
+          escalar_sin_respuesta: defaultPolicy.escalar_sin_respuesta,
+          omitir_notificaciones_chofer: false,
+          omitir_confirmacion_fecha_carga: false,
+          omitir_estimacion_demora_carga: false,
+          omitir_recordatorios_carga: false,
+          motivo: '',
+        });
+      }
+      alert("Se ha vuelto a la configuración estándar.");
+    } catch (err: any) {
+      alert("Error al resetear: " + err.message);
+    } finally {
+      setIsSavingOverride(false);
+    }
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
@@ -411,13 +711,6 @@ export function RemitoEdit() {
       const brutoLugarNombre = finalBrutoId ? (lugaresPesaje.find(l=>l.id === finalBrutoId)?.nombre || (pesaje.bruto.lugar_id==='IGUAL'?taraLugarNombre:nuevoLugarBruto.nombre)) : '...';
 
       const processedChecklist = checklist
-        .filter(item => {
-          // Si hay inspector, solo guardamos las tareas de pesaje en el protocolo del chofer
-          if (instruccionesData.hasInspector) {
-            return item.tipo_tarea === 'PESAJE_TARA' || item.tipo_tarea === 'PESAJE_BRUTO';
-          }
-          return true;
-        })
         .map(item => {
           let finalTarea = item.tarea;
           let finalEstado = item.done ? 'COMPLETADO' : 'PENDIENTE';
@@ -433,7 +726,8 @@ export function RemitoEdit() {
           return {
             ...item,
             tarea: finalTarea,
-            estado: finalEstado
+            estado: finalEstado,
+            asignada_a_chofer: item.asignada_a_chofer !== undefined ? !!item.asignada_a_chofer : true
           };
         });
 
@@ -453,7 +747,9 @@ export function RemitoEdit() {
         tara_pesaje_momento: pesaje.tara.momento,
         tara_pesaje_lugar_id: finalTaraId,
         bruto_pesaje_momento: pesaje.bruto.momento,
-        bruto_pesaje_lugar_id: finalBrutoId
+        bruto_pesaje_lugar_id: finalBrutoId,
+        fecha_hora_estimada_carga: remito.fecha_hora_estimada_carga,
+        debe_pasar_por_reembolse: remito.debe_pasar_por_reembolse
       };
 
       const { error } = await supabase.rpc('save_remito_update_admin', {
@@ -721,7 +1017,25 @@ export function RemitoEdit() {
               <label className="block text-sm font-medium text-gray-700 mb-1">Inspector</label>
               <select 
                 value={remito.inspector_id || ''} 
-                onChange={e => setRemito({...remito, inspector_id: e.target.value ? Number(e.target.value) : null})}
+                onChange={e => {
+                  const val = e.target.value ? Number(e.target.value) : null;
+                  const prevVal = remito.inspector_id;
+                  setRemito({...remito, inspector_id: val});
+                  if (val && prevVal === null) {
+                    const confirmChange = window.confirm(
+                      "Se ha asignado un Inspector. ¿Desea desasignar todas las tareas del chofer para seleccionarlas manualmente?"
+                    );
+                    if (confirmChange) {
+                      setChecklist(prev =>
+                        prev.map(item =>
+                          item.tipo_tarea === 'CONTROL_GENERAL'
+                            ? { ...item, asignada_a_chofer: false }
+                            : item
+                        )
+                      );
+                    }
+                  }
+                }}
                 className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
               >
                 <option value="">Seleccionar...</option>
@@ -741,7 +1055,59 @@ export function RemitoEdit() {
                 {supervisors.map(p => (
                   <option key={`sup-${p.id}`} value={p.id}>{p.nombre}</option>
                 ))}
-            </select>
+              </select>
+            </div>
+          </div>
+
+          {/* Logística Adicional */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-50">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha y Hora Estimada de Carga</label>
+              <div className="relative">
+                <input 
+                  type="text"
+                  onFocus={(e) => {
+                    e.target.type = 'datetime-local';
+                    if (remito.fecha_hora_estimada_carga) {
+                      e.target.value = remito.fecha_hora_estimada_carga.substring(0, 16);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    e.target.type = 'text';
+                    if (remito.fecha_hora_estimada_carga) {
+                      const d = new Date(remito.fecha_hora_estimada_carga);
+                      if (!isNaN(d.getTime())) {
+                        e.target.value = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                      }
+                    } else {
+                      e.target.value = '';
+                    }
+                  }}
+                  defaultValue={remito.fecha_hora_estimada_carga 
+                    ? (() => {
+                        const d = new Date(remito.fecha_hora_estimada_carga);
+                        return isNaN(d.getTime()) ? '' : `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                      })()
+                    : ''}
+                  onChange={e => {
+                    if (e.target.type === 'datetime-local') {
+                      setRemito({...remito, fecha_hora_estimada_carga: e.target.value});
+                    }
+                  }}
+                  placeholder="DD/MM/YYYY HH:mm"
+                  className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-4 pt-6">
+              <button 
+                type="button"
+                onClick={() => setRemito({...remito, debe_pasar_por_reembolse: !remito.debe_pasar_por_reembolse})}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${remito.debe_pasar_por_reembolse ? 'bg-emerald-500' : 'bg-gray-200'}`}
+              >
+                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${remito.debe_pasar_por_reembolse ? 'translate-x-5' : 'translate-x-0'}`} />
+              </button>
+              <span className="text-sm font-bold text-gray-700">¿Debe pasar por Reembolse?</span>
             </div>
           </div>
         </section>
@@ -861,7 +1227,17 @@ export function RemitoEdit() {
 
         {/* Sección C: Checklist e Instrucciones */}
         <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-6">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2">C. Instrucciones y Protocolo</h2>
+          <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+            <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">C. Instrucciones y Protocolo</h2>
+            <button 
+              type="button" 
+              onClick={() => setShowWpModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors shadow-sm"
+            >
+              <MessageSquare className="w-4 h-4" />
+              Enviar por WhatsApp
+            </button>
+          </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 flex flex-col">
@@ -873,8 +1249,8 @@ export function RemitoEdit() {
                   
                   <div className="mt-4">
                     <div className="font-bold text-gray-400 mb-1 text-[10px] uppercase tracking-wider">Sección Carga</div>
-                    <div className={instruccionesData.hasInspector ? 'line-through opacity-40' : ''}>
-                      {instruccionesData.cargaText}
+                    <div>
+                      {instruccionesData.cargaText || <span className="text-gray-400 italic">Sin tareas de carga asignadas al chofer</span>}
                     </div>
                   </div>
                 </div>
@@ -897,28 +1273,250 @@ export function RemitoEdit() {
             <h3 className="text-sm font-bold mb-4 text-gray-800">Checklist de Control (General)</h3>
             <div className="space-y-3">
               {displayedChecklist.map((task, index) => (
-                <label 
+                <div 
                   key={index} 
-                  className={`flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100 transition shadow-sm ${
-                    instruccionesData.hasInspector 
-                      ? 'opacity-60 cursor-not-allowed bg-gray-50/50' 
-                      : 'hover:border-brand-200 cursor-pointer'
-                  }`}
+                  className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-100 transition shadow-sm hover:border-brand-200"
                 >
-                  <input 
-                    type="checkbox" 
-                    checked={task.done} 
-                    onChange={() => !instruccionesData.hasInspector && toggleChecklist(index)}
-                    disabled={instruccionesData.hasInspector}
-                    className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50" 
-                  />
-                  <span className={`text-sm text-gray-700 select-none ${instruccionesData.hasInspector ? 'line-through' : ''}`}>
-                    {task.tarea}
-                  </span>
-                </label>
+                  <label 
+                    className={`flex items-center gap-3 flex-1 ${
+                      !!remito.inspector_id && !task.asignada_a_chofer 
+                        ? 'opacity-60 cursor-not-allowed bg-gray-50/50' 
+                        : 'cursor-pointer'
+                    }`}
+                  >
+                    <input 
+                      type="checkbox" 
+                      checked={task.done} 
+                      onChange={() => !(!!remito.inspector_id && !task.asignada_a_chofer) && toggleChecklist(index)}
+                      disabled={!!remito.inspector_id && !task.asignada_a_chofer}
+                      className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50" 
+                    />
+                    <span className={`text-sm select-none ${!!remito.inspector_id && !task.asignada_a_chofer ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                      {task.tarea}
+                    </span>
+                  </label>
+                  
+                  <button
+                    type="button"
+                    title="Solicitar cumplimiento al chofer vía Bot"
+                    onClick={() => toggleAsignadaChofer(index)}
+                    className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors ml-2"
+                  >
+                    <Truck 
+                      className={`w-5 h-5 transition-colors cursor-pointer ${
+                        task.asignada_a_chofer ? 'text-blue-600' : 'text-gray-300'
+                      }`}
+                    />
+                  </button>
+                </div>
               ))}
             </div>
           </div>
+        </section>
+
+        {/* Sección D: Configuración de Seguimiento */}
+        <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-6">
+          <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">D. Configuración de Seguimiento</h2>
+              {currentOverride ? (
+                <span className="flex items-center gap-1.5 px-2.5 py-0.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-[10px] font-bold">
+                  <AlertTriangle className="w-3 h-3" />
+                  PERSONALIZADO
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 px-2.5 py-0.5 bg-brand-50 text-brand-700 border border-brand-200 rounded-full text-[10px] font-bold">
+                  <Settings className="w-3 h-3" />
+                  DEFAULT
+                </span>
+              )}
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setIsConfigExpanded(!isConfigExpanded)}
+              className="p-2 hover:bg-gray-50 rounded-lg transition-colors text-gray-400"
+            >
+              {isConfigExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </button>
+          </div>
+
+          {!isConfigExpanded ? (
+            <div className="flex justify-between items-center p-4 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="flex items-center gap-4">
+                <div className={cn(
+                  "p-3 rounded-full",
+                  currentOverride ? "bg-amber-100 text-amber-600" : "bg-brand-100 text-brand-600"
+                )}>
+                  {currentOverride ? <AlertCircle className="w-6 h-6" /> : <Clock className="w-6 h-6" />}
+                </div>
+                <div>
+                  <h4 className="font-bold text-gray-800">
+                    {currentOverride ? "Seguimiento personalizado" : "Seguimiento estándar (Default)"}
+                  </h4>
+                  <p className="text-xs text-gray-500">Configura tiempos de espera y automatizaciones para este remito.</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setIsConfigExpanded(true)}
+                className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-all"
+              >
+                Configurar
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-8 animate-in fade-in slide-in-from-top-2 duration-300">
+              {/* Master Switch & Info Base */}
+              <div className="bg-brand-50/30 p-4 rounded-xl border border-brand-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex items-center gap-2 text-brand-700 text-sm font-medium">
+                  <Info className="w-4 h-4" />
+                  Política base vinculada: <strong>{defaultPolicy?.nombre || 'Default'}</strong>
+                </div>
+                
+                <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-between sm:justify-end">
+                  <button 
+                    type="button"
+                    onClick={fetchOverrideHistory}
+                    className="text-xs font-bold text-brand-600 hover:underline whitespace-nowrap"
+                  >
+                    Ver historial
+                  </button>
+
+                  <label className="flex items-center gap-3 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-brand-200 shadow-sm">
+                    <span className="text-sm font-bold text-gray-800">Monitoreo por Bot Activo</span>
+                    <div className="relative">
+                      <input
+                        type="checkbox"
+                        className="sr-only"
+                        checked={!overrideForm.omitir_notificaciones_chofer}
+                        onChange={(e) => setOverrideForm({...overrideForm, omitir_notificaciones_chofer: !e.target.checked})}
+                      />
+                      <div className={cn(
+                        "w-10 h-6 rounded-full transition-colors shadow-inner",
+                        !overrideForm.omitir_notificaciones_chofer ? "bg-emerald-500" : "bg-gray-300"
+                      )}>
+                        <div className={cn(
+                          "absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm",
+                          !overrideForm.omitir_notificaciones_chofer ? "translate-x-4" : "translate-x-0"
+                        )} />
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Tiempos con Tooltips */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                {[
+                  { label: 'Espera Rpta. (min)', key: 'espera_respuesta_minutos', tooltip: 'Minutos que el bot espera respuesta antes de marcar un fallo.' },
+                  { label: 'Umbral Retraso (min)', key: 'umbral_carga_larga_minutos', tooltip: 'Si el retraso supera estos minutos, el bot espacia los mensajes (Intervalo Largo).' },
+                  { label: 'Frecuencia Normal (min)', key: 'intervalo_recordatorio_carga_corta_minutos', tooltip: 'Minutos entre cada recordatorio durante la carga normal.' },
+                  { label: 'Frecuencia en Retrasos (min)', key: 'intervalo_recordatorio_carga_larga_minutos', tooltip: 'Minutos entre recordatorios cuando hay un retraso largo.' },
+                  { label: 'Intentos para Escalar', key: 'max_recordatorios_sin_respuesta', tooltip: 'Número de veces que el chofer puede no responder antes de avisar a un humano.' },
+                ].map((field) => (
+                  <div key={field.key} className="relative group">
+                    <label className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
+                      {field.label}
+                      <span title={field.tooltip} className="flex items-center">
+                        <Info className="w-3.5 h-3.5 cursor-help text-gray-300 hover:text-brand-500 transition-colors" />
+                      </span>
+                    </label>
+                    <input 
+                      type="number"
+                      disabled={overrideForm.omitir_notificaciones_chofer}
+                      value={overrideForm[field.key as keyof typeof overrideForm] as string | number}
+                      onChange={e => setOverrideForm({...overrideForm, [field.key]: e.target.value})}
+                      className="w-full p-2.5 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none transition-all disabled:opacity-60 disabled:bg-gray-50"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {/* Automatizaciones Activas */}
+              <div className="space-y-3 max-w-2xl">
+                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-brand-500" />
+                  Automatizaciones Activas
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { key: 'pedir_confirmacion_fecha_carga', label: 'Pedir confirmación de llegada (Pre-carga)' },
+                    { key: 'pedir_estimacion_demora_carga', label: 'Reclamar tareas del checklist (Durante la carga)' },
+                    { key: 'enviar_recordatorios_carga', label: 'Enviar recordatorios periódicos' },
+                    { key: 'escalar_sin_respuesta', label: 'Escalar a supervisor por silencio' },
+                  ].map((item) => (
+                    <label key={item.key} className={cn(
+                      "flex items-center justify-between p-3 rounded-lg border transition-colors shadow-sm",
+                      overrideForm.omitir_notificaciones_chofer ? "bg-gray-50 border-gray-100 opacity-60 cursor-not-allowed" : "bg-white border-gray-200 cursor-pointer hover:border-brand-200 hover:bg-gray-50"
+                    )}>
+                      <span className="text-sm font-medium text-gray-700">{item.label}</span>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          disabled={overrideForm.omitir_notificaciones_chofer}
+                          checked={overrideForm[item.key as keyof typeof overrideForm] as boolean}
+                          onChange={(e) => setOverrideForm({...overrideForm, [item.key]: e.target.checked})}
+                        />
+                        <div className={cn(
+                          "w-10 h-6 rounded-full transition-colors shadow-inner",
+                          overrideForm[item.key as keyof typeof overrideForm] ? "bg-brand-500" : "bg-gray-300",
+                          overrideForm.omitir_notificaciones_chofer && "opacity-50"
+                        )}>
+                          <div className={cn(
+                            "absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform shadow-sm",
+                            overrideForm[item.key as keyof typeof overrideForm] ? "translate-x-4" : "translate-x-0"
+                          )} />
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Motivo */}
+              <div className="bg-amber-50 p-5 rounded-xl border border-amber-200">
+                <label className="block text-sm font-bold text-amber-800 mb-2">Motivo del cambio *</label>
+                <textarea 
+                  value={overrideForm.motivo}
+                  onChange={e => setOverrideForm({...overrideForm, motivo: e.target.value})}
+                  rows={2}
+                  placeholder="Explica por qué se realiza este ajuste personalizado..."
+                  className="w-full p-3 bg-white border border-amber-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all"
+                />
+              </div>
+
+              {/* Acciones Config */}
+              <div className="flex flex-col sm:flex-row justify-between gap-4 pt-4 border-t border-gray-100">
+                <button 
+                  type="button"
+                  onClick={handleResetToDefault}
+                  disabled={!currentOverride || isSavingOverride}
+                  className="px-4 py-2 text-sm font-bold text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-30"
+                >
+                  Volver a configuración estándar
+                </button>
+                <div className="flex gap-3">
+                  <button 
+                    type="button"
+                    onClick={() => setIsConfigExpanded(false)}
+                    className="px-6 py-2 text-sm font-bold text-gray-500 hover:bg-gray-50 rounded-lg transition-colors"
+                  >
+                    Cerrar panel
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={handleSaveOverride}
+                    disabled={isSavingOverride}
+                    className="px-8 py-2 bg-gray-900 text-white text-sm font-bold rounded-lg shadow-lg hover:bg-black transition-all flex items-center gap-2"
+                  >
+                    {isSavingOverride && <Loader2 className="w-4 h-4 animate-spin" />}
+                    Guardar configuración
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </section>
 
       </main>
@@ -927,15 +1525,7 @@ export function RemitoEdit() {
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/90 backdrop-blur-md border-t border-gray-200 z-50">
         <div className="max-w-4xl mx-auto flex justify-between gap-4">
           <div className="flex gap-4">
-            <button 
-              type="button" 
-              onClick={() => setShowWpModal(true)}
-              className="px-6 py-3 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold rounded-xl shadow-sm hover:bg-emerald-100 transition-colors flex items-center gap-2"
-              title="Enviar instrucciones por WhatsApp"
-            >
-              <MessageSquare className="w-5 h-5" />
-              WhatsApp
-            </button>
+            {/* Espacio reservado para acciones secundarias si fuera necesario */}
           </div>
 
           <div className="flex gap-4">
@@ -964,6 +1554,60 @@ export function RemitoEdit() {
         </div>
       </div>
 
+      {/* History Modal */}
+      {isHistoryModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsHistoryModalOpen(false)}></div>
+          <div className="relative w-full max-w-2xl bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-brand-600" />
+                Historial de Cambios Logísticos
+              </h3>
+              <button onClick={() => setIsHistoryModalOpen(false)} className="p-2 hover:bg-white rounded-full transition-colors">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="p-6 max-h-[60vh] overflow-y-auto">
+              {overrideHistory.length === 0 ? (
+                <p className="text-center py-8 text-gray-500">No hay historial registrado.</p>
+              ) : (
+                <div className="space-y-6">
+                  {overrideHistory.map((h) => (
+                    <div key={h.id} className="relative pl-6 pb-6 border-l-2 border-gray-100 last:pb-0">
+                      <div className={cn(
+                        "absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 border-white shadow-sm",
+                        h.vigente ? "bg-emerald-500" : "bg-gray-300"
+                      )}></div>
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="text-xs font-bold text-gray-900">
+                          {new Date(h.created_at).toLocaleString()}
+                        </span>
+                        {h.vigente && (
+                          <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-[9px] font-bold">VIGENTE</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-700 font-medium mb-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                        "{h.motivo}"
+                      </p>
+                      <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                        <span className="font-bold text-gray-500 uppercase tracking-wider">Autor:</span>
+                        {h.creado_por_email}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button onClick={() => setIsHistoryModalOpen(false)} className="px-6 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* WhatsApp Modal */}
       {showWpModal && (
         <WhatsAppModal
@@ -977,6 +1621,8 @@ export function RemitoEdit() {
             chofer_telefono: catalogs.choferes.find(c => c.id === remito.chofer_id)?.telefono || celularChoferNuevo || '',
             inspector_nombre: inspectors.find(i => i.id === remito.inspector_id)?.nombre || 'Sin inspector',
             balanza_nombre: resolvedTaraStr,
+            destino_nombre: resolvedBrutoStr,
+            cliente_nombre: remito.cliente,
             tareas: `${instruccionesData.savedText}${observacionesExtras ? '\n\nObservaciones Extra:\n' + observacionesExtras : ''}`
           }}
         />

@@ -14,12 +14,30 @@ interface WhatsAppModalProps {
     chofer_telefono: string;
     inspector_nombre: string;
     balanza_nombre: string;
+    destino_nombre?: string;
+    cliente_nombre?: string;
     tareas: string;
   };
 }
 
+// Helpers
+const removeLineBreaks = (str: string) => {
+  if (!str) return 'No informado';
+  return str.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+};
+
+const safeSenderId = (id: any) => {
+  if (typeof id === 'number') return id;
+  const parsed = parseInt(id);
+  return isNaN(parsed) ? null : parsed;
+};
+
+const safeStr = (str: any) => {
+  return (str && str.toString().trim()) || 'No informado';
+};
+
 export function WhatsAppModal({ isOpen, onClose, remitoData }: WhatsAppModalProps) {
-  const { user } = useAuth();
+  const { user, personalAcId } = useAuth();
   const [isSending, setIsSending] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
 
@@ -27,8 +45,11 @@ export function WhatsAppModal({ isOpen, onClose, remitoData }: WhatsAppModalProp
 
   // Preparar las variables para la plantilla de Twilio (2 variables ahora)
   const now = new Date();
-  const serviceData = `Fecha: ${now.toLocaleDateString('es-AR')}
-Hora: ${now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+  const dateStr = now.toLocaleDateString('es-AR');
+  const timeStr = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+
+  const serviceData = `Fecha: ${dateStr}
+Hora: ${timeStr}
 Balanza: ${remitoData.balanza_nombre}
 Inspector: ${remitoData.inspector_nombre}
 Remito: #${remitoData.ref}
@@ -41,7 +62,26 @@ ${remitoData.tareas}`;
     '2': serviceData
   };
 
+  // Preparar variables full
+  const variablesFull = {
+    '1': safeStr(remitoData.chofer_nombre),
+    '2': safeStr(remitoData.cliente_nombre),
+    '3': dateStr,
+    '4': timeStr,
+    '5': safeStr(remitoData.balanza_nombre),
+    '6': safeStr(remitoData.destino_nombre),
+    '7': `#${remitoData.ref}`,
+    '8': removeLineBreaks(remitoData.tareas)
+  };
+
   const handleSend = async () => {
+    const cleanPhone = remitoData.chofer_telefono.replace(/\D/g, '');
+    
+    if (!cleanPhone) {
+      setResult({ success: false, message: 'El número de teléfono no es válido o está vacío.' });
+      return;
+    }
+
     setIsSending(true);
     setResult(null);
 
@@ -61,15 +101,17 @@ ${remitoData.tareas}`;
       // 2. Disparar el webhook de n8n
       const payload = {
         conversation_id: conversationId,
-        conversation_key: remitoData.chofer_telefono.replace(/\D/g, ''),
-        sender_id: user?.id || 0,
+        conversation_key: cleanPhone,
+        sender_id: safeSenderId(personalAcId),
         sender_email: user?.email || 'admin@sistema.com',
         action: 'send_instruction',
         message: `Instrucciones para Remito #${remitoData.ref}`,
-        template_variables: variables
+        template_strategy: 'auto',
+        template_variables: variables,
+        template_variables_full: variablesFull
       };
 
-      console.log('DEBUG - Enviando a n8n:', payload);
+      console.log('DEBUG - Enviando a n8n:', JSON.stringify(payload, null, 2));
 
       const response = await fetch('https://hzerdan.app.n8n.cloud/webhook/whatsapp-salida-web', {
         method: 'POST',

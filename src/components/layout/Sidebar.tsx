@@ -33,6 +33,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: 'Personal AC', path: '/personal', disabled: false },
         { name: 'Plantillas Documentales', path: '/plantillas', disabled: false },
         { name: 'Catálogo Tareas', path: '/catalogo-tareas', disabled: false },
+        { name: 'Políticas Logística', path: '/logistica-politicas', disabled: false },
     ];
 
     return (

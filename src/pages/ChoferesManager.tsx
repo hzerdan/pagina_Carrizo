@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 
 export interface Transportista {
   id: number;
-  nombre_empresa: string;
+  razon_social: string;
 }
 
 export interface Chofer {
@@ -15,7 +15,7 @@ export interface Chofer {
   telefono: string | null;
   email: string | null;
   transportistas?: {
-    nombre_empresa: string;
+    razon_social: string;
   };
 }
 
@@ -46,12 +46,12 @@ export function ChoferesManager() {
       const [choferesRes, transRes] = await Promise.all([
         supabase
           .from('choferes')
-          .select('*, transportistas(nombre_empresa)')
+          .select('*, transportistas(razon_social)')
           .order('id', { ascending: false }),
         supabase
           .from('transportistas')
-          .select('id, nombre_empresa')
-          .order('nombre_empresa')
+          .select('id, razon_social')
+          .order('razon_social')
       ]);
 
       if (choferesRes.error) throw choferesRes.error;
@@ -250,7 +250,7 @@ export function ChoferesManager() {
                       <td className="px-6 py-4 text-gray-600">
                         {c.transportistas ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {c.transportistas.nombre_empresa}
+                            {c.transportistas.razon_social}
                           </span>
                         ) : (
                           <span className="text-gray-400 italic">Sin asignar</span>
@@ -360,7 +360,7 @@ export function ChoferesManager() {
                   >
                     <option value="">-- Seleccionar --</option>
                     {transportistas.map(t => (
-                      <option key={t.id} value={t.id}>{t.nombre_empresa}</option>
+                      <option key={t.id} value={t.id}>{t.razon_social}</option>
                     ))}
                   </select>
                 </div>
