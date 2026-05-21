@@ -1,15 +1,25 @@
-# React + TypeScript + Vite
+# Página Arquimedes - Panel de Operaciones y Logística
+
+Este repositorio contiene la aplicación de control de operaciones, logística y gestión de FSM de la Página Arquimedes.
+
+## 🛠️ Herramientas de Mantenimiento y Purga de Datos
+
+Para mantener el rendimiento óptimo del proyecto, se ha desarrollado un flujo de limpieza y purga segura de datos transaccionales históricos.
+
+### 📄 Guía Interactiva de Purga
+Disponemos de un manual interactivo en formato HTML que autogenera y formatea los scripts en base a la fecha límite que usted elija:
+* **[Guía Interactiva de Purga (purga_datos.html)](file:///c:/Antigravity/Pagina%20Arquimedes/purga_datos.html)** (Haga doble clic sobre el archivo para abrirlo en su navegador).
+
+### ⚙️ Scripts de Limpieza de Almacenamiento (Supabase Storage)
+Ubicados en la raíz del repositorio, permiten eliminar físicamente archivos masivos de los buckets en Supabase:
+* **[delete_storage_files.ps1](file:///c:/Antigravity/Pagina%20Arquimedes/delete_storage_files.ps1)**: Script principal en PowerShell que maneja la paginación de a 1000 archivos y llama a la API de Supabase Storage.
+* **[delete_storage_files.bat](file:///c:/Antigravity/Pagina%20Arquimedes/delete_storage_files.bat)**: Archivo ejecutable de Windows para arrastrar y soltar el archivo CSV (`files_to_delete.csv`) o hacer doble clic directamente.
+
+---
+
+## Desarrollo local (React + TypeScript + Vite)
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
 ## Expanding the ESLint configuration
 

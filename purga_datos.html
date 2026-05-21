@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Centro de Mantenimiento y Purga de Datos - Pagina Arquimedes</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: rgba(20, 27, 45, 0.7);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-glow: rgba(99, 102, 241, 0.15);
+            --secondary: #8b5cf6;
+            --accent: #10b981;
+            --accent-glow: rgba(16, 185, 129, 0.15);
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --code-bg: #05070c;
+            --highlight: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.05) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            position: relative;
+        }
+
+        header::after {
+            content: '';
+            display: block;
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            margin: 20px auto 0;
+            border-radius: 2px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            font-weight: 400;
+        }
+
+        /* Interactive Date Configurator */
+        .configurator-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 40px;
+            backdrop-filter: blur(12px);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .configurator-info h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .configurator-info h3::before {
+            content: '⚙️';
+        }
+
+        .configurator-info p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .configurator-input {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .configurator-input label {
+            font-weight: 500;
+            font-size: 0.95rem;
+            color: var(--text-muted);
+        }
+
+        .configurator-input input[type="date"] {
+            background-color: var(--code-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            color: #ffffff;
+            padding: 10px 16px;
+            font-family: inherit;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .configurator-input input[type="date"]:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-glow);
+        }
+
+        /* Flow Navigation Tabs */
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 30px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 12px 24px;
+            font-family: inherit;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tab-btn:hover {
+            color: #ffffff;
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        .tab-btn.active {
+            color: #ffffff;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+        }
+
+        /* Content Sections */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        }
+
+        .card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--card-border);
+            padding-bottom: 10px;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Flowchart / Step Progress indicators */
+        .flow-steps {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .flow-step-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .flow-step-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--primary);
+            box-shadow: 0 5px 15px var(--primary-glow);
+        }
+
+        .flow-step-num {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            font-size: 2rem;
+            font-weight: 800;
+            color: rgba(255, 255, 255, 0.05);
+            line-height: 1;
+        }
+
+        .flow-step-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+            color: #ffffff;
+        }
+
+        .flow-step-card p {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        /* Warnings/Notes Alerts */
+        .alert {
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+        }
+
+        .alert-info {
+            background-color: rgba(99, 102, 241, 0.1);
+            border-left: 4px solid var(--primary);
+        }
+
+        .alert-warning {
+            background-color: rgba(245, 158, 11, 0.1);
+            border-left: 4px solid var(--highlight);
+        }
+
+        .alert-danger {
+            background-color: rgba(239, 68, 68, 0.1);
+            border-left: 4px solid #ef4444;
+        }
+
+        .alert-icon {
+            font-size: 1.25rem;
+        }
+
+        .alert-content h4 {
+            margin-bottom: 4px;
+            color: #ffffff;
+            font-weight: 600;
+        }
+
+        .alert-content p {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        /* Code Blocks styling */
+        .code-container {
+            position: relative;
+            margin: 20px 0;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        }
+
+        .code-header {
+            background-color: #0b0f19;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .code-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .copy-btn {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--card-border);
+            color: var(--text-main);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .copy-btn:hover {
+            background-color: var(--primary);
+            border-color: var(--primary);
+            color: #ffffff;
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        .copy-btn.copied {
+            background-color: var(--accent);
+            border-color: var(--accent);
+            color: #ffffff;
+        }
+
+        pre {
+            background-color: var(--code-bg);
+            padding: 20px;
+            overflow-x: auto;
+            margin: 0;
+        }
+
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: #e2e8f0;
+        }
+
+        /* Lists */
+        ul, ol {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            color: var(--text-main);
+        }
+
+        li strong {
+            color: #ffffff;
+        }
+
+        /* File Links style */
+        .file-link {
+            color: var(--primary);
+            text-decoration: none;
+            border-bottom: 1px dashed var(--primary);
+            transition: all 0.2s ease;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9em;
+        }
+
+        .file-link:hover {
+            color: var(--secondary);
+            border-bottom-color: var(--secondary);
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--card-border);
+            padding-top: 30px;
+        }
+
+        /* Key values tags */
+        .tag {
+            background-color: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--card-border);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85em;
+            color: var(--secondary);
+        }
+        
+        .tag-date {
+            color: var(--highlight);
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Centro de Mantenimiento y Purga de Datos</h1>
+            <p class="subtitle">Guía Interactiva y Automatizada para la Limpieza Segura de Datos Transaccionales</p>
+        </header>
+
+        <!-- Configurador de Fechas Dinámicas -->
+        <section class="configurator-panel">
+            <div class="configurator-info">
+                <h3>Asistente de Fecha de Purga</h3>
+                <p>Modifique la fecha a continuación para actualizar dinámicamente los parámetros de todos los scripts del manual.</p>
+            </div>
+            <div class="configurator-input">
+                <label for="purge-date">Fecha Límite (Cutoff Date):</label>
+                <input type="date" id="purge-date" value="2026-05-20">
+            </div>
+        </section>
+
+        <!-- Navegación de Flujo -->
+        <nav class="tabs">
+            <button class="tab-btn active" onclick="switchTab(event, 'general')">📊 1. Resumen y Conceptos</button>
+            <button class="tab-btn" onclick="switchTab(event, 'paso1')">💾 2. Almacenamiento (Storage)</button>
+            <button class="tab-btn" onclick="switchTab(event, 'paso2')">🗄️ 3. Purga Base de Datos</button>
+            <button class="tab-btn" onclick="switchTab(event, 'simulador')">🔍 4. Simulador / Dry Run</button>
+        </nav>
+
+        <!-- Pestaña 1: General -->
+        <div id="general" class="tab-content active">
+            <div class="card">
+                <h2>Arquitectura de Purga de Datos</h2>
+                <p style="margin-bottom: 20px;">
+                    El sistema almacena información en Supabase organizada en dos tipos de entidades. Es fundamental mantener esta distinción para no romper la operatividad técnica de la plataforma:
+                </p>
+                
+                <div class="flow-steps">
+                    <div class="flow-step-card">
+                        <div class="flow-step-num">🗑️</div>
+                        <h3>Datos Transaccionales</h3>
+                        <p style="margin-top: 10px;">Información generada por el flujo diario de los usuarios. Se puede purgar según fecha límite.</p>
+                        <ul style="margin-top: 10px; margin-left: 15px; font-size: 0.85rem;">
+                            <li>Pedidos (y sus instancias)</li>
+                            <li>Órdenes de Compra (e instancias)</li>
+                            <li>Remitos (e ítems)</li>
+                            <li>Inspecciones e imágenes</li>
+                            <li>Mensajes y chats de soporte</li>
+                            <li>Historiales y logs técnicos</li>
+                        </ul>
+                    </div>
+
+                    <div class="flow-step-card" style="border-color: rgba(16, 185, 129, 0.3);">
+                        <div class="flow-step-num" style="color: rgba(16, 185, 129, 0.1);">🔒</div>
+                        <h3>Datos Maestros (Configuración)</h3>
+                        <p style="margin-top: 10px;">Definiciones estructurales del negocio y del sistema. <strong>No se tocan bajo ninguna circunstancia.</strong></p>
+                        <ul style="margin-top: 10px; margin-left: 15px; font-size: 0.85rem;">
+                            <li>Definiciones de estados FSM</li>
+                            <li>Configuración de validaciones</li>
+                            <li>Roles del sistema</li>
+                            <li>Camiones, Choferes y Transportistas</li>
+                            <li>Usuarios y perfiles</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="alert alert-info">
+                    <div class="alert-icon">💡</div>
+                    <div class="alert-content">
+                        <h4>Regla de Protección Retroactiva</h4>
+                        <p>Los usuarios cargan órdenes hoy que corresponden a transacciones comerciales del pasado. Por lo tanto, el sistema de purga evalúa que <strong>tanto la fecha comercial del documento como la fecha física de creación del registro en la base de datos (created_at)</strong> sean anteriores a la fecha límite para proceder a la eliminación.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Flujo de Operación Correcto</h2>
+                <p style="margin-bottom: 20px;">Para realizar la purga sin dejar registros huérfanos ni archivos basura en la nube, se debe seguir estrictamente este orden:</p>
+                <ol>
+                    <li>Ejecutar la consulta del <strong>Paso 1 (Storage)</strong> para generar la lista de archivos a borrar.</li>
+                    <li>Exportar los resultados como CSV, renombrarlo a <span class="tag">files_to_delete.csv</span> y copiarlo a la raíz del proyecto.</li>
+                    <li>Ejecutar el archivo automatizado <strong><a href="file:///c:/Antigravity/Pagina%20Arquimedes/delete_storage_files.bat" class="file-link">delete_storage_files.bat</a></strong> para limpiar físicamente el Storage.</li>
+                    <li>Ejecutar el script del <strong>Paso 2 (SQL Purge)</strong> en el panel de Supabase para limpiar la base de datos pública y actualizar las vistas.</li>
+                </ol>
+            </div>
+        </div>
+
+        <!-- Pestaña 2: Storage -->
+        <div id="paso1" class="tab-content">
+            <div class="card">
+                <h2>Paso 1: Limpieza de Archivos en Supabase Storage</h2>
+                
+                <div class="alert alert-warning">
+                    <div class="alert-icon">⚠️</div>
+                    <div class="alert-content">
+                        <h4>¿Por qué se requiere un script externo?</h4>
+                        <p>La base de datos de Supabase protege los metadatos de almacenamiento mediante el trigger <code>storage.protect_delete()</code>. Ejecutar un <code>DELETE</code> directo en SQL fallará con un error 42501 y, además, dejaría los archivos físicos huérfanos en los servidores en la nube. Debemos borrarlos a través de la API oficial.</p>
+                    </div>
+                </div>
+
+                <h3 style="margin-top: 20px;">1. Generar el Reporte CSV</h3>
+                <p>Ejecute esta consulta en el **SQL Editor** de Supabase para obtener todas las rutas físicas de archivos a eliminar:</p>
+
+                <div class="code-container">
+                    <div class="code-header">
+                        <span class="code-title">sql (Consulta de Archivos a Borrar)</span>
+                        <button class="copy-btn" onclick="copyCode('sql-storage')">📋 Copiar</button>
+                    </div>
+                    <pre><code id="sql-storage">-- Consulta de archivos a eliminar
+WITH vars AS (
+    SELECT 
+        '<span class="dynamic-datetime">2026-05-20 00:00:00-03</span>'::timestamptz AS cutoff,
+        '<span class="dynamic-date">2026-05-20</span>'::date AS cutoff_date
+)
+-- 1. Archivos en public.documentos
+SELECT 
+    COALESCE(
+        substring(storage_path from '/storage/v1/object/(?:public|authenticated|sign)/([^/]+)/'),
+        'Archivos_entrada'
+    ) AS bucket_id,
+    CASE 
+        WHEN storage_path LIKE '%/storage/v1/object/%' THEN 
+            substring(storage_path from '/storage/v1/object/(?:public|authenticated|sign)/[^/]+/(.+)$')
+        ELSE 
+            storage_path
+    END AS file_path
+FROM public.documentos, vars
+WHERE uploaded_at < vars.cutoff
+   OR pedido_instance_id IN (SELECT id FROM public.pedido_instancias WHERE created_at < vars.cutoff)
+   OR oc_instance_id IN (SELECT id FROM public.oc_instancias WHERE created_at < vars.cutoff)
+   OR remito_id IN (SELECT id FROM public.remitos WHERE created_at < vars.cutoff)
+
+UNION ALL
+
+-- 2. Archivos multimedia de chats (evidencias)
+SELECT 
+    storage_bucket AS bucket_id,
+    storage_path AS file_path
+FROM public.message_media, vars
+WHERE created_at < vars.cutoff
+
+UNION ALL
+
+-- 3. PDFs/Archivos adjuntos en remitos
+SELECT 
+    substring(archivo_url from '/storage/v1/object/(?:public|authenticated|sign)/([^/]+)/') AS bucket_id,
+    substring(archivo_url from '/storage/v1/object/(?:public|authenticated|sign)/[^/]+/(.+)$') AS file_path
+FROM public.remitos, vars
+WHERE created_at < vars.cutoff AND archivo_url IS NOT NULL AND archivo_url LIKE '%/storage/v1/object/%'
+
+UNION ALL
+
+SELECT 
+    substring(cotizacion_url from '/storage/v1/object/(?:public|authenticated|sign)/([^/]+)/') AS bucket_id,
+    substring(cotizacion_url from '/storage/v1/object/(?:public|authenticated|sign)/[^/]+/(.+)$') AS file_path
+FROM public.remitos, vars
+WHERE created_at < vars.cutoff AND cotizacion_url IS NOT NULL AND cotizacion_url LIKE '%/storage/v1/object/%'
+
+UNION ALL
+
+-- 4. Planillas de inspecciones
+SELECT 
+    substring(planilla_url from '/storage/v1/object/(?:public|authenticated|sign)/([^/]+)/') AS bucket_id,
+    substring(planilla_url from '/storage/v1/object/(?:public|authenticated|sign)/[^/]+/(.+)$') AS file_path
+FROM public.inspecciones, vars
+WHERE (created_at < vars.cutoff OR remito_id IN (SELECT id FROM public.remitos WHERE created_at < vars.cutoff))
+  AND planilla_url IS NOT NULL AND planilla_url LIKE '%/storage/v1/object/%'
+
+UNION ALL
+
+SELECT 
+    substring(planilla_personalizada_url from '/storage/v1/object/(?:public|authenticated|sign)/([^/]+)/') AS bucket_id,
+    substring(planilla_personalizada_url from '/storage/v1/object/(?:public|authenticated|sign)/[^/]+/(.+)$') AS file_path
+FROM public.inspecciones, vars
+WHERE (created_at < vars.cutoff OR remito_id IN (SELECT id FROM public.remitos WHERE created_at < vars.cutoff))
+  AND planilla_personalizada_url IS NOT NULL AND planilla_personalizada_url LIKE '%/storage/v1/object/%'
+
+UNION ALL
+
+SELECT 
+    substring(planilla_completada_url from '/storage/v1/object/(?:public|authenticated|sign)/([^/]+)/') AS bucket_id,
+    substring(planilla_completada_url from '/storage/v1/object/(?:public|authenticated|sign)/[^/]+/(.+)$') AS file_path
+FROM public.inspecciones, vars
+WHERE (created_at < vars.cutoff OR remito_id IN (SELECT id FROM public.remitos WHERE created_at < vars.cutoff))
+  AND planilla_completada_url IS NOT NULL AND planilla_completada_url LIKE '%/storage/v1/object/%'
+
+UNION ALL
+
+-- 5. Cotizaciones de pedidos
+SELECT 
+    substring(cotizacion_archivo_url from '/storage/v1/object/(?:public|authenticated|sign)/([^/]+)/') AS bucket_id,
+    substring(cotizacion_archivo_url from '/storage/v1/object/(?:public|authenticated|sign)/[^/]+/(.+)$') AS file_path
+FROM public.pedidos, vars
+WHERE (fecha_pedido < vars.cutoff_date OR (fecha_pedido IS NULL AND created_at < vars.cutoff))
+  AND cotizacion_archivo_url IS NOT NULL AND cotizacion_archivo_url LIKE '%/storage/v1/object/%';</code></pre>
+                </div>
+
+                <h3 style="margin-top: 30px;">2. Ejecutar la Eliminación Masiva</h3>
+                <ul>
+                    <li>Descargue la tabla generada en el paso anterior como un archivo **CSV** desde la consola de Supabase.</li>
+                    <li>Guarde el archivo con el nombre exacto <strong>`files_to_delete.csv`</strong> en la carpeta raíz del proyecto.</li>
+                    <li>Haga doble clic en el archivo ejecutable <strong><a href="file:///c:/Antigravity/Pagina%20Arquimedes/delete_storage_files.bat" class="file-link">delete_storage_files.bat</a></strong>.</li>
+                    <li>Cuando la consola se lo solicite, pegue la **SERVICE_ROLE_KEY** de su proyecto y pulse Enter. El script procesará y eliminará todos los archivos en lotes automáticos de hasta 1000 elementos.</li>
+                </ul>
+
+                <div class="alert alert-info" style="margin-top: 20px;">
+                    <div class="alert-icon">🛠️</div>
+                    <div class="alert-content">
+                        <h4>Scripts de Soporte Locales</h4>
+                        <p>Los scripts encargados de esta operación son:
+                            <br>• Script principal: <strong><a href="file:///c:/Antigravity/Pagina%20Arquimedes/delete_storage_files.ps1" class="file-link">delete_storage_files.ps1</a></strong> (PowerShell)
+                            <br>• Acceso directo: <strong><a href="file:///c:/Antigravity/Pagina%20Arquimedes/delete_storage_files.bat" class="file-link">delete_storage_files.bat</a></strong> (Consola Windows)
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestaña 3: SQL Purge -->
+        <div id="paso2" class="tab-content">
+            <div class="card">
+                <h2>Paso 2: Script SQL de Purga en la Base de Datos</h2>
+                <p style="margin-bottom: 20px;">
+                    Ejecute este script en el <strong>SQL Editor</strong> de Supabase. El script realiza la desvinculación de claves recursivas en tablas jerárquicas y luego procede a una eliminación bottom-up segura para cumplir con las restricciones relacionales.
+                </p>
+
+                <div class="code-container">
+                    <div class="code-header">
+                        <span class="code-title">sql (Script de Purga Definitivo)</span>
+                        <button class="copy-btn" onclick="copyCode('sql-purge')">📋 Copiar Código</button>
+                    </div>
+                    <pre><code id="sql-purge">DO $$
+DECLARE
+    -- MODIFIQUE AQUÍ LA FECHA LÍMITE DE BORRADO:
+    _cutoff TIMESTAMPTZ := '<span class="dynamic-datetime">2026-05-20 00:00:00-03</span>'; -- Timestamp con zona horaria
+    _cutoff_date DATE   := '<span class="dynamic-date">2026-05-20</span>';             -- Fecha para filtros date
+BEGIN
+    RAISE NOTICE 'Iniciando purga de datos transaccionales en base de datos anteriores a %...', _cutoff;
+
+    -- =========================================================================
+    -- 1. PRE-CALCULAR IDS DE ENTIDADES A BORRAR EN TABLAS TEMPORALES
+    -- =========================================================================
+    CREATE TEMP TABLE tmp_pedidos_to_delete AS
+    SELECT id FROM public.pedidos 
+    WHERE (fecha_pedido < _cutoff_date OR fecha_pedido IS NULL)
+      AND created_at < _cutoff;
+
+    CREATE TEMP TABLE tmp_ocs_to_delete AS
+    SELECT id FROM public.ordenes_compra 
+    WHERE (fecha_emision < _cutoff_date OR fecha_emision IS NULL)
+      AND created_at < _cutoff;
+
+    CREATE TEMP TABLE tmp_pedido_instances_to_delete AS
+    SELECT id FROM public.pedido_instancias 
+    WHERE created_at < _cutoff 
+       OR pedido_id IN (SELECT id FROM tmp_pedidos_to_delete);
+
+    CREATE TEMP TABLE tmp_oc_instances_to_delete AS
+    SELECT id FROM public.oc_instancias 
+    WHERE created_at < _cutoff 
+       OR oc_id IN (SELECT id FROM tmp_ocs_to_delete);
+
+    CREATE TEMP TABLE tmp_remitos_to_delete AS
+    SELECT id FROM public.remitos 
+    WHERE created_at < _cutoff
+       OR id IN (
+           SELECT DISTINCT remito_id FROM public.remito_items 
+           WHERE origen_instance_id IN (SELECT id FROM tmp_pedido_instances_to_delete)
+              OR destino_instance_id IN (SELECT id FROM tmp_pedido_instances_to_delete)
+              OR origen_instance_id IN (SELECT id FROM tmp_oc_instances_to_delete)
+              OR destino_instance_id IN (SELECT id FROM tmp_oc_instances_to_delete)
+       );
+
+    CREATE TEMP TABLE tmp_inspecciones_to_delete AS
+    SELECT id FROM public.inspecciones 
+    WHERE created_at < _cutoff 
+       OR remito_id IN (SELECT id FROM tmp_remitos_to_delete);
+
+    CREATE TEMP TABLE tmp_conversations_to_delete AS
+    SELECT id FROM public.conversations 
+    WHERE created_at < _cutoff
+       OR remito_actual_id IN (SELECT id FROM tmp_remitos_to_delete);
+
+    -- =========================================================================
+    -- 2. DESVINCULAR RELACIONES RECURSIVAS EN LA BASE DE DATOS
+    -- =========================================================================
+    UPDATE public.pedido_instancias 
+    SET parent_instance_id = NULL 
+    WHERE parent_instance_id IN (SELECT id FROM tmp_pedido_instances_to_delete)
+       OR id IN (SELECT id FROM tmp_pedido_instances_to_delete);
+
+    UPDATE public.oc_instancias 
+    SET parent_instance_id = NULL 
+    WHERE parent_instance_id IN (SELECT id FROM tmp_oc_instances_to_delete)
+       OR id IN (SELECT id FROM tmp_oc_instances_to_delete);
+
+    UPDATE public.remitos 
+    SET parent_remito_id = NULL 
+    WHERE parent_remito_id IN (SELECT id FROM tmp_remitos_to_delete)
+       OR id IN (SELECT id FROM tmp_remitos_to_delete);
+
+    -- =========================================================================
+    -- 3. ELIMINAR TABLAS DE LOGS, AUDITORÍA Y METADATOS TRANSACCIONALES
+    -- =========================================================================
+    DELETE FROM public.message_media
+    WHERE created_at < _cutoff 
+       OR message_id IN (
+           SELECT id FROM public.conversation_messages 
+           WHERE conversation_id IN (SELECT id FROM tmp_conversations_to_delete)
+       );
+
+    DELETE FROM public.conversation_messages
+    WHERE created_at < _cutoff 
+       OR conversation_id IN (SELECT id FROM tmp_conversations_to_delete);
+
+    DELETE FROM public.conversations
+    WHERE id IN (SELECT id FROM tmp_conversations_to_delete);
+
+    DELETE FROM public.alertas_escalamiento
+    WHERE created_at < _cutoff;
+
+    DELETE FROM public.magic_links
+    WHERE created_at < _cutoff;
+
+    DELETE FROM public.debug_log_fsm
+    WHERE timestamp < _cutoff;
+
+    DELETE FROM public.mv_refresh_events
+    WHERE refreshed_at < _cutoff;
+
+    DELETE FROM public.documentos
+    WHERE uploaded_at < _cutoff
+       OR pedido_instance_id IN (SELECT id FROM tmp_pedido_instances_to_delete)
+       OR oc_instance_id IN (SELECT id FROM tmp_oc_instances_to_delete)
+       OR remito_id IN (SELECT id FROM tmp_remitos_to_delete);
+
+    DELETE FROM public.historial_eventos
+    WHERE timestamp < _cutoff
+       OR pedido_instance_id IN (SELECT id FROM tmp_pedido_instances_to_delete)
+       OR oc_instance_id IN (SELECT id FROM tmp_oc_instances_to_delete);
+
+    -- =========================================================================
+    -- 4. ELIMINAR VINCULACIONES E ÍTEMS TRANSACCIONALES
+    -- =========================================================================
+    DELETE FROM public.vinculaciones_pedido_oc
+    WHERE pedido_instance_id IN (SELECT id FROM tmp_pedido_instances_to_delete)
+       OR oc_instance_id IN (SELECT id FROM tmp_oc_instances_to_delete);
+
+    DELETE FROM public.inspeccion_items_pedido
+    WHERE pedido_instance_id IN (SELECT id FROM tmp_pedido_instances_to_delete)
+       OR inspeccion_id IN (SELECT id FROM tmp_inspecciones_to_delete);
+
+    DELETE FROM public.inspecciones
+    WHERE id IN (SELECT id FROM tmp_inspecciones_to_delete);
+
+    DELETE FROM public.remito_items
+    WHERE remito_id IN (SELECT id FROM tmp_remitos_to_delete)
+       OR origen_instance_id IN (SELECT id FROM tmp_pedido_instances_to_delete)
+       OR destino_instance_id IN (SELECT id FROM tmp_pedido_instances_to_delete)
+       OR origen_instance_id IN (SELECT id FROM tmp_oc_instances_to_delete)
+       OR destino_instance_id IN (SELECT id FROM tmp_oc_instances_to_delete);
+
+    -- =========================================================================
+    -- 5. ELIMINAR ENTIDADES TRANSACCIONALES PRINCIPALES
+    -- =========================================================================
+    DELETE FROM public.remitos
+    WHERE id IN (SELECT id FROM tmp_remitos_to_delete);
+
+    DELETE FROM public.pedido_instancias
+    WHERE id IN (SELECT id FROM tmp_pedido_instances_to_delete);
+
+    DELETE FROM public.oc_instancias
+    WHERE id IN (SELECT id FROM tmp_oc_instances_to_delete);
+
+    DELETE FROM public.pedidos
+    WHERE id IN (SELECT id FROM tmp_pedidos_to_delete);
+
+    DELETE FROM public.ordenes_compra
+    WHERE id IN (SELECT id FROM tmp_ocs_to_delete);
+
+    -- =========================================================================
+    -- 6. REFRESCAR VISTAS MATERIALIZADAS
+    -- =========================================================================
+    RAISE NOTICE 'Refrescando vistas materializadas...';
+    REFRESH MATERIALIZED VIEW public.mv_analisis_logistico;
+    REFRESH MATERIALIZED VIEW public.mv_detalle_instancias_activas;
+    REFRESH MATERIALIZED VIEW public.mv_instancias_analitica;
+    REFRESH MATERIALIZED VIEW public.mv_instancias_por_estado;
+    REFRESH MATERIALIZED VIEW public.mv_tiempo_promedio_estado;
+    REFRESH MATERIALIZED VIEW public.mv_tiempo_promedio_por_resultado;
+
+    -- Limpiar tablas temporales
+    DROP TABLE tmp_pedidos_to_delete;
+    DROP TABLE tmp_ocs_to_delete;
+    DROP TABLE tmp_pedido_instances_to_delete;
+    DROP TABLE tmp_oc_instances_to_delete;
+    DROP TABLE tmp_remitos_to_delete;
+    DROP TABLE tmp_inspecciones_to_delete;
+    DROP TABLE tmp_conversations_to_delete;
+
+    RAISE NOTICE 'Purga relacional completa y exitosa.';
+END $$;</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pestaña 4: Simulador -->
+        <div id="simulador" class="tab-content">
+            <div class="card">
+                <h2>Simulador de Purga (Dry Run / Prueba en Seco)</h2>
+                <p style="margin-bottom: 20px;">
+                    <strong>¡RECOMENDADO ANTES DE CADA PURGA!</strong> Ejecute esta consulta en el editor SQL para auditar exactamente qué registros se eliminarían y cuáles se conservarían según la fecha límite configurada.
+                </p>
+
+                <div class="code-container">
+                    <div class="code-header">
+                        <span class="code-title">sql (Simulador de Auditoría)</span>
+                        <button class="copy-btn" onclick="copyCode('sql-simulator')">📋 Copiar Código</button>
+                    </div>
+                    <pre><code id="sql-simulator">-- Simulador de Purga
+WITH vars AS (
+    SELECT 
+        '<span class="dynamic-datetime">2026-05-20 00:00:00-03</span>'::timestamptz AS cutoff,
+        '<span class="dynamic-date">2026-05-20</span>'::date AS cutoff_date
+),
+pedidos_eval AS (
+    SELECT 
+        id, 
+        fecha_pedido AS fecha_referencia, 
+        created_at, 
+        pedido_ref_externa AS referencia_externa,
+        'Pedido' AS tipo_entidad,
+        CASE 
+            WHEN (fecha_pedido < vars.cutoff_date OR fecha_pedido IS NULL) AND created_at < vars.cutoff THEN 'ELIMINAR'
+            ELSE 'CONSERVAR'
+        END AS accion
+    FROM public.pedidos, vars
+),
+ocs_eval AS (
+    SELECT 
+        id, 
+        fecha_emision AS fecha_referencia, 
+        created_at, 
+        oc_ref_externa AS referencia_externa,
+        'Orden de Compra' AS tipo_entidad,
+        CASE 
+            WHEN (fecha_emision < vars.cutoff_date OR fecha_emision IS NULL) AND created_at < vars.cutoff THEN 'ELIMINAR'
+            ELSE 'CONSERVAR'
+        END AS accion
+    FROM public.ordenes_compra, vars
+),
+remitos_eval AS (
+    SELECT 
+        r.id, 
+        r.created_at::date AS fecha_referencia, 
+        r.created_at, 
+        r.numero_remito AS referencia_externa,
+        'Remito' AS tipo_entidad,
+        CASE 
+            -- Un remito se borra si su fecha es anterior a cutoff O si pertenece a instancias borradas
+            WHEN r.created_at < vars.cutoff OR r.id IN (
+                SELECT DISTINCT remito_id FROM public.remito_items 
+                WHERE origen_instance_id IN (SELECT id FROM public.pedido_instancias WHERE created_at < vars.cutoff OR pedido_id IN (SELECT id FROM public.pedidos WHERE (fecha_pedido < vars.cutoff_date OR fecha_pedido IS NULL) AND created_at < vars.cutoff))
+                   OR destino_instance_id IN (SELECT id FROM public.pedido_instancias WHERE created_at < vars.cutoff OR pedido_id IN (SELECT id FROM public.pedidos WHERE (fecha_pedido < vars.cutoff_date OR fecha_pedido IS NULL) AND created_at < vars.cutoff))
+            ) THEN 'ELIMINAR'
+            ELSE 'CONSERVAR'
+        END AS accion
+    FROM public.remitos r, vars
+)
+SELECT accion, tipo_entidad, id, fecha_referencia, created_at, referencia_externa FROM pedidos_eval
+UNION ALL
+SELECT accion, tipo_entidad, id, fecha_referencia, created_at, referencia_externa FROM ocs_eval
+UNION ALL
+SELECT accion, tipo_entidad, id, fecha_referencia, created_at, referencia_externa FROM remitos_eval
+ORDER BY accion DESC, tipo_entidad, id;</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Guía de Mantenimiento - Pagina Arquimedes &copy; 2026. Subir este documento junto a los scripts al repositorio Git.</p>
+        </footer>
+    </div>
+
+    <script>
+        // Tab switching logic
+        function switchTab(evt, tabId) {
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(content => content.classList.remove('active'));
+
+            const tabButtons = document.querySelectorAll('.tab-btn');
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+
+            document.getElementById(tabId).classList.add('active');
+            evt.currentTarget.classList.add('active');
+        }
+
+        // Copy code helper
+        function copyCode(elementId) {
+            const codeText = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(codeText).then(() => {
+                const btn = document.querySelector(`[onclick="copyCode('${elementId}')"]`);
+                const originalText = btn.innerHTML;
+                
+                btn.innerHTML = '✓ ¡Copiado!';
+                btn.classList.add('copied');
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Error al copiar el texto: ', err);
+            });
+        }
+
+        // Date selector logic
+        const dateInput = document.getElementById('purge-date');
+        
+        function updateDatePlaceholders() {
+            const selectedDate = dateInput.value; // YYYY-MM-DD
+            if (!selectedDate) return;
+
+            // Generate full ISO-like datetime with offset
+            const datetimeVal = `${selectedDate} 00:00:00-03`;
+
+            // Update all placeholder nodes
+            const datePlaceholders = document.querySelectorAll('.dynamic-date');
+            datePlaceholders.forEach(el => {
+                el.textContent = selectedDate;
+            });
+
+            const datetimePlaceholders = document.querySelectorAll('.dynamic-datetime');
+            datetimePlaceholders.forEach(el => {
+                el.textContent = datetimeVal;
+            });
+        }
+
+        dateInput.addEventListener('input', updateDatePlaceholders);
+        
+        // Initial setup
+        updateDatePlaceholders();
+    </script>
+</body>
+</html>
