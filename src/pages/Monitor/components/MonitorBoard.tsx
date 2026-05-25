@@ -27,7 +27,7 @@ export function MonitorBoard({ instances, stateDefs, onCardClick, onDragEnd, isL
   );
 
   const getInstancesForColumn = (stateCode: string) => {
-    return instances.filter(i => i.estado_actual.startsWith(stateCode));
+    return instances.filter(i => i.estado_actual.split(':')[0].trim() === stateCode);
   };
 
   const handleDragStart = (event: DragStartEvent) => {
