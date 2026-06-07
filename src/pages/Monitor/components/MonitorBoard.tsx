@@ -9,12 +9,20 @@ import { LayoutDashboard } from 'lucide-react';
 interface MonitorBoardProps {
   instances: InstanceData[];
   stateDefs: StateDefinition[];
+  visibleStateDefs: StateDefinition[];
   onCardClick: (instance: InstanceData) => void;
   onDragEnd: (event: DragEndEvent) => void;
   isLoading?: boolean;
 }
 
-export function MonitorBoard({ instances, stateDefs, onCardClick, onDragEnd, isLoading }: MonitorBoardProps) {
+export function MonitorBoard({ 
+  instances, 
+  stateDefs, 
+  visibleStateDefs, 
+  onCardClick, 
+  onDragEnd, 
+  isLoading 
+}: MonitorBoardProps) {
   const [activeInstance, setActiveInstance] = useState<InstanceData | null>(null);
 
   const sensors = useSensors(
@@ -61,6 +69,20 @@ export function MonitorBoard({ instances, stateDefs, onCardClick, onDragEnd, isL
     );
   }
 
+  if (visibleStateDefs.length === 0 && !isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 bg-white rounded-xl border border-gray-100 shadow-sm min-h-[400px]">
+        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+          <LayoutDashboard className="w-8 h-8 text-gray-400" />
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">Ningún estado visible</h3>
+        <p className="text-gray-500 text-center max-w-sm">
+          Selecciona columnas visibles desde el panel de filtros para ver el tablero.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <DndContext 
       sensors={sensors}
@@ -72,7 +94,7 @@ export function MonitorBoard({ instances, stateDefs, onCardClick, onDragEnd, isL
       {/* Horizontal scrollable container for columns */}
       <div className="flex-1 overflow-x-auto overflow-y-hidden pb-2 h-full min-h-0">
         <div className="flex gap-4 h-full min-h-0 w-max px-1">
-          {stateDefs.map(stateDef => (
+          {visibleStateDefs.map(stateDef => (
              <KanbanColumn 
                key={stateDef.state_code}
                stateDef={stateDef}

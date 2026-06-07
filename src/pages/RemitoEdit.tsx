@@ -38,6 +38,7 @@ interface RemitoState {
   supervisor_id: number | null;
   fecha_hora_estimada_carga: string | null;
   debe_pasar_por_reembolse: boolean;
+  es_flete_corto: boolean;
 }
 
 export interface LogisticaPolitica {
@@ -104,6 +105,7 @@ export function RemitoEdit() {
     supervisor_id: null,
     fecha_hora_estimada_carga: null,
     debe_pasar_por_reembolse: false,
+    es_flete_corto: false,
   });
 
   const [catalogs, setCatalogs] = useState({
@@ -201,6 +203,7 @@ export function RemitoEdit() {
         supervisor_id: ctx.remito?.supervisor_id || null,
         fecha_hora_estimada_carga: ctx.remito?.fecha_hora_estimada_carga || null,
         debe_pasar_por_reembolse: ctx.remito?.debe_pasar_por_reembolse || false,
+        es_flete_corto: ctx.remito?.es_flete_corto || false,
       });
 
       const savedProtocol = ctx.remito?.protocolo_control || [];
@@ -749,7 +752,8 @@ export function RemitoEdit() {
         bruto_pesaje_momento: pesaje.bruto.momento,
         bruto_pesaje_lugar_id: finalBrutoId,
         fecha_hora_estimada_carga: remito.fecha_hora_estimada_carga,
-        debe_pasar_por_reembolse: remito.debe_pasar_por_reembolse
+        debe_pasar_por_reembolse: remito.debe_pasar_por_reembolse,
+        es_flete_corto: remito.es_flete_corto
       };
 
       const { error } = await supabase.rpc('save_remito_update_admin', {
@@ -1099,15 +1103,29 @@ export function RemitoEdit() {
                 />
               </div>
             </div>
-            <div className="flex items-center gap-4 pt-6">
-              <button 
-                type="button"
-                onClick={() => setRemito({...remito, debe_pasar_por_reembolse: !remito.debe_pasar_por_reembolse})}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${remito.debe_pasar_por_reembolse ? 'bg-emerald-500' : 'bg-gray-200'}`}
-              >
-                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${remito.debe_pasar_por_reembolse ? 'translate-x-5' : 'translate-x-0'}`} />
-              </button>
-              <span className="text-sm font-bold text-gray-700">¿Debe pasar por Reembolse?</span>
+            <div className="flex flex-col gap-4 pt-4 justify-center">
+              <div className="flex items-center gap-4">
+                <button 
+                  type="button"
+                  id="toggle-reembolse"
+                  onClick={() => setRemito({...remito, debe_pasar_por_reembolse: !remito.debe_pasar_por_reembolse})}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${remito.debe_pasar_por_reembolse ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                >
+                  <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${remito.debe_pasar_por_reembolse ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+                <span className="text-sm font-bold text-gray-700">¿Debe pasar por Reembolse?</span>
+              </div>
+              <div className="flex items-center gap-4">
+                <button 
+                  type="button"
+                  id="toggle-flete-corto"
+                  onClick={() => setRemito({...remito, es_flete_corto: !remito.es_flete_corto})}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${remito.es_flete_corto ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                >
+                  <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${remito.es_flete_corto ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+                <span className="text-sm font-bold text-gray-700">¿Es flete corto?</span>
+              </div>
             </div>
           </div>
         </section>

@@ -22,6 +22,10 @@ export function MonitorPage() {
   const [searchPedido, setSearchPedido] = useState<string>('');
   const [selectedInstance, setSelectedInstance] = useState<InstanceData | null>(null);
 
+  // Filtros de estado para el Kanban
+  const [stateFilterMode, setStateFilterMode] = useState<'TODOS' | 'CON_TARJETAS' | 'SELECCIONADOS'>('TODOS');
+  const [selectedStates, setSelectedStates] = useState<string[]>([]);
+
   // Transition State
   const [pendingTransition, setPendingTransition] = useState<{
     instance: InstanceData;
@@ -44,9 +48,9 @@ export function MonitorPage() {
       
       setData(instancesRes.data || []);
       setStateDefs(statesRes.data || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching monitor data:', err);
-      setError(err.message || 'Error desconocido al obtener la información.');
+      setError(err instanceof Error ? err.message : 'Error desconocido al obtener la información.');
     } finally {
       setIsLoading(false);
     }
@@ -66,6 +70,42 @@ export function MonitorPage() {
       return matchMercado && matchAlerta && matchPedido;
     });
   }, [data, tipoMercado, colorAlerta, searchPedido]);
+
+  // Estados que actualmente contienen tarjetas
+  const statesWithCards = useMemo(() => {
+    const codes = new Set<string>();
+    filteredData.forEach(instance => {
+      const code = instance.estado_actual.split(':')[0].trim();
+      if (code) codes.add(code);
+    });
+    return codes;
+  }, [filteredData]);
+
+  // Definiciones de estado (columnas) filtradas para el tablero
+  const filteredStateDefs = useMemo(() => {
+    if (stateFilterMode === 'TODOS') {
+      return stateDefs;
+    }
+    if (stateFilterMode === 'CON_TARJETAS') {
+      return stateDefs.filter(stateDef => 
+        statesWithCards.has(stateDef.state_code) || selectedStates.includes(stateDef.state_code)
+      );
+    }
+    if (stateFilterMode === 'SELECCIONADOS') {
+      return stateDefs.filter(stateDef => selectedStates.includes(stateDef.state_code));
+    }
+    return stateDefs;
+  }, [stateDefs, stateFilterMode, statesWithCards, selectedStates]);
+
+  // Handler para cambiar el modo de filtro de estados y pre-poblar selecciones
+  const handleStateFilterModeChange = useCallback((mode: 'TODOS' | 'CON_TARJETAS' | 'SELECCIONADOS') => {
+    setStateFilterMode(mode);
+    if (mode === 'SELECCIONADOS') {
+      setSelectedStates(Array.from(statesWithCards));
+    } else if (mode === 'CON_TARJETAS') {
+      setSelectedStates([]);
+    }
+  }, [statesWithCards]);
 
   const toggleRefresh = () => {
     setSelectedInstance(null); // Optional: close drawer on refresh
@@ -125,9 +165,9 @@ export function MonitorPage() {
       // Successfully transitioned, refresh data locally
       await fetchData();
       setPendingTransition(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Transition Error:', err);
-      alert(`Error al transicionar manual: ${err.message}`);
+      alert(`Error al transicionar manual: ${err instanceof Error ? err.message : 'Error desconocido'}`);
     } finally {
       setIsTransitioning(false);
     }
@@ -166,7 +206,7 @@ export function MonitorPage() {
           </div>
         )}
 
-        {/* Filtros */}
+         {/* Filtros */}
         <div className="mb-4 flex-shrink-0">
           <MonitorFilters 
             tipoMercado={tipoMercado}
@@ -175,6 +215,12 @@ export function MonitorPage() {
             setColorAlerta={setColorAlerta}
             searchPedido={searchPedido}
             setSearchPedido={setSearchPedido}
+            stateFilterMode={stateFilterMode}
+            setStateFilterMode={handleStateFilterModeChange}
+            selectedStates={selectedStates}
+            setSelectedStates={setSelectedStates}
+            stateDefs={stateDefs}
+            statesWithCards={statesWithCards}
           />
         </div>
 
@@ -183,6 +229,7 @@ export function MonitorPage() {
           <MonitorBoard 
             instances={filteredData}
             stateDefs={stateDefs}
+            visibleStateDefs={filteredStateDefs}
             onCardClick={setSelectedInstance} 
             onDragEnd={handleDragEnd}
             isLoading={isLoading}
