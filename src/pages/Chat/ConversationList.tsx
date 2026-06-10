@@ -52,14 +52,25 @@ export function ConversationList({ conversations, selectedId, onSelect, loading 
                         )}
                     >
                         <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 text-xl font-medium text-gray-600 mr-3">
-                            {chat.conversation_key.charAt(0)}
+                            {(chat.participant_name || chat.conversation_key).charAt(0).toUpperCase()}
                         </div>
 
                         <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-baseline mb-1">
-                                <h3 className="font-semibold text-gray-900 truncate pr-2">
-                                    {chat.conversation_key}
-                                </h3>
+                                <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
+                                    <h3 className="font-semibold text-gray-900 truncate">
+                                        {chat.participant_name || chat.conversation_key}
+                                    </h3>
+                                    {chat.channel === 'telegram' ? (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-100 text-[10px] font-medium flex-shrink-0">
+                                            Telegram
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-medium flex-shrink-0">
+                                            WhatsApp
+                                        </span>
+                                    )}
+                                </div>
                                 <span className="text-xs text-gray-500 flex-shrink-0">
                                     {chat.last_activity_at ? formatDistanceToNow(new Date(chat.last_activity_at), { addSuffix: true, locale: es }) : ''}
                                 </span>

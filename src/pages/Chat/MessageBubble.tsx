@@ -6,8 +6,8 @@ export interface ChatMessage {
     id: string;
     conversation_id: string;
     body_text: string | null;
-    sender_role: 'chofer' | 'sistema' | 'operador' | 'desconocido';
-    direction: 'inbound' | 'outbound';
+    sender_role: 'chofer' | 'sistema' | 'operador' | 'interno' | 'bot' | 'desconocido';
+    direction: string;
     created_at: string;
     media_urls?: string[] | null;
     personal_ac?: {
@@ -18,10 +18,12 @@ export interface ChatMessage {
 interface MessageBubbleProps {
     message: ChatMessage;
     showTail?: boolean;
+    participantName?: string;
+    participantRole?: 'chofer' | 'operador' | 'interno' | 'desconocido';
 }
 
-export function MessageBubble({ message, showTail = true }: MessageBubbleProps) {
-    const isIncoming = message.sender_role === 'chofer' || message.sender_role === 'desconocido';
+export function MessageBubble({ message, showTail = true, participantName, participantRole }: MessageBubbleProps) {
+    const isIncoming = message.direction === 'in' || message.direction === 'inbound' || message.sender_role === 'chofer' || message.sender_role === 'desconocido';
 
     // Custom bubble shapes for WhatsApp look
     const borderRadiusClass = isIncoming
@@ -30,7 +32,7 @@ export function MessageBubble({ message, showTail = true }: MessageBubbleProps) 
 
     const bgColorClass = isIncoming
         ? 'bg-white'
-        : message.sender_role === 'sistema'
+        : (message.sender_role === 'sistema' || message.sender_role === 'bot')
             ? 'bg-chat-bot'
             : 'bg-chat-human';
 
@@ -111,6 +113,16 @@ export function MessageBubble({ message, showTail = true }: MessageBubbleProps) 
                 {!isIncoming && message.sender_role === 'operador' && (
                     <div className="text-[10px] sm:text-xs font-semibold text-emerald-700/70 mb-0.5 tracking-tight">
                         ~ {message.personal_ac?.nombre_completo || 'Operador'}
+                    </div>
+                )}
+
+                {/* Participant info if incoming message */}
+                {isIncoming && (
+                    <div className="text-[10px] sm:text-xs font-semibold text-sky-700 mb-0.5 tracking-tight flex items-center gap-1 select-none">
+                        <span>~ {participantName || 'Usuario'}</span>
+                        <span className="text-[9px] font-normal text-gray-400 bg-gray-100 px-1 py-0.5 rounded border border-gray-200">
+                            {participantRole === 'chofer' ? 'Chofer' : participantRole === 'interno' ? 'Personal AC' : 'Usuario'}
+                        </span>
                     </div>
                 )}
 

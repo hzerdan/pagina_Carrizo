@@ -114,13 +114,18 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                 </button>
 
                 <div className="w-10 h-10 rounded-full bg-gray-300 mr-3 flex-shrink-0 flex items-center justify-center font-semibold text-lg text-gray-600">
-                    {conversation.conversation_key.charAt(0)}
+                    {(conversation.participant_name || conversation.conversation_key).charAt(0).toUpperCase()}
                 </div>
 
                 <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-900 truncate text-lg leading-tight">
-                        {conversation.conversation_key}
+                        {conversation.participant_name || conversation.conversation_key}
                     </h3>
+                    {conversation.participant_name && (
+                        <p className="text-xs text-gray-500 truncate mt-0.5">
+                            {conversation.channel === 'telegram' ? 'Telegram' : 'WhatsApp'} · {conversation.conversation_key}
+                        </p>
+                    )}
                 </div>
 
                 {/* Toggle Bot/Humano */}
@@ -178,7 +183,15 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                 ) : (
                     messages.map((msg, index) => {
                         const showTail = index === 0 || messages[index - 1].sender_role !== msg.sender_role;
-                        return <MessageBubble key={msg.id} message={msg} showTail={showTail} />;
+                        return (
+                            <MessageBubble 
+                                key={msg.id} 
+                                message={msg} 
+                                showTail={showTail} 
+                                participantName={conversation.participant_name}
+                                participantRole={conversation.participant_role}
+                            />
+                        );
                     })
                 )}
                 <div ref={messagesEndRef} />

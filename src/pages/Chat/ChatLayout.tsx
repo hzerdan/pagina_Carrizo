@@ -8,6 +8,10 @@ export interface Conversation {
     conversation_key: string;
     estado_atencion: string;
     last_activity_at: string;
+    channel: 'whatsapp' | 'telegram';
+    participant_role: 'chofer' | 'operador' | 'interno' | 'desconocido';
+    participant_id: number | null;
+    participant_name?: string;
 }
 
 export function ChatLayout() {
@@ -18,16 +22,41 @@ export function ChatLayout() {
     // Fetch initial conversations
     const fetchConversations = async () => {
         try {
-            const { data, error } = await supabase
+            const { data: convData, error: convError } = await supabase
                 .from('conversations')
                 .select('*')
                 .order('last_activity_at', { ascending: false });
 
-            if (error) {
-                console.error('Error fetching conversations:', error);
-            } else {
-                setConversations(data || []);
+            if (convError) {
+                console.error('Error fetching conversations:', convError);
+                return;
             }
+
+            // Fetch choferes and personal_ac to map names in memory
+            const [choferesRes, personalRes] = await Promise.all([
+                supabase.from('choferes').select('id, nombre_completo'),
+                supabase.from('personal_ac').select('id, nombre_completo')
+            ]);
+
+            const choferesMap = new Map(choferesRes.data?.map(c => [c.id, c.nombre_completo]) || []);
+            const personalMap = new Map(personalRes.data?.map(p => [p.id, p.nombre_completo]) || []);
+
+            const mappedConversations = (convData || []).map((chat: any) => {
+                let participant_name = '';
+                if (chat.participant_role === 'chofer' && chat.participant_id) {
+                    participant_name = choferesMap.get(chat.participant_id) || '';
+                } else if (chat.participant_role === 'interno' && chat.participant_id) {
+                    participant_name = personalMap.get(chat.participant_id) || '';
+                }
+                return {
+                    ...chat,
+                    participant_name
+                };
+            });
+
+            setConversations(mappedConversations);
+        } catch (err) {
+            console.error('Error in fetchConversations:', err);
         } finally {
             setLoading(false);
         }

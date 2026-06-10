@@ -36,9 +36,11 @@ interface RemitoState {
   acoplado_id: number | null;
   inspector_id: number | null;
   supervisor_id: number | null;
+  operador_id: number | null;
   fecha_hora_estimada_carga: string | null;
   debe_pasar_por_reembolse: boolean;
   es_flete_corto: boolean;
+  cantidad_total: number | null;
 }
 
 export interface LogisticaPolitica {
@@ -103,9 +105,11 @@ export function RemitoEdit() {
     acoplado_id: null,
     inspector_id: null,
     supervisor_id: null,
+    operador_id: null,
     fecha_hora_estimada_carga: null,
     debe_pasar_por_reembolse: false,
     es_flete_corto: false,
+    cantidad_total: null,
   });
 
   const [catalogs, setCatalogs] = useState({
@@ -116,6 +120,7 @@ export function RemitoEdit() {
 
   const [inspectors, setInspectors] = useState<any[]>([]);
   const [supervisors, setSupervisors] = useState<any[]>([]);
+  const [operadores, setOperadores] = useState<any[]>([]);
   
   const [lugaresPesaje, setLugaresPesaje] = useState<any[]>([]);
 
@@ -201,9 +206,11 @@ export function RemitoEdit() {
         acoplado_id: ctx.remito?.acoplado_id || null,
         inspector_id: ctx.remito?.inspector_id || null,
         supervisor_id: ctx.remito?.supervisor_id || null,
+        operador_id: ctx.remito?.operador_id || null,
         fecha_hora_estimada_carga: ctx.remito?.fecha_hora_estimada_carga || null,
         debe_pasar_por_reembolse: ctx.remito?.debe_pasar_por_reembolse || false,
         es_flete_corto: ctx.remito?.es_flete_corto || false,
+        cantidad_total: ctx.remito?.cantidad_total !== undefined ? ctx.remito?.cantidad_total : null,
       });
 
       const savedProtocol = ctx.remito?.protocolo_control || [];
@@ -257,6 +264,7 @@ export function RemitoEdit() {
       // Catalogos que el nuevo RPC resolverá de manera optimizada:
       setInspectors(ctx.catalogos.inspectores || []);
       setSupervisors(ctx.catalogos.supervisores || []);
+      setOperadores(ctx.catalogos.operadores || []);
 
       // Pre-fill pesaje si existe en base de datos
       const taraLugar = ctx.remito?.tara_pesaje_lugar_id || null;
@@ -744,6 +752,7 @@ export function RemitoEdit() {
         camion_id: finalCamionId,
         acoplado_id: finalAcopladoId,
         supervisor_id: remito.supervisor_id ? Number(remito.supervisor_id) : null,
+        operador_id: remito.operador_id ? Number(remito.operador_id) : null,
         inspector_id: remito.inspector_id ? Number(remito.inspector_id) : null,
         instrucciones_texto: textoFinal,
         protocolo_control: processedChecklist,
@@ -840,9 +849,17 @@ export function RemitoEdit() {
             </div>
             <p className="text-sm text-gray-500 mt-1 ml-9">Pedido: {remito.pedido}</p>
           </div>
-          <span className={`px-3 py-1 rounded-full text-xs font-semibold ${remito.estado === 'Datos Faltantes' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-            {remito.estado}
-          </span>
+          <div className="flex flex-col items-end gap-1.5">
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${remito.estado === 'Datos Faltantes' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+              {remito.estado}
+            </span>
+            {remito.cantidad_total !== null && remito.cantidad_total !== undefined && (
+              <span className="text-[11px] font-semibold text-gray-500 bg-gray-50 border border-gray-200/80 px-2 py-0.5 rounded-md flex items-center gap-1 mt-1 shadow-sm">
+                <Scale className="w-3 h-3 text-gray-400" />
+                Cantidad Total: <span className="text-gray-700 font-bold">{remito.cantidad_total} Ton</span>
+              </span>
+            )}
+          </div>
         </div>
         {remito.estado === 'Datos Faltantes' && (
           <div className="mt-4 text-xs bg-amber-50 text-amber-700 border border-amber-200 p-2 rounded flex items-center gap-2">
@@ -1016,7 +1033,7 @@ export function RemitoEdit() {
           </div>
 
           {/* Personal */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Inspector</label>
               <select 
@@ -1049,7 +1066,20 @@ export function RemitoEdit() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Supervisor (Operador)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Operador</label>
+              <select 
+                value={remito.operador_id || ''} 
+                onChange={e => setRemito({...remito, operador_id: e.target.value ? Number(e.target.value) : null})}
+                className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+              >
+                <option value="">Seleccionar...</option>
+                {operadores.map(p => (
+                  <option key={`op-${p.id}`} value={p.id}>{p.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Supervisor</label>
               <select 
                 value={remito.supervisor_id || ''} 
                 onChange={e => setRemito({...remito, supervisor_id: e.target.value ? Number(e.target.value) : null})}
