@@ -5,6 +5,25 @@ import { ChevronLeft, Bot, User } from 'lucide-react';
 import { MessageBubble } from './MessageBubble';
 import type { ChatMessage } from './MessageBubble';
 import { ChatInput } from './ChatInput';
+import { differenceInCalendarDays, startOfDay, format } from 'date-fns';
+
+function getMessageDateLabel(dateString: string): string {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    const today = new Date();
+    const diffDays = differenceInCalendarDays(startOfDay(today), startOfDay(date));
+
+    if (diffDays === 0) {
+        return 'Hoy';
+    } else if (diffDays === 1) {
+        return 'Ayer';
+    } else if (diffDays > 1 && diffDays <= 7) {
+        const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+        return dayNames[date.getDay()];
+    } else {
+        return format(date, 'dd-MM-yyyy');
+    }
+}
 
 interface ChatWindowProps {
     conversation: Conversation;
@@ -18,6 +37,12 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
     const [estadoAtencion, setEstadoAtencion] = useState(conversation.estado_atencion);
     const [updatingEstado, setUpdatingEstado] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const lastScrollTop = useRef(0);
+    const [showFloatingBadge, setShowFloatingBadge] = useState(false);
+    const [floatingBadgeText, setFloatingBadgeText] = useState('');
+    const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isProgrammaticScroll = useRef(false);
 
     const fetchMessages = async () => {
         try {
@@ -76,8 +101,71 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
         scrollToBottom();
     }, [messages]);
 
+    useEffect(() => {
+        return () => {
+            if (scrollTimeoutRef.current) {
+                clearTimeout(scrollTimeoutRef.current);
+            }
+        };
+    }, []);
+
     const scrollToBottom = () => {
+        isProgrammaticScroll.current = true;
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        
+        if (scrollTimeoutRef.current) {
+            clearTimeout(scrollTimeoutRef.current);
+        }
+        scrollTimeoutRef.current = setTimeout(() => {
+            isProgrammaticScroll.current = false;
+        }, 800);
+    };
+
+    const handleScroll = () => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        const scrollTop = container.scrollTop;
+
+        if (isProgrammaticScroll.current) {
+            lastScrollTop.current = scrollTop;
+            return;
+        }
+
+        const isScrollingDown = scrollTop > lastScrollTop.current;
+        lastScrollTop.current = scrollTop;
+
+        // Detect first visible message
+        const children = container.querySelectorAll('.message-item');
+        let firstVisibleDateLabel = '';
+
+        for (let i = 0; i < children.length; i++) {
+            const child = children[i] as HTMLElement;
+            const rect = child.getBoundingClientRect();
+            const containerRect = container.getBoundingClientRect();
+
+            if (rect.bottom >= containerRect.top) {
+                firstVisibleDateLabel = child.getAttribute('data-date') || '';
+                break;
+            }
+        }
+
+        if (firstVisibleDateLabel) {
+            setFloatingBadgeText(firstVisibleDateLabel);
+        }
+
+        if (isScrollingDown) {
+            setShowFloatingBadge(true);
+
+            if (scrollTimeoutRef.current) {
+                clearTimeout(scrollTimeoutRef.current);
+            }
+            scrollTimeoutRef.current = setTimeout(() => {
+                setShowFloatingBadge(false);
+            }, 1000);
+        } else {
+            setShowFloatingBadge(false);
+        }
     };
 
     const toggleEstadoAtencion = async () => {
@@ -158,43 +246,73 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                 </div>
             </div>
 
-            {/* Messages Area - WhatsApp Background Pattern */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[url('https://i.ibb.co/3s1f13b/wa-bg.png')] bg-repeat bg-opacity-50" style={{ backgroundSize: '400px', backgroundColor: '#efeae2', backgroundBlendMode: 'overlay' }}>
-                {errorMsg ? (
-                    <div className="flex justify-center p-8">
-                        <div className="bg-red-50 text-red-600 border border-red-200 p-4 rounded-lg shadow-sm text-sm whitespace-pre-wrap max-w-lg w-full">
-                            <strong>Ups, hubo un problema al obtener los mensajes:</strong>
-                            <br /><br />
-                            {errorMsg}
-                        </div>
+            {/* Messages Area Wrapper */}
+            <div className="flex-1 min-h-0 relative">
+                {/* Floating Date Badge */}
+                <div className={`absolute top-3 left-1/2 -translate-x-1/2 z-20 transition-all duration-300 pointer-events-none ${showFloatingBadge ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
+                    <div className="bg-white/90 backdrop-blur-xs text-gray-600 text-xs px-3 py-1.5 rounded-md shadow-md font-semibold uppercase tracking-wider border border-gray-200/50">
+                        {floatingBadgeText}
                     </div>
-                ) : loading ? (
-                    <div className="flex justify-center p-8">
-                        <div className="animate-pulse bg-white p-3 rounded-lg shadow-sm text-sm text-gray-500">
-                            Cargando mensajes...
+                </div>
+
+                {/* Messages Area - WhatsApp Background Pattern */}
+                <div 
+                    ref={scrollContainerRef}
+                    onScroll={handleScroll}
+                    className="h-full overflow-y-auto p-4 space-y-3 bg-[url('https://i.ibb.co/3s1f13b/wa-bg.png')] bg-repeat bg-opacity-50" 
+                    style={{ backgroundSize: '400px', backgroundColor: '#efeae2', backgroundBlendMode: 'overlay' }}
+                >
+                    {errorMsg ? (
+                        <div className="flex justify-center p-8">
+                            <div className="bg-red-50 text-red-600 border border-red-200 p-4 rounded-lg shadow-sm text-sm whitespace-pre-wrap max-w-lg w-full">
+                                <strong>Ups, hubo un problema al obtener los mensajes:</strong>
+                                <br /><br />
+                                {errorMsg}
+                            </div>
                         </div>
-                    </div>
-                ) : messages.length === 0 ? (
-                    <div className="flex justify-center p-8">
-                        <div className="bg-white px-4 py-2 rounded-lg shadow-sm text-sm text-gray-500">
-                            No hay mensajes aún. Comienza la conversación.
+                    ) : loading ? (
+                        <div className="flex justify-center p-8">
+                            <div className="animate-pulse bg-white p-3 rounded-lg shadow-sm text-sm text-gray-500">
+                                Cargando mensajes...
+                            </div>
                         </div>
-                    </div>
-                ) : (
-                    messages.map((msg, index) => {
-                        const showTail = index === 0 || messages[index - 1].sender_role !== msg.sender_role;
-                        return (
-                            <MessageBubble 
-                                key={msg.id} 
-                                message={msg} 
-                                showTail={showTail} 
-                                participantName={conversation.participant_name}
-                                participantRole={conversation.participant_role}
-                            />
-                        );
-                    })
-                )}
-                <div ref={messagesEndRef} />
+                    ) : messages.length === 0 ? (
+                        <div className="flex justify-center p-8">
+                            <div className="bg-white px-4 py-2 rounded-lg shadow-sm text-sm text-gray-500">
+                                No hay mensajes aún. Comienza la conversación.
+                            </div>
+                        </div>
+                    ) : (
+                        messages.map((msg, index) => {
+                            const prevMsg = index > 0 ? messages[index - 1] : null;
+                            const showDateSeparator = !prevMsg || 
+                                differenceInCalendarDays(startOfDay(new Date(msg.created_at)), startOfDay(new Date(prevMsg.created_at))) > 0;
+                            const showTail = index === 0 || showDateSeparator || messages[index - 1].sender_role !== msg.sender_role;
+                            const dateLabel = getMessageDateLabel(msg.created_at);
+
+                            return (
+                                <div key={msg.id} data-date={dateLabel} className="w-full flex flex-col items-stretch message-item">
+                                    {showDateSeparator && (
+                                        <div className="flex justify-center my-3 select-none">
+                                            <div className="bg-white/90 backdrop-blur-xs text-gray-500 text-xs px-3 py-1.5 rounded-md shadow-sm uppercase font-semibold text-center border border-gray-200/30">
+                                                {dateLabel}
+                                            </div>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <MessageBubble 
+                                            message={msg} 
+                                            showTail={showTail} 
+                                            participantName={conversation.participant_name}
+                                            participantRole={conversation.participant_role}
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                    <div ref={messagesEndRef} />
+                </div>
             </div>
 
             {/* Input Footer */}
