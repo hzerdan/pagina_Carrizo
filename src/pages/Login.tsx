@@ -20,7 +20,8 @@ export default function Login() {
     }
 
     if (session) {
-        return <Navigate to="/" replace />;
+        const search = window.location.search;
+        return <Navigate to={`/${search}`} replace />;
     }
 
     const handleLogin = async (e: React.FormEvent) => {

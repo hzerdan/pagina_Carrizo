@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ConversationList } from './ConversationList';
 import { ChatWindow } from './ChatWindow';
 import { supabase } from '../../lib/supabase';
@@ -12,12 +13,17 @@ export interface Conversation {
     participant_role: 'chofer' | 'operador' | 'interno' | 'desconocido';
     participant_id: number | null;
     participant_name?: string;
+    remito_actual_id?: number | null;
 }
+
 
 export function ChatLayout() {
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [searchParams] = useSearchParams();
+    const queryRemitoId = searchParams.get('remito_id');
+    const queryConversationId = searchParams.get('conversation_id');
 
     // Fetch initial conversations
     const fetchConversations = async () => {
@@ -78,6 +84,18 @@ export function ChatLayout() {
             supabase.removeChannel(channel);
         };
     }, []);
+
+    useEffect(() => {
+        if (conversations.length > 0) {
+            if (queryConversationId) {
+                const found = conversations.find(c => c.id === queryConversationId);
+                if (found) setSelectedChatId(found.id);
+            } else if (queryRemitoId) {
+                const found = conversations.find(c => String(c.remito_actual_id) === String(queryRemitoId));
+                if (found) setSelectedChatId(found.id);
+            }
+        }
+    }, [queryConversationId, queryRemitoId, conversations]);
 
     const selectedConversation = conversations.find(c => c.id === selectedChatId);
 

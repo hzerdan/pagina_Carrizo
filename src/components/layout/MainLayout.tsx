@@ -17,7 +17,8 @@ export function MainLayout() {
     }
 
     if (!session) {
-        return <Navigate to="/login" replace />;
+        const search = window.location.search;
+        return <Navigate to={`/login${search}`} replace />;
     }
 
     return (

@@ -10,10 +10,12 @@ export interface ChatMessage {
     direction: string;
     created_at: string;
     media_urls?: string[] | null;
+    remito_id?: number | null;
     personal_ac?: {
         nombre_completo: string;
     };
 }
+
 
 interface MessageBubbleProps {
     message: ChatMessage;

@@ -19,7 +19,8 @@ import {
   Info, 
   Loader2,
   Zap,
-  Truck
+  Truck,
+  CheckSquare
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { WhatsAppModal } from '../components/WhatsAppModal';
@@ -361,7 +362,7 @@ export function RemitoEdit() {
   };
 
   const displayedChecklist = useMemo(() => {
-    return checklist.filter(item => item.tipo_tarea === "CONTROL_GENERAL");
+    return checklist.filter(item => item.tipo_tarea === "CONTROL_GENERAL" || item.tipo_tarea === "PESAJE_TARA" || item.tipo_tarea === "PESAJE_BRUTO");
   }, [checklist]);
 
   // Derived computations
@@ -434,7 +435,9 @@ export function RemitoEdit() {
     const newList = [...checklist];
     const itemIndex = checklist.findIndex(c => c.tarea === displayedChecklist[index].tarea);
     if(itemIndex > -1) {
-      newList[itemIndex].done = !newList[itemIndex].done;
+      const newDone = !newList[itemIndex].done;
+      newList[itemIndex].done = newDone;
+      newList[itemIndex].estado = newDone ? 'COMPLETADO' : 'PENDIENTE';
       setChecklist(newList);
     }
   };
@@ -444,6 +447,40 @@ export function RemitoEdit() {
     const itemIndex = checklist.findIndex(c => c.tarea === displayedChecklist[index].tarea);
     if(itemIndex > -1) {
       newList[itemIndex].asignada_a_chofer = !newList[itemIndex].asignada_a_chofer;
+      setChecklist(newList);
+    }
+  };
+
+  const handleApproveTask = (index: number) => {
+    const newList = [...checklist];
+    const itemIndex = checklist.findIndex(c => c.tarea === displayedChecklist[index].tarea);
+    if (itemIndex > -1) {
+      newList[itemIndex].done = true;
+      newList[itemIndex].estado = 'COMPLETADO';
+      
+      // Copiar el peso reportado por el chofer al estado local de pesaje
+      if (newList[itemIndex].tipo_tarea === 'PESAJE_TARA' && newList[itemIndex].valor_reportado_chofer) {
+        setPesaje(prev => ({
+          ...prev,
+          tara: { ...prev.tara, momento: newList[itemIndex].valor_reportado_chofer }
+        }));
+      } else if (newList[itemIndex].tipo_tarea === 'PESAJE_BRUTO' && newList[itemIndex].valor_reportado_chofer) {
+        setPesaje(prev => ({
+          ...prev,
+          bruto: { ...prev.bruto, momento: newList[itemIndex].valor_reportado_chofer }
+        }));
+      }
+      
+      setChecklist(newList);
+    }
+  };
+
+  const handleRejectTask = (index: number) => {
+    const newList = [...checklist];
+    const itemIndex = checklist.findIndex(c => c.tarea === displayedChecklist[index].tarea);
+    if (itemIndex > -1) {
+      newList[itemIndex].done = false;
+      newList[itemIndex].estado = 'RECHAZADO';
       setChecklist(newList);
     }
   };
@@ -724,14 +761,32 @@ export function RemitoEdit() {
       const processedChecklist = checklist
         .map(item => {
           let finalTarea = item.tarea;
-          let finalEstado = item.done ? 'COMPLETADO' : 'PENDIENTE';
+          let finalEstado = item.estado || 'PENDIENTE';
+
+          if (item.done) {
+            finalEstado = 'COMPLETADO';
+          } else if (item.estado === 'COMPLETADO') {
+            finalEstado = 'PENDIENTE';
+          }
 
           if (item.tipo_tarea === 'PESAJE_TARA') {
             finalTarea = (item.tarea_template || item.tarea).replace('{lugar}', taraLugarNombre);
-            finalEstado = finalTaraId ? 'COMPLETADO' : 'PENDIENTE';
+            if (item.done) {
+              finalEstado = 'COMPLETADO';
+            } else if (item.estado === 'REPORTADO_CHOFER' || item.estado === 'RECHAZADO') {
+              finalEstado = item.estado;
+            } else {
+              finalEstado = 'PENDIENTE';
+            }
           } else if (item.tipo_tarea === 'PESAJE_BRUTO') {
             finalTarea = (item.tarea_template || item.tarea).replace('{lugar}', brutoLugarNombre);
-            finalEstado = finalBrutoId ? 'COMPLETADO' : 'PENDIENTE';
+            if (item.done) {
+              finalEstado = 'COMPLETADO';
+            } else if (item.estado === 'REPORTADO_CHOFER' || item.estado === 'RECHAZADO') {
+              finalEstado = item.estado;
+            } else {
+              finalEstado = 'PENDIENTE';
+            }
           }
 
           return {
@@ -1171,6 +1226,31 @@ export function RemitoEdit() {
                 <Scale className="w-5 h-5 text-blue-500" />
                 <h3 className="font-bold text-gray-800">Pesaje Tara (Vacío)</h3>
               </div>
+              {/* Alerta de peso de tara reportado por el chofer */}
+              {(() => {
+                const taraTask = checklist.find(t => t.tipo_tarea === 'PESAJE_TARA');
+                if (taraTask?.valor_reportado_chofer && taraTask.estado === 'REPORTADO_CHOFER') {
+                  return (
+                    <div className="mb-4 bg-amber-50 p-3 rounded-lg border border-amber-200 text-xs text-amber-800 space-y-2">
+                      <p className="font-semibold flex items-center gap-1.5">
+                        <Scale className="w-4 h-4 animate-pulse text-amber-600" />
+                        Chofer reportó peso: <span className="underline font-bold text-sm">{taraTask.valor_reportado_chofer}</span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const idx = checklist.findIndex(t => t.tipo_tarea === 'PESAJE_TARA');
+                          if (idx > -1) handleApproveTask(idx);
+                        }}
+                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10px] font-bold shadow-xs transition-colors cursor-pointer"
+                      >
+                        Aprobar y usar este valor
+                      </button>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               <div className="space-y-4">
                 <div>
                   <label className="text-xs font-semibold text-gray-500">Momento</label>
@@ -1224,6 +1304,31 @@ export function RemitoEdit() {
                 <Package className="w-5 h-5 text-emerald-500" />
                 <h3 className="font-bold text-gray-800">Pesaje Bruto (Lleno)</h3>
               </div>
+              {/* Alerta de peso bruto reportado por el chofer */}
+              {(() => {
+                const brutoTask = checklist.find(t => t.tipo_tarea === 'PESAJE_BRUTO');
+                if (brutoTask?.valor_reportado_chofer && brutoTask.estado === 'REPORTADO_CHOFER') {
+                  return (
+                    <div className="mb-4 bg-amber-50 p-3 rounded-lg border border-amber-200 text-xs text-amber-800 space-y-2">
+                      <p className="font-semibold flex items-center gap-1.5">
+                        <Scale className="w-4 h-4 animate-pulse text-amber-600" />
+                        Chofer reportó peso: <span className="underline font-bold text-sm">{brutoTask.valor_reportado_chofer}</span>
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const idx = checklist.findIndex(t => t.tipo_tarea === 'PESAJE_BRUTO');
+                          if (idx > -1) handleApproveTask(idx);
+                        }}
+                        className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[10px] font-bold shadow-xs transition-colors cursor-pointer"
+                      >
+                        Aprobar y usar este valor
+                      </button>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
               <div className="space-y-4">
                 <div>
                   <label className="text-xs font-semibold text-gray-500">Momento</label>
@@ -1339,23 +1444,87 @@ export function RemitoEdit() {
                       disabled={!!remito.inspector_id && !task.asignada_a_chofer}
                       className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50" 
                     />
-                    <span className={`text-sm select-none ${!!remito.inspector_id && !task.asignada_a_chofer ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                      {task.tarea}
-                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center flex-wrap gap-1.5 select-none">
+                        <span className={`text-sm ${!!remito.inspector_id && !task.asignada_a_chofer ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                          {task.tarea}
+                        </span>
+                        {task.estado && task.estado !== 'PENDIENTE' && task.estado !== 'COMPLETADO' && (
+                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
+                            task.estado === 'REPORTADO_CHOFER' 
+                              ? 'bg-amber-100 text-amber-800 animate-pulse' 
+                              : task.estado === 'NO_REALIZABLE'
+                              ? 'bg-red-100 text-red-800'
+                              : task.estado === 'RECHAZADO'
+                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                              : ''
+                          }`}>
+                            {task.estado === 'REPORTADO_CHOFER' ? 'Pendiente Operador' : task.estado === 'NO_REALIZABLE' ? 'No Realizable' : 'Rechazado'}
+                          </span>
+                        )}
+                      </div>
+                      {task.valor_reportado_chofer && (
+                        <div className="mt-1">
+                          {task.valor_reportado_chofer.startsWith('http') ? (
+                            <a 
+                              href={task.valor_reportado_chofer} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="text-[9px] text-blue-700 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded-md border border-blue-100 font-medium inline-flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              📷 Ver Foto Adjunta
+                            </a>
+                          ) : (
+                            <span className="text-[9px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-100 font-medium inline-block">
+                              Valor: <strong>{task.valor_reportado_chofer}</strong>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </label>
                   
-                  <button
-                    type="button"
-                    title="Solicitar cumplimiento al chofer vía Bot"
-                    onClick={() => toggleAsignadaChofer(index)}
-                    className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors ml-2"
-                  >
-                    <Truck 
-                      className={`w-5 h-5 transition-colors cursor-pointer ${
-                        task.asignada_a_chofer ? 'text-blue-600' : 'text-gray-300'
-                      }`}
-                    />
-                  </button>
+                  <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                    {task.estado === 'REPORTADO_CHOFER' && (
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleApproveTask(index);
+                          }}
+                          className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
+                          title="Aprobar Tarea"
+                        >
+                          <CheckSquare className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRejectTask(index);
+                          }}
+                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+                          title="Rechazar Tarea"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      title="Solicitar cumplimiento al chofer vía Bot"
+                      onClick={() => toggleAsignadaChofer(index)}
+                      className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      <Truck 
+                        className={`w-5 h-5 transition-colors cursor-pointer ${
+                          task.asignada_a_chofer ? 'text-blue-600' : 'text-gray-300'
+                        }`}
+                      />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
