@@ -70,7 +70,7 @@ BEGIN
                           '💬 *Requerimiento enviado:*' || E'\n' ||
                           '"' || COALESCE(v_rec.body_text, '') || '"' || E'\n\n' ||
                           '💬 *Responder en la Web:*' || E'\n' ||
-                          '[Abrir Chat en Dashboard](https://remitos-logistica.vercel.app/?remito_id=' || COALESCE(v_rec.remito_id::text, '') || ')';
+                          '[Abrir Chat en Dashboard](https://pagina-carrizo.vercel.app/?remito_id=' || COALESCE(v_rec.remito_id::text, '') || ')';
 
     -- 5. Enviar el HTTP POST a n8n
     v_payload := jsonb_build_object(
