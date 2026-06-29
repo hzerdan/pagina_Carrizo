@@ -42,6 +42,12 @@ interface RemitoState {
   debe_pasar_por_reembolse: boolean;
   es_flete_corto: boolean;
   cantidad_total: number | null;
+  fecha_probable_entrega: string | null;
+  mi_sobre_proveedor_preparado: boolean;
+  mi_sobre_cliente_preparado: boolean;
+  me_planillas_t48_emitidas: boolean;
+  me_checklist_enviado_operario: boolean;
+  tipo_mercado: string | null;
 }
 
 export interface LogisticaPolitica {
@@ -111,6 +117,12 @@ export function RemitoEdit() {
     debe_pasar_por_reembolse: false,
     es_flete_corto: false,
     cantidad_total: null,
+    fecha_probable_entrega: null,
+    mi_sobre_proveedor_preparado: false,
+    mi_sobre_cliente_preparado: false,
+    me_planillas_t48_emitidas: false,
+    me_checklist_enviado_operario: false,
+    tipo_mercado: null,
   });
 
   const [catalogs, setCatalogs] = useState({
@@ -212,6 +224,12 @@ export function RemitoEdit() {
         debe_pasar_por_reembolse: ctx.remito?.debe_pasar_por_reembolse || false,
         es_flete_corto: ctx.remito?.es_flete_corto || false,
         cantidad_total: ctx.remito?.cantidad_total !== undefined ? ctx.remito?.cantidad_total : null,
+        fecha_probable_entrega: ctx.remito?.fecha_probable_entrega || null,
+        mi_sobre_proveedor_preparado: ctx.remito?.mi_sobre_proveedor_preparado || false,
+        mi_sobre_cliente_preparado: ctx.remito?.mi_sobre_cliente_preparado || false,
+        me_planillas_t48_emitidas: ctx.remito?.me_planillas_t48_emitidas || false,
+        me_checklist_enviado_operario: ctx.remito?.me_checklist_enviado_operario || false,
+        tipo_mercado: ctx.pedidos && ctx.pedidos.length > 0 ? ctx.pedidos[0].tipo_mercado : null,
       });
 
       const savedProtocol = ctx.remito?.protocolo_control || [];
@@ -817,7 +835,12 @@ export function RemitoEdit() {
         bruto_pesaje_lugar_id: finalBrutoId,
         fecha_hora_estimada_carga: remito.fecha_hora_estimada_carga,
         debe_pasar_por_reembolse: remito.debe_pasar_por_reembolse,
-        es_flete_corto: remito.es_flete_corto
+        es_flete_corto: remito.es_flete_corto,
+        fecha_probable_entrega: remito.fecha_probable_entrega,
+        mi_sobre_proveedor_preparado: remito.mi_sobre_proveedor_preparado,
+        mi_sobre_cliente_preparado: remito.mi_sobre_cliente_preparado,
+        me_planillas_t48_emitidas: remito.me_planillas_t48_emitidas,
+        me_checklist_enviado_operario: remito.me_checklist_enviado_operario
       };
 
       const { error } = await supabase.rpc('save_remito_update_admin', {
@@ -1188,6 +1211,46 @@ export function RemitoEdit() {
                 />
               </div>
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha y Hora Probable de Entrega</label>
+              <div className="relative">
+                <input 
+                  type="text"
+                  onFocus={(e) => {
+                    e.target.type = 'datetime-local';
+                    if (remito.fecha_probable_entrega) {
+                      e.target.value = remito.fecha_probable_entrega.substring(0, 16);
+                    }
+                  }}
+                  onBlur={(e) => {
+                    e.target.type = 'text';
+                    if (remito.fecha_probable_entrega) {
+                      const d = new Date(remito.fecha_probable_entrega);
+                      if (!isNaN(d.getTime())) {
+                        e.target.value = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                      }
+                    } else {
+                      e.target.value = '';
+                    }
+                  }}
+                  defaultValue={remito.fecha_probable_entrega 
+                    ? (() => {
+                        const d = new Date(remito.fecha_probable_entrega);
+                        return isNaN(d.getTime()) ? '' : `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                      })()
+                    : ''}
+                  onChange={e => {
+                    if (e.target.type === 'datetime-local') {
+                      setRemito({...remito, fecha_probable_entrega: e.target.value});
+                    }
+                  }}
+                  placeholder="DD/MM/YYYY HH:mm"
+                  className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                />
+              </div>
+            </div>
+
             <div className="flex flex-col gap-4 pt-4 justify-center">
               <div className="flex items-center gap-4">
                 <button 
@@ -1212,6 +1275,69 @@ export function RemitoEdit() {
                 <span className="text-sm font-bold text-gray-700">¿Es flete corto?</span>
               </div>
             </div>
+
+            {/* Checklists de Estado 4 de Documentación */}
+            {remito.tipo_mercado && (
+              <div className="col-span-1 md:col-span-2 p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-2">
+                  <CheckSquare className="w-4 h-4 text-brand-600" />
+                  Control de Documentación (Estado 4 - Mercado: {remito.tipo_mercado === 'MI' ? 'Interno' : 'Externo'})
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {remito.tipo_mercado === 'MI' ? (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          id="toggle-sobre-proveedor"
+                          onClick={() => setRemito({...remito, mi_sobre_proveedor_preparado: !remito.mi_sobre_proveedor_preparado})}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${remito.mi_sobre_proveedor_preparado ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                        >
+                          <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${remito.mi_sobre_proveedor_preparado ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                        <span className="text-sm font-medium text-gray-700">Sobre Proveedor Preparado</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          id="toggle-sobre-cliente"
+                          onClick={() => setRemito({...remito, mi_sobre_cliente_preparado: !remito.mi_sobre_cliente_preparado})}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${remito.mi_sobre_cliente_preparado ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                        >
+                          <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${remito.mi_sobre_cliente_preparado ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                        <span className="text-sm font-medium text-gray-700">Sobre Cliente Preparado</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          id="toggle-planillas-t48"
+                          onClick={() => setRemito({...remito, me_planillas_t48_emitidas: !remito.me_planillas_t48_emitidas})}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${remito.me_planillas_t48_emitidas ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                        >
+                          <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${remito.me_planillas_t48_emitidas ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                        <span className="text-sm font-medium text-gray-700">Planillas T-48 Emitidas</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          id="toggle-checklist-operario"
+                          onClick={() => setRemito({...remito, me_checklist_enviado_operario: !remito.me_checklist_enviado_operario})}
+                          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${remito.me_checklist_enviado_operario ? 'bg-emerald-500' : 'bg-gray-200'}`}
+                        >
+                          <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${remito.me_checklist_enviado_operario ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                        <span className="text-sm font-medium text-gray-700">Checklist Enviado al Operario</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

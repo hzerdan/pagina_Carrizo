@@ -243,6 +243,7 @@ export function MonitorPage() {
         isOpen={!!selectedInstance}
         instance={selectedInstance}
         onClose={() => setSelectedInstance(null)}
+        onTransitionSuccess={fetchData}
       />
 
       {/* Modal de Transición Manual */}

@@ -408,4 +408,4 @@ BEGIN
 
   RETURN QUERY SELECT false, false, NULL::TEXT;
 END;
-$$;
+$$;;

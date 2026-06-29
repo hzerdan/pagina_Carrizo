@@ -1,18 +1,165 @@
-import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert } from 'lucide-react';
 import type { InstanceData } from '../types';
 import { cn } from '../../../lib/utils';
+import { supabase } from '../../../lib/supabase';
+import { useAuth } from '../../../contexts/AuthContext';
 
 interface InstanceDetailsDrawerProps {
   instance: InstanceData | null;
   isOpen: boolean;
   onClose: () => void;
+  onTransitionSuccess?: () => void;
 }
 
-export function InstanceDetailsDrawer({ instance, isOpen, onClose }: InstanceDetailsDrawerProps) {
+interface ChecklistItem {
+  codigo: string;
+  nombre: string;
+  es_bloqueante: boolean;
+  cumplido: boolean;
+  mensaje: string;
+}
+
+export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionSuccess }: InstanceDetailsDrawerProps) {
+  const { user, personalAcId } = useAuth();
+  
+  const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+  const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
+  const [isSupervisor, setIsSupervisor] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [transitionError, setTransitionError] = useState<string | null>(null);
+
+  // Determinar si estamos en un estado transicionable
+  const stateCode = instance?.estado_actual.split(':')[0].trim() || '';
+  const isState32 = stateCode === '3.2';
+  const isState4 = stateCode === '4';
+  const isTransitionableState = isState32 || isState4;
+  const nextStateCode = isState32 ? '4' : isState4 ? '5' : '';
+
+  // Efecto para cargar el checklist dinámico y los permisos de supervisor
+  useEffect(() => {
+    if (!instance || !isOpen) return;
+
+    const loadChecklist = async () => {
+      try {
+        setIsLoadingChecklist(true);
+        const { data, error } = await supabase.rpc('get_checklist_instancia', {
+          p_instancia_id: instance.instancia_id
+        });
+
+        if (error) throw error;
+        setChecklist((data as ChecklistItem[]) || []);
+      } catch (err) {
+        console.error('Error fetching checklist:', err);
+      } finally {
+        setIsLoadingChecklist(false);
+      }
+    };
+
+    const checkSupervisorRole = async () => {
+      if (!personalAcId) return;
+      try {
+        const { data, error } = await supabase
+          .from('personal_ac_roles')
+          .select('roles(codigo)')
+          .eq('personal_ac_id', personalAcId);
+
+        if (error) throw error;
+        
+        if (data) {
+          const hasSup = data.some(
+            (row: any) => row.roles && (row.roles.codigo === 'SUP' || row.roles.codigo === 'AD')
+          );
+          setIsSupervisor(hasSup);
+        }
+      } catch (err) {
+        console.error('Error checking supervisor role:', err);
+      }
+    };
+
+    loadChecklist();
+    checkSupervisorRole();
+    setTransitionError(null);
+  }, [instance, isOpen, personalAcId]);
+
   if (!instance) return null;
 
   const isYellow = instance.color_alerta === 'AMARILLO';
   const isRed = instance.color_alerta === 'ROJO';
+
+  // Determinar si cumple todos los obligatorios
+  const missingBlocking = checklist.some(item => item.es_bloqueante && !item.cumplido);
+  const canAdvance = !missingBlocking && checklist.length > 0;
+
+  // Manejar el avance normal
+  const handleAdvance = async () => {
+    const missingOptionals = checklist.some(item => !item.es_bloqueante && !item.cumplido);
+    if (missingOptionals) {
+      const confirm = window.confirm("Se avanzará al siguiente estado sin los datos opcionales. ¿Desea continuar?");
+      if (!confirm) return;
+    }
+
+    try {
+      setIsTransitioning(true);
+      setTransitionError(null);
+
+      const { data, error } = await supabase.rpc('intentar_transicion_automatica_pedido', {
+        p_instancia_id: instance.instancia_id
+      });
+
+      if (error) throw new Error(error.message);
+
+      const res = data as { transicion_exitosa?: boolean; nuevo_estado_code?: string; mensaje_debug?: string } | null;
+      if (res?.transicion_exitosa) {
+        onTransitionSuccess?.();
+        onClose();
+      } else {
+        throw new Error(res?.mensaje_debug || "No se pudo transicionar. Verifique que se cumplan las validaciones.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setTransitionError(err.message || "Error al realizar la transición.");
+    } finally {
+      setIsTransitioning(false);
+    }
+  };
+
+  // Manejar el override del supervisor (Forzar)
+  const handleForceAdvance = async () => {
+    const motivo = window.prompt("Ingrese el motivo para forzar el cambio de estado (requerido):");
+    if (motivo === null) return;
+    if (!motivo.trim()) {
+      alert("Debe ingresar un motivo válido.");
+      return;
+    }
+
+    try {
+      setIsTransitioning(true);
+      setTransitionError(null);
+
+      const { data, error } = await supabase.rpc('transicionar_instancia_manual', {
+        p_instancia_id: instance.instancia_id,
+        p_nuevo_estado_code: nextStateCode, // Siguiente estado dinámico
+        p_usuario_nombre: user?.email || 'unknown',
+        p_motivo: motivo
+      });
+
+      if (error) throw new Error(error.message);
+
+      const res = data as { status?: string } | null;
+      if (res?.status === 'SUCCESS') {
+        onTransitionSuccess?.();
+        onClose();
+      } else {
+        throw new Error("No se pudo forzar la transición.");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setTransitionError(err.message || "Error al forzar la transición.");
+    } finally {
+      setIsTransitioning(false);
+    }
+  };
 
   return (
     <>
@@ -107,28 +254,56 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose }: InstanceDet
             </div>
           </div>
 
-          {/* Pending Tasks */}
+          {/* Pending Tasks (Checklist Inteligente) */}
           <div>
             <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider flex items-center gap-2">
               Tareas Pendientes
-              {(!instance.tareas_faltantes || instance.tareas_faltantes.length === 0) && (
+              {checklist.length > 0 && checklist.every(item => item.cumplido) && (
                 <span className="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">COMPLETO</span>
               )}
             </h3>
             
-            {(!instance.tareas_faltantes || instance.tareas_faltantes.length === 0) ? (
+            {isLoadingChecklist ? (
+              <div className="flex items-center justify-center p-6 text-gray-500 gap-2">
+                <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
+                <span className="text-sm">Evaluando requisitos...</span>
+              </div>
+            ) : checklist.length === 0 ? (
               <div className="bg-green-50 text-green-800 p-4 rounded-xl border border-green-100 flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
                 <p className="text-sm font-medium">Sin tareas bloqueantes para este estado.</p>
               </div>
             ) : (
               <ul className="space-y-3">
-                {instance.tareas_faltantes.map((tarea, idx) => (
-                  <li key={idx} className="flex items-start gap-3 group">
-                    <Circle className="w-5 h-5 text-gray-300 mt-0.5 flex-shrink-0 group-hover:text-gray-400 transition-colors" />
-                    <span className="text-sm text-gray-700 font-medium">{tarea}</span>
-                  </li>
-                ))}
+                {checklist.map((item, idx) => {
+                  const Icon = item.cumplido ? CheckCircle2 : Circle;
+                  return (
+                    <li key={idx} className="flex items-start gap-3 group" title={item.mensaje}>
+                      <Icon className={cn(
+                        "w-5 h-5 mt-0.5 flex-shrink-0 transition-colors",
+                        item.cumplido ? "text-green-600" : 
+                        item.es_bloqueante ? "text-blue-500 group-hover:text-blue-600" : "text-gray-300 group-hover:text-gray-400"
+                      )} />
+                      <div className="flex-1 min-w-0">
+                        <p className={cn(
+                          "text-sm font-medium leading-tight flex items-center gap-2 flex-wrap",
+                          item.cumplido ? "text-gray-400 line-through" : "text-gray-700"
+                        )}>
+                          <span>{item.nombre}</span>
+                          <span className={cn(
+                            "text-[10px] font-bold px-1.5 py-0.5 rounded",
+                            item.es_bloqueante ? "text-blue-700 bg-blue-50" : "text-gray-500 bg-gray-100"
+                          )}>
+                            {item.es_bloqueante ? "Obligatorio" : "Opcional"}
+                          </span>
+                        </p>
+                        {item.mensaje && (
+                          <p className="text-xs text-gray-400 mt-1 italic">{item.mensaje}</p>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>
@@ -149,7 +324,77 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose }: InstanceDet
           )}
 
         </div>
+
+        {/* Transition Actions Footer */}
+        {isTransitionableState && (
+          <div className="p-5 border-t border-gray-100 bg-gray-50/70 space-y-3 flex-shrink-0">
+            {transitionError && (
+              <div className="bg-red-50 border border-red-200 text-red-800 p-3 rounded-lg flex items-start gap-2 text-xs">
+                <AlertCircle className="w-4 h-4 flex-shrink-0 text-red-600 mt-0.5" />
+                <p>{transitionError}</p>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              {canAdvance ? (
+                <button
+                  onClick={handleAdvance}
+                  disabled={isTransitioning || isLoadingChecklist}
+                  className="flex-1 py-3 px-4 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-md transition-all duration-150 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  {isTransitioning ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Procesando...
+                    </>
+                  ) : (
+                    <>
+                      Procesar Avance de Estado
+                    </>
+                  )}
+                </button>
+              ) : isSupervisor ? (
+                <button
+                  onClick={handleForceAdvance}
+                  disabled={isTransitioning || isLoadingChecklist}
+                  className="flex-1 py-3 px-4 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-md transition-all duration-150 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
+                >
+                  {isTransitioning ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Procesando...
+                    </>
+                  ) : (
+                    <>
+                      <ShieldAlert className="w-4 h-4" />
+                      Forzar Avance de Estado (Supervisor)
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  disabled
+                  className="flex-1 py-3 px-4 bg-gray-100 text-gray-400 text-sm font-bold rounded-xl flex items-center justify-center gap-2 cursor-not-allowed border border-gray-200"
+                >
+                  Procesar Avance de Estado
+                </button>
+              )}
+            </div>
+            
+            {!canAdvance && !isSupervisor && (
+              <p className="text-center text-xs text-blue-600 font-semibold bg-blue-50 py-1.5 rounded-lg border border-blue-100/50">
+                Complete los requisitos obligatorios para habilitar el avance.
+              </p>
+            )}
+            {!canAdvance && isSupervisor && (
+              <p className="text-center text-xs text-orange-600 font-semibold bg-orange-50 py-1.5 rounded-lg border border-orange-100/50">
+                Requisitos incompletos. Habilitado override de Supervisor.
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </>
   );
 }
+
