@@ -33,8 +33,9 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
   const stateCode = instance?.estado_actual.split(':')[0].trim() || '';
   const isState32 = stateCode === '3.2';
   const isState4 = stateCode === '4';
-  const isTransitionableState = isState32 || isState4;
-  const nextStateCode = isState32 ? '4' : isState4 ? '5' : '';
+  const isState5 = stateCode === '5';
+  const isTransitionableState = isState32 || isState4 || isState5;
+  const nextStateCode = isState32 ? '4' : isState4 ? '5' : isState5 ? '5.1' : '';
 
   // Efecto para cargar el checklist dinámico y los permisos de supervisor
   useEffect(() => {
