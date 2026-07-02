@@ -9,6 +9,45 @@ interface MonitorCardProps {
   onClick: (instance: InstanceData) => void;
 }
 
+function parseReferenciaHumana(ref: string, instanceId: number) {
+  let pedido = '';
+  let oc = '';
+  let remito = '';
+  let idInstancia = String(instanceId);
+
+  if (!ref) {
+    return { pedido, oc, remito, idInstancia };
+  }
+
+  const parts = ref.split('_');
+
+  parts.forEach((part, index) => {
+    if (part.startsWith('OC-')) {
+      oc = part.substring(3);
+    } else if (part.startsWith('PED-')) {
+      pedido = part.substring(4);
+    } else if (part.startsWith('REM-')) {
+      remito = part.substring(4);
+    } else if (/^\d+$/.test(part)) {
+      if (part.length > 6) {
+        pedido = part;
+      } else {
+        if (index === parts.length - 1) {
+          idInstancia = part;
+        }
+      }
+    } else if (part.includes('-')) {
+      oc = part;
+    } else {
+      if (index === 0) {
+        pedido = part;
+      }
+    }
+  });
+
+  return { pedido, oc, remito, idInstancia };
+}
+
 export function MonitorCard({ instance, onClick }: MonitorCardProps) {
   // Alert color logic for the left border/indicator
   const getAlertColor = (color: string) => {
@@ -46,6 +85,8 @@ export function MonitorCard({ instance, onClick }: MonitorCardProps) {
     transition,
   };
 
+  const parsed = parseReferenciaHumana(instance.referencia_humana, instance.instancia_id);
+
   return (
     <div
       ref={setNodeRef}
@@ -74,19 +115,42 @@ export function MonitorCard({ instance, onClick }: MonitorCardProps) {
           onClick={() => onClick(instance)}
           className="p-4 flex-1 flex flex-col cursor-pointer"
         >
-          {/* Header: Market Badge & Wait Time */}
-          <div className="flex justify-between items-start mb-3">
-            <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-bold rounded-md">
+          {/* Header: Market Badge, Info lines & Wait Time */}
+          <div className="flex justify-between items-start mb-3 gap-2">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+              <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-bold rounded-md flex-shrink-0">
                 {instance.tipo_mercado}
               </span>
-              <span className="text-xs text-gray-500 truncate max-w-[120px]" title={instance.referencia_humana}>
-                {instance.referencia_humana}
-              </span>
+              
+              <div 
+                className="flex-1 min-w-0 text-[11px] text-gray-500 font-medium space-y-0.5" 
+                title={instance.referencia_humana}
+              >
+                {parsed.pedido && (
+                  <div className="truncate">
+                    <span className="text-gray-400 font-normal">Pedido:</span> {parsed.pedido}
+                  </div>
+                )}
+                {parsed.oc && (
+                  <div className="truncate">
+                    <span className="text-gray-400 font-normal">OC:</span> {parsed.oc}
+                  </div>
+                )}
+                {parsed.remito && (
+                  <div className="truncate">
+                    <span className="text-gray-400 font-normal">Remito:</span> {parsed.remito}
+                  </div>
+                )}
+                {parsed.idInstancia && (
+                  <div className="truncate">
+                    <span className="text-gray-400 font-normal">Instancia:</span> {parsed.idInstancia}
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className={cn(
-               "flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md",
+               "flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md flex-shrink-0",
                instance.color_alerta === 'ROJO' ? 'bg-red-50 text-red-700' :
                instance.color_alerta === 'AMARILLO' ? 'bg-yellow-50 text-yellow-700' :
                'bg-green-50 text-green-700'

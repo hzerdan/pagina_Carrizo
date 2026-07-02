@@ -472,7 +472,10 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                 chofer_telefono: conversation.conversation_key,
                 escalation_reason: escalationText,
                 operator_name: user?.email || 'Operador',
-                action: 'escalate_supervisor'
+                action: 'escalate_supervisor',
+                metadata: {
+                    remito_id: selectedRemitoId
+                }
             };
 
             const response = await fetch('https://hzerdan.app.n8n.cloud/webhook/whatsapp-salida-web', {

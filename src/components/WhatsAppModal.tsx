@@ -108,7 +108,10 @@ ${remitoData.tareas}`;
         message: `Instrucciones para Remito #${remitoData.ref}`,
         template_strategy: 'auto',
         template_variables: variables,
-        template_variables_full: variablesFull
+        template_variables_full: variablesFull,
+        metadata: {
+          remito_id: remitoData.id
+        }
       };
 
       console.log('DEBUG - Enviando a n8n:', JSON.stringify(payload, null, 2));
