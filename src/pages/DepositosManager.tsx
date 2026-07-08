@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plus, Edit2, Trash2, Search, X, Loader2, MapPin, ToggleLeft, ToggleRight, Eye, EyeOff } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -57,19 +57,7 @@ export function DepositosManager() {
   
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  useEffect(() => {
-    fetchData();
-    if (toastMessage) {
-      const timer = setTimeout(() => setToastMessage(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toastMessage]);
-
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToastMessage({ type, text });
-  };
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -79,12 +67,27 @@ export function DepositosManager() {
 
       if (error) throw error;
       setDepositos(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching data:', err);
       showToast('error', 'Error al cargar depósitos.');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setToastMessage({ type, text });
   };
 
   const handleOpenModal = (deposito?: Deposito) => {
@@ -147,7 +150,7 @@ export function DepositosManager() {
       showToast('success', 'Depósito guardado exitosamente.');
       handleCloseModal();
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving data:', err);
       showToast('error', 'Error al guardar el depósito.');
     } finally {
@@ -163,9 +166,9 @@ export function DepositosManager() {
         .update({ estado: nuevoEstado })
         .eq('id', deposito.id);
       if (error) throw error;
-      showToast('success', `Depósito ${nuevoEstado === 'ACTIVO' ? 'activado' : 'desactivado'} exitosamente.`);
+      showToast('success', `Depósito ${nuevoEstado === 'ACTIVO' ? 'activada' : 'desactivada'} exitosamente.`);
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error toggling state:', err);
       showToast('error', 'Error al cambiar el estado del depósito.');
     }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X, Plus, Loader2, Search, Check, ChevronDown, Package } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';

@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import type { InstanceData, StateDefinition } from '../types';
 
@@ -24,12 +24,13 @@ export function TransitionModal({
 }: TransitionModalProps) {
   const [motivo, setMotivo] = useState('');
 
-  // Reset motivo on open
-  useEffect(() => {
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
     if (isOpen) {
       setMotivo('');
     }
-  }, [isOpen]);
+  }
 
   if (!isOpen || !instance || !newStateCode) return null;
 

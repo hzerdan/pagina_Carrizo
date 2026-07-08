@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plus, Edit2, Trash2, Search, X, Loader2, ClipboardList, ToggleLeft, ToggleRight, Eye, EyeOff, Camera, Bell } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -42,19 +42,7 @@ export function CatalogoTareasManager() {
   
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  useEffect(() => {
-    fetchData();
-    if (toastMessage) {
-      const timer = setTimeout(() => setToastMessage(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toastMessage]);
-
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToastMessage({ type, text });
-  };
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -64,12 +52,27 @@ export function CatalogoTareasManager() {
 
       if (error) throw error;
       setTareas(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching data:', err);
       showToast('error', 'Error al cargar catálogo de tareas.');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setToastMessage({ type, text });
   };
 
   const handleOpenModal = (tarea?: TareaControl) => {
@@ -122,7 +125,7 @@ export function CatalogoTareasManager() {
       showToast('success', 'Tarea guardada exitosamente.');
       handleCloseModal();
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving data:', err);
       showToast('error', 'Error al guardar la tarea.');
     } finally {
@@ -140,7 +143,7 @@ export function CatalogoTareasManager() {
       if (error) throw error;
       showToast('success', `Tarea ${nuevoEstado === 'ACTIVO' ? 'activada' : 'desactivada'} exitosamente.`);
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error toggling state:', err);
       showToast('error', 'Error al cambiar el estado de la tarea.');
     }

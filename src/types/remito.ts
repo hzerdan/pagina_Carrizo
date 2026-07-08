@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export interface PedidoVinculado {
   id_instancia?: number;
   pedido_id?: number;

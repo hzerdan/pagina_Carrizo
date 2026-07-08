@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { 
   Plus, 
@@ -63,7 +63,7 @@ export function LogisticaPoliticasManager() {
   // Form state
   const [formData, setFormData] = useState(initialFormData);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const { data, error } = await supabase
@@ -73,17 +73,17 @@ export function LogisticaPoliticasManager() {
 
       if (error) throw error;
       setPoliticas(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching politicas:', err);
       showToast('error', 'Error al cargar las políticas.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const showToast = (type: 'success' | 'error', message: string) => {
     setToast({ type, message });
@@ -131,7 +131,7 @@ export function LogisticaPoliticasManager() {
       if (error) throw error;
       showToast('success', `Política ${!politica.activa ? 'activada' : 'desactivada'} correctamente.`);
       await fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error toggling activa:', err);
       showToast('error', 'Error al cambiar el estado de la política.');
     }
@@ -193,12 +193,14 @@ export function LogisticaPoliticasManager() {
       
       await fetchData();
       handleCloseModal();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving politica:', err);
-      if (err.code === '23505') {
+      const isUniqueViolation = err && typeof err === 'object' && 'code' in err && err.code === '23505';
+      const errMsg = err instanceof Error ? err.message : 'Error desconocido';
+      if (isUniqueViolation) {
         setErrorMsg('Ya existe una política con ese nombre.');
       } else {
-        setErrorMsg('Error al guardar: ' + err.message);
+        setErrorMsg('Error al guardar: ' + errMsg);
       }
     } finally {
       setIsSaving(false);

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plus, Edit2, Trash2, Search, X, Loader2 } from 'lucide-react';
 
@@ -54,21 +54,7 @@ export default function PersonalManager() {
   
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  useEffect(() => {
-    fetchData();
-    
-    // Auto-hide toast after 3 seconds
-    if (toastMessage) {
-      const timer = setTimeout(() => setToastMessage(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toastMessage]);
-
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToastMessage({ type, text });
-  };
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       // Fetch Roles
@@ -92,12 +78,28 @@ export default function PersonalManager() {
 
       if (personalError) throw personalError;
       setPersonal(personalData || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching data:', err);
       showToast('error', 'Error al cargar los datos.');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    // Auto-hide toast after 3 seconds
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setToastMessage({ type, text });
   };
 
   const handleOpenModal = (empleado?: PersonalAC) => {
@@ -197,9 +199,10 @@ export default function PersonalManager() {
       showToast('success', 'Empleado guardado exitosamente.');
       handleCloseModal();
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving data:', err);
-      showToast('error', err.message || 'Error al guardar el empleado.');
+      const errMsg = err instanceof Error ? err.message : 'Error al guardar el empleado.';
+      showToast('error', errMsg);
     } finally {
       setSaving(false);
     }
@@ -220,7 +223,7 @@ export default function PersonalManager() {
       
       showToast('success', 'Empleado eliminado exitosamente.');
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error deleting data:', err);
       showToast('error', 'Error al eliminar el empleado.');
     }

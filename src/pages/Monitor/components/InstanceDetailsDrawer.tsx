@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
 import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert } from 'lucide-react';
 import type { InstanceData } from '../types';
@@ -22,7 +23,6 @@ interface ChecklistItem {
 
 export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionSuccess }: InstanceDetailsDrawerProps) {
   const { user, personalAcId } = useAuth();
-  
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
   const [isSupervisor, setIsSupervisor] = useState(false);
@@ -34,8 +34,20 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
   const isState32 = stateCode === '3.2';
   const isState4 = stateCode === '4';
   const isState5 = stateCode === '5';
-  const isTransitionableState = isState32 || isState4 || isState5;
-  const nextStateCode = isState32 ? '4' : isState4 ? '5' : isState5 ? '5.1' : '';
+  const isState51 = stateCode === '5.1';
+  const isTransitionableState = isState32 || isState4 || isState5 || isState51;
+  const nextStateCode = (() => {
+    if (isState32) return '4';
+    if (isState4) return '5';
+    if (isState5) return '5.1';
+    if (isState51) {
+      if (instance?.proximos_estados && instance.proximos_estados.length > 0) {
+        return instance.proximos_estados[0].split(':')[0].trim();
+      }
+      return '5.5';
+    }
+    return '';
+  })();
 
   // Efecto para cargar el checklist dinámico y los permisos de supervisor
   useEffect(() => {
@@ -44,12 +56,69 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
     const loadChecklist = async () => {
       try {
         setIsLoadingChecklist(true);
-        const { data, error } = await supabase.rpc('get_checklist_instancia', {
-          p_instancia_id: instance.instancia_id
-        });
+        if (stateCode === '5.1') {
+          // Lógica para cargar las tareas dinámicas del chofer asociadas al remito
+          const { data: remitoItems, error: remitoErr } = await supabase
+            .from('remito_items')
+            .select('remito_id, remitos(id, remito_ref_externa, protocolo_control, chofer_id)')
+            .or(`destino_instance_id.eq.${instance.instancia_id},origen_instance_id.eq.${instance.instancia_id}`)
+            .eq('origen_type', 'PEDIDO');
 
-        if (error) throw error;
-        setChecklist((data as ChecklistItem[]) || []);
+          if (remitoErr) throw remitoErr;
+
+          const allTasks: ChecklistItem[] = [];
+          if (!remitoItems || remitoItems.length === 0) {
+            allTasks.push({
+              codigo: 'VAL_P_511',
+              nombre: 'Asociar remito al pedido',
+              es_bloqueante: true,
+              cumplido: false,
+              mensaje: 'No hay remito asociado a esta instancia.'
+            });
+          } else {
+            remitoItems.forEach((ri: any) => {
+              if (ri.remitos) {
+                // Verificar si tiene chofer asignado
+                if (!ri.remitos.chofer_id) {
+                  allTasks.push({
+                    codigo: 'VAL_P_511',
+                    nombre: `Asignar chofer al remito (${ri.remitos.remito_ref_externa || ri.remito_id})`,
+                    es_bloqueante: true,
+                    cumplido: false,
+                    mensaje: 'Falta chofer asignado.'
+                  });
+                }
+                // Obtener tareas del protocolo
+                const protocol = ri.remitos.protocolo_control || [];
+                const driverTasks = protocol.filter((t: any) => t.asignada_a_chofer);
+                driverTasks.forEach((t: any) => {
+                  let msg = '';
+                  if (t.estado === 'REPORTADO_CHOFER') msg = 'Reportado por chofer - Pendiente de aprobación';
+                  else if (t.estado === 'PENDIENTE') msg = 'Pendiente';
+                  else if (t.estado === 'NO_REALIZABLE') msg = 'No realizable';
+                  else if (t.estado === 'RECHAZADO') msg = 'Rechazado';
+                  
+                  allTasks.push({
+                    codigo: t.tarea_template || t.tarea || `TASK_${t.id}`,
+                    nombre: t.tarea,
+                    es_bloqueante: true,
+                    cumplido: t.estado === 'COMPLETADO',
+                    mensaje: msg
+                  });
+                });
+              }
+            });
+          }
+          setChecklist(allTasks);
+        } else {
+          // Lógica original para otros estados
+          const { data, error } = await supabase.rpc('get_checklist_instancia', {
+            p_instancia_id: instance.instancia_id
+          });
+
+          if (error) throw error;
+          setChecklist((data as ChecklistItem[]) || []);
+        }
       } catch (err) {
         console.error('Error fetching checklist:', err);
       } finally {
@@ -81,7 +150,7 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
     loadChecklist();
     checkSupervisorRole();
     setTransitionError(null);
-  }, [instance, isOpen, personalAcId]);
+  }, [instance, isOpen, personalAcId, stateCode]);
 
   if (!instance) return null;
 
@@ -104,7 +173,11 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
       setIsTransitioning(true);
       setTransitionError(null);
 
-      const { data, error } = await supabase.rpc('intentar_transicion_automatica_pedido', {
+      const rpcName = stateCode === '5.1'
+        ? 'intentar_transicion_carga_mercaderia'
+        : 'intentar_transicion_automatica_pedido';
+
+      const { data, error } = await supabase.rpc(rpcName, {
         p_instancia_id: instance.instancia_id
       });
 
@@ -354,6 +427,33 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
                     </>
                   )}
                 </button>
+              ) : stateCode === '5.1' ? (
+                isSupervisor ? (
+                  <button
+                    onClick={handleForceAdvance}
+                    disabled={isTransitioning || isLoadingChecklist}
+                    className="flex-1 py-3 px-4 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl shadow-md transition-all duration-150 flex items-center justify-center gap-2 hover:-translate-y-0.5 active:translate-y-0"
+                  >
+                    {isTransitioning ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Procesando...
+                      </>
+                    ) : (
+                      <>
+                        <ShieldAlert className="w-4 h-4" />
+                        Forzar Avance de Estado (Supervisor/Admin)
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    disabled
+                    className="flex-1 py-3 px-4 bg-gray-100 text-gray-400 text-sm font-bold rounded-xl flex items-center justify-center gap-2 cursor-not-allowed border border-gray-200"
+                  >
+                    Procesar Avance de Estado
+                  </button>
+                )
               ) : isSupervisor ? (
                 <button
                   onClick={handleForceAdvance}
@@ -382,12 +482,24 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
               )}
             </div>
             
-            {!canAdvance && !isSupervisor && (
+            {!canAdvance && stateCode === '5.1' && (
+              isSupervisor ? (
+                <p className="text-center text-xs text-red-600 font-semibold bg-red-50 py-1.5 rounded-lg border border-red-100/50">
+                  Tareas incompletas. Habilitado override de Supervisor/Admin.
+                </p>
+              ) : (
+                <p className="text-center text-xs text-blue-600 font-semibold bg-blue-50 py-1.5 rounded-lg border border-blue-100/50">
+                  Complete las tareas obligatorias del chofer para habilitar el avance.
+                </p>
+              )
+            )}
+
+            {!canAdvance && stateCode !== '5.1' && !isSupervisor && (
               <p className="text-center text-xs text-blue-600 font-semibold bg-blue-50 py-1.5 rounded-lg border border-blue-100/50">
                 Complete los requisitos obligatorios para habilitar el avance.
               </p>
             )}
-            {!canAdvance && isSupervisor && (
+            {!canAdvance && stateCode !== '5.1' && isSupervisor && (
               <p className="text-center text-xs text-orange-600 font-semibold bg-orange-50 py-1.5 rounded-lg border border-orange-100/50">
                 Requisitos incompletos. Habilitado override de Supervisor.
               </p>

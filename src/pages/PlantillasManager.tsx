@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plus, Edit2, Search, X, Loader2, Upload, ExternalLink, FileText, ToggleLeft, ToggleRight } from 'lucide-react';
 
@@ -73,17 +73,11 @@ export function PlantillasManager() {
     }
   }, [toastMessage]);
 
-  // ── Initial fetch ────────────────────────────────────────────────────
-  useEffect(() => {
-    fetchData();
-  }, []);
-
   const showToast = (type: 'success' | 'error', text: string) => {
     setToastMessage({ type, text });
   };
 
-  // ── Fetch all templates ──────────────────────────────────────────────
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -93,13 +87,18 @@ export function PlantillasManager() {
 
       if (error) throw error;
       setTemplates(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching templates:', err);
       showToast('error', 'Error al cargar las plantillas.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // ── Initial fetch ────────────────────────────────────────────────────
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // ── Open / close modal ──────────────────────────────────────────────
   const handleOpenModal = (tpl?: InspeccionTemplate) => {
@@ -214,17 +213,19 @@ export function PlantillasManager() {
       showToast('success', 'Plantilla guardada exitosamente.');
       handleCloseModal();
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving template:', err);
+      const errObj = err as Record<string, unknown> | null;
+      const errMsg = err instanceof Error ? err.message : '';
       const isDuplicate =
-        err?.message?.includes('duplicate') ||
-        err?.message?.includes('unique') ||
-        err?.code === '23505';
+        errMsg.includes('duplicate') ||
+        errMsg.includes('unique') ||
+        (errObj && errObj.code === '23505');
       showToast(
         'error',
         isDuplicate
           ? 'El código de plantilla ya existe. Use un código diferente.'
-          : `Error al guardar la plantilla: ${err.message || 'Error desconocido'}`
+          : `Error al guardar la plantilla: ${errMsg || 'Error desconocido'}`
       );
     } finally {
       setSaving(false);
@@ -242,7 +243,7 @@ export function PlantillasManager() {
       if (error) throw error;
       showToast('success', `Plantilla ${!tpl.activo ? 'activada' : 'desactivada'}.`);
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error toggling template:', err);
       showToast('error', 'Error al cambiar el estado de la plantilla.');
     }
@@ -258,7 +259,7 @@ export function PlantillasManager() {
       if (error) throw error;
       showToast('success', 'Tipo de plantilla actualizado.');
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error updating template tipo:', err);
       showToast('error', 'Error al actualizar el tipo de la plantilla.');
     }

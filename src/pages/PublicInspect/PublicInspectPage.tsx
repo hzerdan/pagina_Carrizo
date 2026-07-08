@@ -43,9 +43,10 @@ export function PublicInspectPage() {
         if (rpcError) throw rpcError;
         
         setData(result as PublicInspeccionData);
-      } catch (err: any) {
+      } catch (err) {
         console.error('Error fetching inspection:', err);
-        setErrorStr(err.message || 'Error al obtener la inspección. Es posible que el enlace no sea válido.');
+        const errMsg = err instanceof Error ? err.message : 'Error desconocido';
+        setErrorStr(errMsg || 'Error al obtener la inspección. Es posible que el enlace no sea válido.');
       } finally {
         setLoading(false);
       }
@@ -86,9 +87,10 @@ export function PublicInspectPage() {
       if (rpcError) throw rpcError;
 
       setSuccess(true);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Upload Error:', err);
-      setUploadError(err.message || 'Error desconocido al procesar la solicitud.');
+      const errMsg = err instanceof Error ? err.message : 'Error desconocido';
+      setUploadError(errMsg || 'Error desconocido al procesar la solicitud.');
     } finally {
       setUploading(false);
     }

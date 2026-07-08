@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Search, Edit2, Trash2, Loader2, Truck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -40,7 +40,7 @@ export function ChoferesManager() {
     transportista_id: '' as string | number,
   });
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
       const [choferesRes, transRes] = await Promise.all([
@@ -59,17 +59,17 @@ export function ChoferesManager() {
 
       setChoferes(choferesRes.data || []);
       setTransportistas(transRes.data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching data:', err);
       // Podrías manejar un estado global de error aquí si lo deseas
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleOpenModal = (chofer?: Chofer) => {
     setErrorMsg(null);
@@ -110,9 +110,10 @@ export function ChoferesManager() {
       const { error } = await supabase.from('choferes').delete().eq('id', id);
       if (error) throw error;
       await fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error deleting chofer:', err);
-      alert('Error al eliminar el chofer. ' + err.message);
+      const errMsg = err instanceof Error ? err.message : 'Error desconocido';
+      alert('Error al eliminar el chofer. ' + errMsg);
     }
   };
 
@@ -161,13 +162,15 @@ export function ChoferesManager() {
       
       await fetchData();
       handleCloseModal();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving chofer:', err);
       // Detect uniqueness violation or other errors
-      if (err.code === '23505') {
+      const isUniqueViolation = err && typeof err === 'object' && 'code' in err && err.code === '23505';
+      const errMsg = err instanceof Error ? err.message : 'Error desconocido';
+      if (isUniqueViolation) {
         setErrorMsg('El DNI ya se encuentra registrado para otro chofer.');
       } else {
-        setErrorMsg('Ocurrió un error al guardar: ' + err.message);
+        setErrorMsg('Ocurrió un error al guardar: ' + errMsg);
       }
     } finally {
       setIsSaving(false);

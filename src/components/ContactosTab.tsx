@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plus, Trash2, Loader2, X } from 'lucide-react';
 
@@ -34,13 +34,7 @@ export function ContactosTab({ entidadTipo, entidadId }: ContactosTabProps) {
 
   const fkColumn = `${entidadTipo}_id`;
 
-  useEffect(() => {
-    if (entidadId) {
-      fetchContactos();
-    }
-  }, [entidadId, entidadTipo]);
-
-  const fetchContactos = async () => {
+  const fetchContactos = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -56,7 +50,13 @@ export function ContactosTab({ entidadTipo, entidadId }: ContactosTabProps) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [entidadId, fkColumn]);
+
+  useEffect(() => {
+    if (entidadId) {
+      fetchContactos();
+    }
+  }, [entidadId, fetchContactos]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();

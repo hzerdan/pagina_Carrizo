@@ -47,8 +47,9 @@ export function RemitosList() {
       
       if (error) throw error;
       setRemitos(data || []);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar los remitos activos.');
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Error desconocido';
+      setError(errMsg || 'Error al cargar los remitos activos.');
     } finally {
       setLoading(false);
     }

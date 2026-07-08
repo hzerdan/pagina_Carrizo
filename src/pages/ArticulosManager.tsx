@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plus, Edit2, Trash2, Search, X, Loader2 } from 'lucide-react';
 
@@ -23,7 +23,7 @@ const initialFormData: FormData = {
   codigo_articulo: '',
   nombre: '',
   tipo_mercado: 'MI',
-  peso_standard_kg: 50.00,
+  peso_standard_kg: 0,
 };
 
 export function ArticulosManager() {
@@ -37,19 +37,7 @@ export function ArticulosManager() {
   
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  useEffect(() => {
-    fetchData();
-    if (toastMessage) {
-      const timer = setTimeout(() => setToastMessage(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toastMessage]);
-
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToastMessage({ type, text });
-  };
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -59,12 +47,27 @@ export function ArticulosManager() {
 
       if (error) throw error;
       setArticulos(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching data:', err);
       showToast('error', 'Error al cargar los artículos.');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setToastMessage({ type, text });
   };
 
   const handleOpenModal = (articulo?: Articulo) => {
@@ -115,7 +118,7 @@ export function ArticulosManager() {
       showToast('success', 'Artículo guardado exitosamente.');
       handleCloseModal();
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving data:', err);
       showToast('error', 'Error al guardar el artículo.\n(Revise si el código ya existe)');
     } finally {
@@ -133,7 +136,7 @@ export function ArticulosManager() {
       if (error) throw error;
       showToast('success', 'Artículo dado de baja exitosamente.');
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error deleting data:', err);
       showToast('error', 'Error al dar de baja el artículo.');
     }

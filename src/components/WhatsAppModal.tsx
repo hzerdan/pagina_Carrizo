@@ -26,14 +26,17 @@ const removeLineBreaks = (str: string) => {
   return str.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
 };
 
-const safeSenderId = (id: any) => {
+const safeSenderId = (id: unknown) => {
   if (typeof id === 'number') return id;
-  const parsed = parseInt(id);
-  return isNaN(parsed) ? null : parsed;
+  if (typeof id === 'string') {
+    const parsed = parseInt(id);
+    return isNaN(parsed) ? null : parsed;
+  }
+  return null;
 };
 
-const safeStr = (str: any) => {
-  return (str && str.toString().trim()) || 'No informado';
+const safeStr = (str: unknown) => {
+  return (str !== null && str !== undefined && String(str).trim()) || 'No informado';
 };
 
 export function WhatsAppModal({ isOpen, onClose, remitoData }: WhatsAppModalProps) {
@@ -132,8 +135,9 @@ ${remitoData.tareas}`;
         setResult(null);
       }, 2000);
 
-    } catch (error: any) {
-      setResult({ success: false, message: error.message });
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : 'Error desconocido';
+      setResult({ success: false, message: errMsg });
     } finally {
       setIsSending(false);
     }

@@ -1,4 +1,5 @@
-import { useEffect, useState, useRef, useMemo } from 'react';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import type { Conversation } from './ChatLayout';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -77,7 +78,9 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
         catalogTasks.forEach((catTask: any) => {
             const taskName = catTask.tarea_template || catTask.tarea;
             const isPresent = merged.some(s => 
-                (s.tarea_template === taskName) || (s.tarea === taskName)
+                (s.id !== undefined && catTask.id !== undefined && Number(s.id) === Number(catTask.id)) ||
+                (s.tarea_template === taskName) || 
+                (s.tarea === taskName)
             );
             if (!isPresent) {
                 merged.push({
@@ -131,7 +134,19 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
         if (data) setCatalogTasks(data);
     };
 
-    const fetchRemitoData = async () => {
+    const scrollToBottom = useCallback(() => {
+        isProgrammaticScroll.current = true;
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        
+        if (scrollTimeoutRef.current) {
+            clearTimeout(scrollTimeoutRef.current);
+        }
+        scrollTimeoutRef.current = setTimeout(() => {
+            isProgrammaticScroll.current = false;
+        }, 800);
+    }, []);
+
+    const fetchRemitoData = useCallback(async () => {
         if (conversation.participant_role !== 'chofer' || !conversation.participant_id) {
             setActiveRemito(null);
             setRemitosList([]);
@@ -168,7 +183,7 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
         } finally {
             setLoadingRemito(false);
         }
-    };
+    }, [conversation.participant_role, conversation.participant_id, conversation.remito_actual_id, selectedRemitoId]);
 
     useEffect(() => {
         fetchLugares();
@@ -195,10 +210,10 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                 supabase.removeChannel(remitoChannel);
             };
         }
-    }, [conversation.id, conversation.participant_id, conversation.remito_actual_id]);
+    }, [conversation.participant_role, conversation.participant_id, conversation.id, fetchRemitoData]);
 
 
-    const fetchMessages = async () => {
+    const fetchMessages = useCallback(async () => {
         try {
             const { data, error } = await supabase
                 .from('conversation_messages')
@@ -217,7 +232,7 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
             setLoading(false);
             scrollToBottom();
         }
-    };
+    }, [conversation.id, scrollToBottom]);
 
     useEffect(() => {
         setLoading(true);
@@ -231,7 +246,7 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                 schema: 'public',
                 table: 'conversation_messages',
                 filter: `conversation_id=eq.${conversation.id}`
-            }, (_payload) => {
+            }, () => {
                 // Fetch specific message with relations if needed, or simply refetch all.
                 // For simplicity and to get relations correctly, refetching all:
                 fetchMessages();
@@ -249,11 +264,11 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [conversation.id]);
+    }, [conversation.id, conversation.estado_atencion, fetchMessages]);
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages]);
+    }, [messages, scrollToBottom]);
 
     useEffect(() => {
         return () => {
@@ -262,18 +277,6 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
             }
         };
     }, []);
-
-    const scrollToBottom = () => {
-        isProgrammaticScroll.current = true;
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-        
-        if (scrollTimeoutRef.current) {
-            clearTimeout(scrollTimeoutRef.current);
-        }
-        scrollTimeoutRef.current = setTimeout(() => {
-            isProgrammaticScroll.current = false;
-        }, 800);
-    };
 
     const handleScroll = () => {
         const container = scrollContainerRef.current;

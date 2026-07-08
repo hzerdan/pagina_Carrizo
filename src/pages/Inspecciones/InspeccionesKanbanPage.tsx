@@ -60,9 +60,10 @@ export function InspeccionesKanbanPage() {
 
       setInspecciones(insRes.data || []);
       setStateDefs(statesRes.data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching inspecciones data:', err);
-      setError(err.message || 'Error desconocido al obtener la información.');
+      const errMsg = err instanceof Error ? err.message : 'Error desconocido';
+      setError(errMsg || 'Error desconocido al obtener la información.');
     } finally {
       setIsLoading(false);
     }
@@ -130,10 +131,11 @@ export function InspeccionesKanbanPage() {
         // Success — refresh
         await fetchData();
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Transition attempt error:', err);
+      const errMsg = err instanceof Error ? err.message : 'Error desconocido';
       setPendingTransition({ inspeccion, newStateCode: targetStateCode });
-      setTransitionError(err.message || 'Error inesperado durante la transición.');
+      setTransitionError(errMsg || 'Error inesperado durante la transición.');
       setShowExcepcionModal(true);
     } finally {
       setIsTransitioning(false);
@@ -159,9 +161,10 @@ export function InspeccionesKanbanPage() {
       setShowExcepcionModal(false);
       setPendingTransition(null);
       setTransitionError(null);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Force transition error:', err);
-      alert(`Error al forzar la transición: ${err.message}`);
+      const errMsg = err instanceof Error ? err.message : 'Error desconocido';
+      alert(`Error al forzar la transición: ${errMsg}`);
     } finally {
       setIsTransitioning(false);
     }

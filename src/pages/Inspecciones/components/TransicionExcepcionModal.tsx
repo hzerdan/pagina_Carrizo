@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { X, AlertTriangle, ShieldAlert } from 'lucide-react';
 import type { InspeccionKanban, StateDefinition } from '../types';
@@ -26,9 +26,13 @@ export function TransicionExcepcionModal({
 }: TransicionExcepcionModalProps) {
   const [motivo, setMotivo] = useState('');
 
-  useEffect(() => {
-    if (isOpen) setMotivo('');
-  }, [isOpen]);
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (isOpen !== prevIsOpen) {
+    setPrevIsOpen(isOpen);
+    if (isOpen) {
+      setMotivo('');
+    }
+  }
 
   if (!isOpen || !inspeccion || !newStateCode) return null;
 

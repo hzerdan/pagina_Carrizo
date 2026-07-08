@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from 'react';
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,7 +11,6 @@ import {
   CheckCircle, 
   ChevronDown, 
   ChevronUp, 
-  Plus, 
   UserPlus, 
   X, 
   MessageSquare, 
@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { WhatsAppModal } from '../components/WhatsAppModal';
+import { DateTimePicker } from '../components/DateTimePicker';
 
 interface RemitoState {
   id: number | null;
@@ -48,6 +49,10 @@ interface RemitoState {
   me_planillas_t48_emitidas: boolean;
   me_checklist_enviado_operario: boolean;
   tipo_mercado: string | null;
+  mision_estado?: string | null;
+  tiene_incidencias_carga?: boolean;
+  ultimo_mensaje_chofer_at?: string | null;
+  mensajes_sin_respuesta_count?: number;
 }
 
 export interface LogisticaPolitica {
@@ -64,6 +69,7 @@ export interface LogisticaPolitica {
   pedir_estimacion_demora_carga: boolean;
   enviar_recordatorios_carga: boolean;
   escalar_sin_respuesta: boolean;
+  anticipacion_monitoreo_horas: number;
 }
 
 export interface LogisticaOverride {
@@ -83,6 +89,7 @@ export interface LogisticaOverride {
   omitir_confirmacion_fecha_carga: boolean | null;
   omitir_estimacion_demora_carga: boolean | null;
   omitir_recordatorios_carga: boolean | null;
+  anticipacion_monitoreo_horas: number | null;
   motivo: string | null;
   creado_por_id: number | null;
   creado_por_email: string | null;
@@ -123,6 +130,10 @@ export function RemitoEdit() {
     me_planillas_t48_emitidas: false,
     me_checklist_enviado_operario: false,
     tipo_mercado: null,
+    mision_estado: 'ESPERANDO_DOCS',
+    tiene_incidencias_carga: false,
+    ultimo_mensaje_chofer_at: null,
+    mensajes_sin_respuesta_count: 0,
   });
 
   const [catalogs, setCatalogs] = useState({
@@ -148,11 +159,9 @@ export function RemitoEdit() {
   const [checklist, setChecklist] = useState<any[]>([]);
 
   // UI state for inputs
-  const [searchChofer, setSearchChofer] = useState('');
-  const [showChoferList, setShowChoferList] = useState(false);
+  const [nombreChoferNuevo, setNombreChoferNuevo] = useState('');
   const [dniChoferNuevo, setDniChoferNuevo] = useState('');
   const [celularChoferNuevo, setCelularChoferNuevo] = useState('');
-  const [isConfirmingChofer, setIsConfirmingChofer] = useState(false);
 
   const [searchCamion, setSearchCamion] = useState('');
   const [showCamionList, setShowCamionList] = useState(false);
@@ -177,6 +186,7 @@ export function RemitoEdit() {
     intervalo_recordatorio_carga_corta_minutos: '' as string | number,
     intervalo_recordatorio_carga_larga_minutos: '' as string | number,
     max_recordatorios_sin_respuesta: '' as string | number,
+    anticipacion_monitoreo_horas: '' as string | number,
     pedir_confirmacion_fecha_carga: null as boolean | null,
     pedir_estimacion_demora_carga: null as boolean | null,
     enviar_recordatorios_carga: null as boolean | null,
@@ -188,11 +198,9 @@ export function RemitoEdit() {
     motivo: '',
   });
 
-  useEffect(() => {
-    fetchContext();
-  }, [id]);
 
-  const fetchContext = async () => {
+
+  const fetchContext = useCallback(async () => {
     try {
       setLoading(true);
       setErrorMsg(null);
@@ -230,6 +238,10 @@ export function RemitoEdit() {
         me_planillas_t48_emitidas: ctx.remito?.me_planillas_t48_emitidas || false,
         me_checklist_enviado_operario: ctx.remito?.me_checklist_enviado_operario || false,
         tipo_mercado: ctx.pedidos && ctx.pedidos.length > 0 ? ctx.pedidos[0].tipo_mercado : null,
+        mision_estado: ctx.remito?.mision_estado || 'ESPERANDO_DOCS',
+        tiene_incidencias_carga: !!ctx.remito?.tiene_incidencias_carga,
+        ultimo_mensaje_chofer_at: ctx.remito?.ultimo_mensaje_chofer_at || null,
+        mensajes_sin_respuesta_count: ctx.remito?.mensajes_sin_respuesta_count || 0,
       });
 
       const savedProtocol = ctx.remito?.protocolo_control || [];
@@ -241,7 +253,9 @@ export function RemitoEdit() {
       catalogTasks.forEach((catTask: any) => {
         const taskName = catTask.tarea_template || catTask.tarea;
         const isPresent = mergedList.some(s => 
-          (s.tarea_template === taskName) || (s.tarea === taskName)
+          (s.id !== undefined && catTask.id !== undefined && Number(s.id) === Number(catTask.id)) ||
+          (s.tarea_template === taskName) || 
+          (s.tarea === taskName)
         );
         if (!isPresent) {
           mergedList.push({
@@ -306,11 +320,6 @@ export function RemitoEdit() {
         setObservacionesExtras(prevInstrucciones.split('Observaciones Extra:\n')[1]);
       }
 
-      // Pre-fill chofer
-      if (ctx.remito?.chofer_id) {
-        const c = ctx.catalogos.choferes.find((x: any) => x.id === ctx.remito.chofer_id);
-        if (c) setSearchChofer(c.nombre);
-      }
       if (ctx.remito?.camion_id) {
         const c = ctx.catalogos.camiones.find((x: any) => x.id === ctx.remito.camion_id);
         if (c) setSearchCamion(c.patente);
@@ -346,6 +355,7 @@ export function RemitoEdit() {
           intervalo_recordatorio_carga_corta_minutos: overrideRes.data.intervalo_recordatorio_carga_corta_minutos ?? '',
           intervalo_recordatorio_carga_larga_minutos: overrideRes.data.intervalo_recordatorio_carga_larga_minutos ?? '',
           max_recordatorios_sin_respuesta: overrideRes.data.max_recordatorios_sin_respuesta ?? '',
+          anticipacion_monitoreo_horas: overrideRes.data.anticipacion_monitoreo_horas ?? '',
           pedir_confirmacion_fecha_carga: overrideRes.data.pedir_confirmacion_fecha_carga,
           pedir_estimacion_demora_carga: overrideRes.data.pedir_estimacion_demora_carga,
           enviar_recordatorios_carga: overrideRes.data.enviar_recordatorios_carga,
@@ -365,6 +375,7 @@ export function RemitoEdit() {
           intervalo_recordatorio_carga_corta_minutos: policyRes.data.intervalo_recordatorio_carga_corta_minutos,
           intervalo_recordatorio_carga_larga_minutos: policyRes.data.intervalo_recordatorio_carga_larga_minutos,
           max_recordatorios_sin_respuesta: policyRes.data.max_recordatorios_sin_respuesta,
+          anticipacion_monitoreo_horas: policyRes.data.anticipacion_monitoreo_horas,
           pedir_confirmacion_fecha_carga: policyRes.data.pedir_confirmacion_fecha_carga,
           pedir_estimacion_demora_carga: policyRes.data.pedir_estimacion_demora_carga,
           enviar_recordatorios_carga: policyRes.data.enviar_recordatorios_carga,
@@ -372,12 +383,17 @@ export function RemitoEdit() {
         }));
       }
 
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error al cargar contexto.');
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Error desconocido';
+      setErrorMsg(errMsg || 'Error al cargar contexto.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    fetchContext();
+  }, [fetchContext]);
 
   const displayedChecklist = useMemo(() => {
     return checklist.filter(item => item.tipo_tarea === "CONTROL_GENERAL" || item.tipo_tarea === "PESAJE_TARA" || item.tipo_tarea === "PESAJE_BRUTO");
@@ -390,23 +406,14 @@ export function RemitoEdit() {
     return exists ? "Este DNI ya está registrado en el sistema." : null;
   }, [dniChoferNuevo, catalogs.choferes]);
 
-  const filteredChoferes = useMemo(() => {
-    const q = searchChofer.toLowerCase().replace(/\s+/g, '');
-    const qClean = q.replace(/\D/g, '');
-    if (!q) return catalogs.choferes;
-    return catalogs.choferes.filter(c => {
-      const nameMatch = (c.nombre || '').toLowerCase().includes(q);
-      const dniClean = (c.dni || '').replace(/\D/g, '');
-      const dniMatch = qClean && dniClean.includes(qClean);
-      return nameMatch || dniMatch;
-    });
-  }, [searchChofer, catalogs.choferes]);
-
-  const hasExactDniMatch = useMemo(() => {
-    const qClean = searchChofer.replace(/\D/g, '');
-    if (qClean.length < 7) return false;
-    return catalogs.choferes.some(c => (c.dni || '').replace(/\D/g, '') === qClean);
-  }, [searchChofer, catalogs.choferes]);
+  const resolvedChoferNombre = useMemo(() => {
+    if (remito.chofer_id === 0) return nombreChoferNuevo;
+    if (remito.chofer_id) {
+      const c = catalogs.choferes.find(x => x.id === remito.chofer_id);
+      return c ? c.nombre : '';
+    }
+    return '';
+  }, [remito.chofer_id, nombreChoferNuevo, catalogs.choferes]);
 
   const filteredCamiones = useMemo(() => {
     const q = searchCamion.toLowerCase();
@@ -538,18 +545,32 @@ export function RemitoEdit() {
   };
 
   const resolveChoferId = async (nombre: string, dni: string, celular: string): Promise<number | null> => {
-    if (!nombre || !dni) return null;
+    if (!nombre) return null;
     
-    const cleanDni = dni.replace(/\D/g, '');
+    const cleanDni = dni ? dni.replace(/\D/g, '') : '';
+    let existing = null;
     
-    // Primero intentamos buscarlo por DNI para evitar duplicados
-    const { data: existing, error: searchError } = await supabase
-      .from('choferes')
-      .select('id')
-      .eq('dni', cleanDni)
-      .maybeSingle();
-      
-    if (searchError) throw new Error(`Error al buscar chofer: ${searchError.message}`);
+    if (cleanDni) {
+      // Primero intentamos buscarlo por DNI para evitar duplicados
+      const { data: existingDni, error: searchError } = await supabase
+        .from('choferes')
+        .select('id')
+        .eq('dni', cleanDni)
+        .maybeSingle();
+        
+      if (searchError) throw new Error(`Error al buscar chofer por DNI: ${searchError.message}`);
+      existing = existingDni;
+    } else {
+      // Intentar buscar por nombre completo para evitar duplicar nombres idénticos si no hay DNI
+      const { data: existingName, error: searchError } = await supabase
+        .from('choferes')
+        .select('id')
+        .eq('nombre_completo', nombre.toUpperCase())
+        .maybeSingle();
+        
+      if (searchError) throw new Error(`Error al buscar chofer por nombre: ${searchError.message}`);
+      existing = existingName;
+    }
     
     const normalizePhone = (phone: string) => {
       const clean = phone.replace(/\D/g, '');
@@ -561,12 +582,13 @@ export function RemitoEdit() {
     const normalizedCelular = normalizePhone(celular);
     
     if (existing) {
-      // Si ya existe, lo actualizamos con los nuevos datos (opcional, pero recomendado)
+      // Si ya existe, lo actualizamos con los nuevos datos
       const { error: updateError } = await supabase
         .from('choferes')
         .update({
           nombre_completo: nombre.toUpperCase(),
-          telefono: normalizedCelular
+          telefono: normalizedCelular || null,
+          ...(cleanDni ? { dni: cleanDni } : {})
         })
         .eq('id', existing.id);
         
@@ -579,8 +601,8 @@ export function RemitoEdit() {
       .from('choferes')
       .insert({
         nombre_completo: nombre.toUpperCase(),
-        dni: cleanDni,
-        telefono: normalizedCelular
+        dni: cleanDni || null,
+        telefono: normalizedCelular || null
       })
       .select('id')
       .single();
@@ -592,7 +614,7 @@ export function RemitoEdit() {
     // Actualizar catálogo local
     setCatalogs(prev => ({
       ...prev,
-      choferes: [...prev.choferes, { id: newData.id, nombre: nombre.toUpperCase(), dni: cleanDni, telefono: normalizedCelular }]
+      choferes: [...prev.choferes, { id: newData.id, nombre: nombre.toUpperCase(), dni: cleanDni || null, telefono: normalizedCelular || null }]
     }));
 
     return newData.id;
@@ -631,6 +653,10 @@ export function RemitoEdit() {
       alert("El máximo de recordatorios no puede ser negativo.");
       return;
     }
+    if (Number(overrideForm.anticipacion_monitoreo_horas) < 0) {
+      alert("La anticipación de monitoreo no puede ser negativa.");
+      return;
+    }
 
     setIsSavingOverride(true);
     try {
@@ -656,6 +682,7 @@ export function RemitoEdit() {
         intervalo_recordatorio_carga_corta_minutos: Number(overrideForm.intervalo_recordatorio_carga_corta_minutos),
         intervalo_recordatorio_carga_larga_minutos: Number(overrideForm.intervalo_recordatorio_carga_larga_minutos),
         max_recordatorios_sin_respuesta: Number(overrideForm.max_recordatorios_sin_respuesta),
+        anticipacion_monitoreo_horas: Number(overrideForm.anticipacion_monitoreo_horas),
         pedir_confirmacion_fecha_carga: overrideForm.pedir_confirmacion_fecha_carga,
         pedir_estimacion_demora_carga: overrideForm.pedir_estimacion_demora_carga,
         enviar_recordatorios_carga: overrideForm.enviar_recordatorios_carga,
@@ -713,6 +740,7 @@ export function RemitoEdit() {
           intervalo_recordatorio_carga_corta_minutos: defaultPolicy.intervalo_recordatorio_carga_corta_minutos,
           intervalo_recordatorio_carga_larga_minutos: defaultPolicy.intervalo_recordatorio_carga_larga_minutos,
           max_recordatorios_sin_respuesta: defaultPolicy.max_recordatorios_sin_respuesta,
+          anticipacion_monitoreo_horas: defaultPolicy.anticipacion_monitoreo_horas,
           pedir_confirmacion_fecha_carga: defaultPolicy.pedir_confirmacion_fecha_carga,
           pedir_estimacion_demora_carga: defaultPolicy.pedir_estimacion_demora_carga,
           enviar_recordatorios_carga: defaultPolicy.enviar_recordatorios_carga,
@@ -738,8 +766,8 @@ export function RemitoEdit() {
       // Resolver chofer nuevo o existente
       let finalChoferId = remito.chofer_id;
       if (remito.chofer_id === 0) {
-        if (!searchChofer || !dniChoferNuevo || !celularChoferNuevo) {
-          alert("Por favor complete nombre, DNI y celular del nuevo chofer.");
+        if (!nombreChoferNuevo || !celularChoferNuevo) {
+          alert("Por favor complete el nombre y celular/teléfono del nuevo chofer.");
           setIsSubmitting(false);
           return;
         }
@@ -748,15 +776,11 @@ export function RemitoEdit() {
           setIsSubmitting(false);
           return;
         }
-        finalChoferId = await resolveChoferId(searchChofer, dniChoferNuevo, celularChoferNuevo);
+        finalChoferId = await resolveChoferId(nombreChoferNuevo, dniChoferNuevo, celularChoferNuevo);
         if (!finalChoferId) {
           setIsSubmitting(false);
           return;
         }
-      } else if (!remito.chofer_id) {
-        alert("Por favor seleccione un chofer o cargue uno nuevo.");
-        setIsSubmitting(false);
-        return;
       }
 
       // Resolver creación automática de Camión y Acoplado
@@ -771,7 +795,7 @@ export function RemitoEdit() {
 
       // Resolver Lugares de Pesaje
       const finalTaraId = await resolveLugarPesaje(pesaje.tara.lugar_id, nuevoLugarTara);
-      let finalBrutoId = pesaje.bruto.lugar_id === 'IGUAL' ? finalTaraId : await resolveLugarPesaje(pesaje.bruto.lugar_id, nuevoLugarBruto);
+      const finalBrutoId = pesaje.bruto.lugar_id === 'IGUAL' ? finalTaraId : await resolveLugarPesaje(pesaje.bruto.lugar_id, nuevoLugarBruto);
       
       const taraLugarNombre = finalTaraId ? (lugaresPesaje.find(l=>l.id === finalTaraId)?.nombre || nuevoLugarTara.nombre) : '...';
       const brutoLugarNombre = finalBrutoId ? (lugaresPesaje.find(l=>l.id === finalBrutoId)?.nombre || (pesaje.bruto.lugar_id==='IGUAL'?taraLugarNombre:nuevoLugarBruto.nombre)) : '...';
@@ -818,8 +842,8 @@ export function RemitoEdit() {
       const textoFinal = observacionesExtras.trim() ? `${instruccionesGeneradas}\n\nObservaciones Extra:\n${observacionesExtras}` : instruccionesGeneradas;
 
       const p_updates = {
-        chofer_id: Number(finalChoferId),
-        nombre_chofer_nuevo: remito.chofer_id === 0 ? searchChofer : null,
+        chofer_id: finalChoferId ? Number(finalChoferId) : null,
+        nombre_chofer_nuevo: remito.chofer_id === 0 ? nombreChoferNuevo : null,
         dni_chofer_nuevo: remito.chofer_id === 0 ? dniChoferNuevo : null,
         celular_chofer_nuevo: remito.chofer_id === 0 ? celularChoferNuevo : null,
         camion_id: finalCamionId,
@@ -840,7 +864,10 @@ export function RemitoEdit() {
         mi_sobre_proveedor_preparado: remito.mi_sobre_proveedor_preparado,
         mi_sobre_cliente_preparado: remito.mi_sobre_cliente_preparado,
         me_planillas_t48_emitidas: remito.me_planillas_t48_emitidas,
-        me_checklist_enviado_operario: remito.me_checklist_enviado_operario
+        me_checklist_enviado_operario: remito.me_checklist_enviado_operario,
+        mision_estado: remito.mision_estado,
+        tiene_incidencias_carga: remito.tiene_incidencias_carga,
+        ultimo_mensaje_chofer_at: remito.ultimo_mensaje_chofer_at
       };
 
       const { error } = await supabase.rpc('save_remito_update_admin', {
@@ -856,6 +883,73 @@ export function RemitoEdit() {
 
     } catch (err: any) {
       alert("Hubo un problema al guardar los cambios: " + err.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const formatRelativeTime = (dateString: string | null | undefined) => {
+    if (!dateString) return 'Sin contacto';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Hace instantes';
+    if (diffMins < 60) return `Hace ${diffMins} min`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `Hace ${diffHours} h`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `Hace ${diffDays} días`;
+  };
+
+
+  const isOrigen = useMemo(() => {
+    // Es Destino únicamente si se configuró explícitamente la tara en destino o el bruto en destino
+    const isDestino = pesaje.tara.momento === 'Después de descargar' || pesaje.bruto.momento === 'Antes de descargar';
+    return !isDestino;
+  }, [pesaje.tara.momento, pesaje.bruto.momento]);
+
+  const fsmSteps = useMemo(() => {
+    return [
+      { code: 'ESPERANDO_DOCS', label: 'Documentación', desc: 'Confirmación de papeles', isNA: false },
+      { code: 'PESAJE_1_ORIGEN', label: 'Tara Origen', desc: 'Pesaje inicial vacío', isNA: !isOrigen },
+      { code: 'EN_CARGA', label: 'Carga', desc: 'Carga y checklist', isNA: false },
+      { code: 'PESAJE_2_ORIGEN', label: 'Bruto Origen', desc: 'Pesaje cargado', isNA: !isOrigen },
+      { code: 'EN_TRANSITO', label: 'Tránsito', desc: 'Viaje a destino', isNA: false },
+      { code: 'PESAJE_1_DESTINO', label: 'Bruto Destino', desc: 'Pesaje bruto entrada', isNA: isOrigen },
+      { code: 'EN_DESCARGA', label: 'Descarga', desc: 'Descargando mercadería', isNA: false },
+      { code: 'PESAJE_2_DESTINO', label: 'Tara Destino', desc: 'Pesaje tara salida', isNA: isOrigen },
+      { code: 'MISION_COMPLETADA', label: 'Completada', desc: 'Fin del viaje', isNA: false },
+    ];
+  }, [isOrigen]);
+
+  const activePath = useMemo(() => {
+    if (isOrigen) {
+      return ['ESPERANDO_DOCS', 'PESAJE_1_ORIGEN', 'EN_CARGA', 'PESAJE_2_ORIGEN', 'EN_TRANSITO', 'EN_DESCARGA', 'MISION_COMPLETADA'];
+    } else {
+      return ['ESPERANDO_DOCS', 'EN_CARGA', 'EN_TRANSITO', 'PESAJE_1_DESTINO', 'EN_DESCARGA', 'PESAJE_2_DESTINO', 'MISION_COMPLETADA'];
+    }
+  }, [isOrigen]);
+
+  const handleForceTransition = async (targetState: string) => {
+    const confirmText = `¿Estás seguro de que quieres FORZAR la misión al estado "${targetState}"? Esto registrará un evento de transición forzada en el historial.`;
+    if (!window.confirm(confirmText)) return;
+    
+    try {
+      setIsSubmitting(true);
+      const { error } = await supabase.rpc('transicionar_mision_remito', {
+        p_remito_id: Number(id),
+        p_nuevo_estado: targetState,
+        p_usuario_actor: user?.email || 'admin',
+        p_comentarios: 'Transición forzada manualmente por el operador.',
+        p_forced: true
+      });
+      if (error) throw error;
+      alert(`Misión transicionada exitosamente a ${targetState}`);
+      await fetchContext();
+    } catch (err: any) {
+      alert("Error al forzar transición: " + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -905,7 +999,6 @@ export function RemitoEdit() {
 
   return (
     <div className="h-full overflow-y-auto w-full relative" onClick={() => {
-      setShowChoferList(false);
       setShowCamionList(false);
       setShowAcopladoList(false);
     }}>
@@ -948,53 +1041,225 @@ export function RemitoEdit() {
       </header>
 
       <main className="px-4 space-y-8">
+        {/* FSM Máquina de Estados de la Misión de Transporte */}
+        <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-6">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-100 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <Truck className="w-5 h-5 text-brand-600 animate-pulse" />
+                <h2 className="text-lg font-bold text-gray-800">Misión de Transporte (FSM)</h2>
+                {remito.tiene_incidencias_carga && (
+                  <span className="px-2.5 py-0.5 bg-red-100 text-red-800 border border-red-200 rounded-full text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> Incidencia Activa
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-500 mt-1">
+                Monitoreo físico del remito en tiempo real. Estado actual: <strong className="text-brand-700">{remito.mision_estado || 'ESPERANDO_DOCS'}</strong>
+              </p>
+            </div>
+            
+            <div className="flex flex-wrap gap-3 items-center text-xs">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 flex items-center gap-2 shadow-xs">
+                <MessageSquare className="w-4 h-4 text-brand-500" />
+                <div>
+                  <div className="font-semibold text-gray-700">Solicitudes sin respuesta</div>
+                  <div className="text-[10px] text-gray-500">
+                    {remito.mensajes_sin_respuesta_count || 0} sin rpta.
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 flex items-center gap-2 shadow-xs">
+                <Clock className="w-4 h-4 text-brand-500" />
+                <div>
+                  <div className="font-semibold text-gray-700">Último contacto</div>
+                  <div className="text-[10px] text-gray-500">
+                    {formatRelativeTime(remito.ultimo_mensaje_chofer_at)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Toggle Incidencia */}
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setIsSubmitting(true);
+                    const nuevoIncidencia = !remito.tiene_incidencias_carga;
+                    const { error } = await supabase.rpc('save_remito_update_admin', {
+                      p_remito_id: Number(id),
+                      p_updates: { tiene_incidencias_carga: nuevoIncidencia },
+                      p_admin_email: user?.email || 'admin'
+                    });
+                    if (error) throw error;
+                    setRemito(r => ({ ...r, tiene_incidencias_carga: nuevoIncidencia }));
+                    alert(`Incidencia ${nuevoIncidencia ? 'activada' : 'desactivada'} correctamente.`);
+                  } catch (err: any) {
+                    alert("Error: " + err.message);
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+                className={cn(
+                  "px-3 py-2.5 rounded-lg border text-[11px] font-bold shadow-xs cursor-pointer transition-all",
+                  remito.tiene_incidencias_carga 
+                    ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100" 
+                    : "bg-white text-gray-700 border-gray-200 hover:bg-gray-50"
+                )}
+              >
+                {remito.tiene_incidencias_carga ? "Resolver Incidencia" : "Reportar Incidencia"}
+              </button>
+            </div>
+          </div>
+
+          {/* Stepper visual horizontal scrollable */}
+          <div className="overflow-x-auto pb-4 -mx-6 px-6">
+            <div className="flex items-center min-w-[800px] justify-between relative py-2">
+              {fsmSteps.map((step, idx) => {
+                const isNA = step.isNA;
+                const status = isNA 
+                  ? 'NA' 
+                  : activePath.indexOf(step.code) < activePath.indexOf(remito.mision_estado || 'ESPERANDO_DOCS')
+                    ? 'COMPLETED'
+                    : step.code === remito.mision_estado
+                      ? 'ACTIVE'
+                      : 'PENDING';
+                
+                // Determinar estado de la línea hacia la tarea previa
+                const prevStep = idx > 0 ? fsmSteps[idx - 1] : null;
+                const prevIsNA = prevStep ? prevStep.isNA : false;
+                const prevStatus = prevStep
+                  ? prevIsNA
+                    ? 'NA'
+                    : activePath.indexOf(prevStep.code) < activePath.indexOf(remito.mision_estado || 'ESPERANDO_DOCS')
+                      ? 'COMPLETED'
+                      : prevStep.code === remito.mision_estado
+                        ? 'ACTIVE'
+                        : 'PENDING'
+                  : null;
+
+                const isSegmentCompleted = prevStatus === 'COMPLETED' && (status === 'COMPLETED' || status === 'ACTIVE');
+                const isSegmentActive = prevStatus === 'COMPLETED' && status === 'ACTIVE';
+
+                return (
+                  <div key={step.code} className="flex flex-1 items-center justify-center relative">
+                    {/* Línea de segmento dinámica al paso anterior */}
+                    {idx > 0 && (
+                      <div 
+                        className={cn(
+                          "absolute left-0 right-1/2 top-4 h-0.5 -translate-y-1/2 -translate-x-1/2 w-full -z-10 transition-all duration-500",
+                          isSegmentCompleted 
+                            ? "bg-emerald-500" 
+                            : isSegmentActive 
+                              ? "bg-brand-500" 
+                              : status === 'NA' || prevStatus === 'NA' 
+                                ? "bg-gray-100 border-t border-dashed" 
+                                : "bg-gray-200"
+                        )}
+                      />
+                    )}
+
+                    <div className="flex flex-col items-center text-center relative px-2">
+                      {/* Indicador de Estado */}
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-sm transition-all duration-300 z-10",
+                        status === 'COMPLETED' && "bg-emerald-500 text-white ring-4 ring-emerald-100",
+                        status === 'ACTIVE' && "bg-brand-600 text-white ring-4 ring-brand-100",
+                        status === 'PENDING' && "bg-white text-gray-400 border-2 border-gray-200",
+                        status === 'NA' && "bg-gray-50 text-gray-300 border border-gray-200 border-dashed"
+                      )}>
+                        {status === 'COMPLETED' ? (
+                          <CheckCircle className="w-5 h-5 text-white" />
+                        ) : status === 'NA' ? (
+                          <span className="text-[9px]">N/A</span>
+                        ) : (
+                          idx + 1
+                        )}
+                      </div>
+                      
+                      {/* Textos */}
+                      <span className={cn(
+                        "text-[11px] font-bold mt-2",
+                        status === 'ACTIVE' ? "text-brand-700" : status === 'NA' ? "text-gray-300" : "text-gray-700"
+                      )}>
+                        {step.label}
+                      </span>
+                      <span className="text-[9px] text-gray-400 max-w-[100px] mt-0.5">
+                        {isNA ? 'Omitido según config.' : step.desc}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Selector de Transición Forzada */}
+          <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-sm">
+            <div className="space-y-1">
+              <h3 className="font-bold text-gray-800 flex items-center gap-1.5">
+                <Settings className="w-4 h-4 text-gray-500" />
+                Transición Forzada (Contingencia)
+              </h3>
+              <p className="text-xs text-gray-500">
+                Fuerza el avance o retroceso del viaje si ocurre alguna eventualidad o pesaje omitido.
+              </p>
+            </div>
+            
+            <div className="flex gap-2 w-full sm:w-auto items-center">
+              <select
+                id="select-forced-state"
+                defaultValue={remito.mision_estado || 'ESPERANDO_DOCS'}
+                className="p-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:border-brand-500 flex-1 sm:flex-none"
+              >
+                {fsmSteps.filter(s => !s.isNA).map(s => (
+                  <option key={s.code} value={s.code}>{s.label}</option>
+                ))}
+              </select>
+              
+              <button
+                type="button"
+                onClick={async () => {
+                  const selEl = document.getElementById('select-forced-state') as HTMLSelectElement;
+                  if (selEl) {
+                    await handleForceTransition(selEl.value);
+                  }
+                }}
+                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold shadow-sm transition-colors cursor-pointer"
+              >
+                Forzar
+              </button>
+            </div>
+          </div>
+        </section>
+
         {/* Sección A: Datos del Viaje */}
         <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-6">
           <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500 border-b border-gray-100 pb-2">A. Datos del Viaje</h2>
 
-          {/* Chofer Autocomplete */}
+          {/* Chofer Select */}
           <div className="relative">
             <label className="block text-sm font-medium text-gray-700 mb-1">Chofer</label>
-            <div className="relative">
-              <input 
-                value={searchChofer}
-                onChange={e => {
-                  setSearchChofer(e.target.value);
-                  setShowChoferList(true);
-                }}
-                onFocus={() => setShowChoferList(true)}
-                onClick={e => e.stopPropagation()}
-                type="text"
-                placeholder="Buscar chofer por nombre o DNI..."
-                className="w-full p-3 pr-10 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none transition-all"
-              />
-              <button onClick={(e) => { e.stopPropagation(); setShowChoferList(!showChoferList); }} type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-                {showChoferList ? <ChevronUp className="w-5 h-5"/> : <ChevronDown className="w-5 h-5"/>}
-              </button>
-              
-              {showChoferList && (
-                <div className="absolute z-50 w-full bg-white border border-gray-200 rounded-b-lg shadow-xl max-h-[250px] overflow-y-auto">
-                  {filteredChoferes.map(c => (
-                    <div 
-                      key={`ch-${c.id}`} 
-                      onClick={() => { setRemito({...remito, chofer_id: c.id}); setSearchChofer(c.nombre || ''); setShowChoferList(false); }}
-                      className="p-3 hover:bg-gray-50 cursor-pointer border-b border-gray-100 flex justify-between items-center"
-                    >
-                      <span className="font-medium text-gray-800">{c.nombre}</span>
-                      <span className="text-gray-400 text-xs font-mono">DNI: {c.dni}</span>
-                    </div>
-                  ))}
-                  {!hasExactDniMatch && (
-                    <div 
-                      onClick={() => { setRemito({...remito, chofer_id: 0}); setShowChoferList(false); }}
-                      className="p-4 text-center hover:bg-brand-50 cursor-pointer text-brand-600 font-bold border-t border-gray-100 bg-brand-50/50 flex items-center justify-center gap-2"
-                    >
-                      <Plus className="w-4 h-4" /> Cargar Nuevo
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <select 
+              value={remito.chofer_id === null ? '' : remito.chofer_id}
+              onChange={e => {
+                const val = e.target.value;
+                setRemito({
+                  ...remito,
+                  chofer_id: val === '' ? null : (val === '0' ? 0 : Number(val))
+                });
+              }}
+              className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none transition-all text-sm"
+            >
+              <option value="">Seleccionar chofer...</option>
+              {catalogs.choferes.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre} {c.dni ? `(DNI: ${c.dni})` : ''}
+                </option>
+              ))}
+              <option value="0" className="font-bold text-brand-600">+ Nuevo Chofer...</option>
+            </select>
 
             {remito.chofer_id === 0 && (
               <div className="mt-3 p-4 bg-blue-50/50 rounded-xl border border-blue-100 space-y-3">
@@ -1002,13 +1267,22 @@ export function RemitoEdit() {
                   <h3 className="text-xs font-bold text-blue-700 uppercase tracking-wider flex items-center gap-2">
                     <UserPlus className="w-4 h-4"/> Nuevo Chofer
                   </h3>
-                  <button onClick={() => { setRemito({...remito, chofer_id: null}); setSearchChofer(''); }} type="button" className="text-gray-400 hover:text-red-500">
+                  <button onClick={() => { setRemito({...remito, chofer_id: null}); }} type="button" className="text-gray-400 hover:text-red-500">
                     <X className="w-4 h-4"/>
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">DNI</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Nombre Completo</label>
+                    <input 
+                      value={nombreChoferNuevo} 
+                      onChange={e => setNombreChoferNuevo(e.target.value)} 
+                      placeholder="Ej: JUAN PEREZ"
+                      className="w-full p-2 text-sm bg-white border border-gray-200 rounded outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">DNI (Opcional)</label>
                     <input 
                       value={dniChoferNuevo} 
                       onChange={e => setDniChoferNuevo(e.target.value.replace(/\D/g, ''))} 
@@ -1018,7 +1292,7 @@ export function RemitoEdit() {
                     {dniExistenteError && <p className="text-xs text-red-500 mt-1">{dniExistenteError}</p>}
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-1">CELULAR</label>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">Celular / Teléfono</label>
                     <input 
                       value={celularChoferNuevo} 
                       onChange={e => setCelularChoferNuevo(e.target.value.replace(/\D/g, ''))} 
@@ -1026,36 +1300,6 @@ export function RemitoEdit() {
                       className="w-full p-2 text-sm bg-white border border-gray-200 rounded outline-none focus:ring-2 focus:ring-brand-500"
                     />
                   </div>
-                </div>
-                <div className="flex justify-end pt-2 border-t border-blue-100/50">
-                  <button 
-                    type="button"
-                    disabled={isConfirmingChofer || !!dniExistenteError || !dniChoferNuevo || !celularChoferNuevo}
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      setIsConfirmingChofer(true);
-                      try {
-                        const id = await resolveChoferId(searchChofer, dniChoferNuevo, celularChoferNuevo);
-                        if (id) {
-                          setRemito(prev => ({ ...prev, chofer_id: id }));
-                          setSearchChofer(searchChofer.toUpperCase());
-                          setShowChoferList(false);
-                        }
-                      } catch (err: any) {
-                        alert("Error: " + err.message);
-                      } finally {
-                        setIsConfirmingChofer(false);
-                      }
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-xs font-bold rounded-lg hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
-                  >
-                    {isConfirmingChofer ? (
-                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                    ) : (
-                      <CheckCircle className="w-3 h-3" />
-                    )}
-                    Confirmar Chofer
-                  </button>
                 </div>
               </div>
             )}
@@ -1176,38 +1420,9 @@ export function RemitoEdit() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Fecha y Hora Estimada de Carga</label>
               <div className="relative">
-                <input 
-                  type="text"
-                  onFocus={(e) => {
-                    e.target.type = 'datetime-local';
-                    if (remito.fecha_hora_estimada_carga) {
-                      e.target.value = remito.fecha_hora_estimada_carga.substring(0, 16);
-                    }
-                  }}
-                  onBlur={(e) => {
-                    e.target.type = 'text';
-                    if (remito.fecha_hora_estimada_carga) {
-                      const d = new Date(remito.fecha_hora_estimada_carga);
-                      if (!isNaN(d.getTime())) {
-                        e.target.value = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-                      }
-                    } else {
-                      e.target.value = '';
-                    }
-                  }}
-                  defaultValue={remito.fecha_hora_estimada_carga 
-                    ? (() => {
-                        const d = new Date(remito.fecha_hora_estimada_carga);
-                        return isNaN(d.getTime()) ? '' : `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-                      })()
-                    : ''}
-                  onChange={e => {
-                    if (e.target.type === 'datetime-local') {
-                      setRemito({...remito, fecha_hora_estimada_carga: e.target.value});
-                    }
-                  }}
-                  placeholder="DD/MM/YYYY HH:mm"
-                  className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                <DateTimePicker 
+                  value={remito.fecha_hora_estimada_carga}
+                  onChange={val => setRemito({...remito, fecha_hora_estimada_carga: val})}
                 />
               </div>
             </div>
@@ -1215,38 +1430,9 @@ export function RemitoEdit() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Fecha y Hora Probable de Entrega</label>
               <div className="relative">
-                <input 
-                  type="text"
-                  onFocus={(e) => {
-                    e.target.type = 'datetime-local';
-                    if (remito.fecha_probable_entrega) {
-                      e.target.value = remito.fecha_probable_entrega.substring(0, 16);
-                    }
-                  }}
-                  onBlur={(e) => {
-                    e.target.type = 'text';
-                    if (remito.fecha_probable_entrega) {
-                      const d = new Date(remito.fecha_probable_entrega);
-                      if (!isNaN(d.getTime())) {
-                        e.target.value = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-                      }
-                    } else {
-                      e.target.value = '';
-                    }
-                  }}
-                  defaultValue={remito.fecha_probable_entrega 
-                    ? (() => {
-                        const d = new Date(remito.fecha_probable_entrega);
-                        return isNaN(d.getTime()) ? '' : `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-                      })()
-                    : ''}
-                  onChange={e => {
-                    if (e.target.type === 'datetime-local') {
-                      setRemito({...remito, fecha_probable_entrega: e.target.value});
-                    }
-                  }}
-                  placeholder="DD/MM/YYYY HH:mm"
-                  className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                <DateTimePicker 
+                  value={remito.fecha_probable_entrega}
+                  onChange={val => setRemito({...remito, fecha_probable_entrega: val})}
                 />
               </div>
             </div>
@@ -1610,6 +1796,27 @@ export function RemitoEdit() {
                     </div>
                   </label>
                   
+                  <div className="flex items-center gap-1.5 shrink-0 ml-4 border-l border-gray-100 pl-3">
+                    <span className="text-[10px] text-gray-400 font-medium">Gracia:</span>
+                    <input
+                      type="number"
+                      value={task.minutos_gracia !== undefined ? task.minutos_gracia : 30}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        const itemIndex = checklist.findIndex(c => c.tarea === task.tarea);
+                        if (itemIndex !== -1) {
+                          const newList = [...checklist];
+                          newList[itemIndex].minutos_gracia = isNaN(val) ? 0 : val;
+                          setChecklist(newList);
+                        }
+                      }}
+                      min={0}
+                      className="w-12 text-center p-1 border border-gray-200 rounded text-xs focus:ring-brand-500 focus:border-brand-500 font-semibold text-gray-700 bg-gray-50/50"
+                      title="Minutos de gracia para esta tarea"
+                    />
+                    <span className="text-[9px] text-gray-400 mr-2">min</span>
+                  </div>
+
                   <div className="flex items-center gap-1.5 ml-2 shrink-0">
                     {task.estado === 'REPORTADO_CHOFER' && (
                       <div className="flex gap-1">
@@ -1749,13 +1956,14 @@ export function RemitoEdit() {
               </div>
 
               {/* Tiempos con Tooltips */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                 {[
                   { label: 'Espera Rpta. (min)', key: 'espera_respuesta_minutos', tooltip: 'Minutos que el bot espera respuesta antes de marcar un fallo.' },
                   { label: 'Umbral Retraso (min)', key: 'umbral_carga_larga_minutos', tooltip: 'Si el retraso supera estos minutos, el bot espacia los mensajes (Intervalo Largo).' },
                   { label: 'Frecuencia Normal (min)', key: 'intervalo_recordatorio_carga_corta_minutos', tooltip: 'Minutos entre cada recordatorio durante la carga normal.' },
                   { label: 'Frecuencia en Retrasos (min)', key: 'intervalo_recordatorio_carga_larga_minutos', tooltip: 'Minutos entre recordatorios cuando hay un retraso largo.' },
                   { label: 'Intentos para Escalar', key: 'max_recordatorios_sin_respuesta', tooltip: 'Número de veces que el chofer puede no responder antes de avisar a un humano.' },
+                  { label: 'Anticipación Carga (horas)', key: 'anticipacion_monitoreo_horas', tooltip: 'Horas antes de la fecha estimada de carga para empezar a gestionar la misión.' },
                 ].map((field) => (
                   <div key={field.key} className="relative group">
                     <label className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">
@@ -1960,7 +2168,7 @@ export function RemitoEdit() {
             id: Number(id),
             ref: remito.ref,
             chofer_id: Number(remito.chofer_id),
-            chofer_nombre: searchChofer,
+            chofer_nombre: resolvedChoferNombre,
             chofer_telefono: catalogs.choferes.find(c => c.id === remito.chofer_id)?.telefono || celularChoferNuevo || '',
             inspector_nombre: inspectors.find(i => i.id === remito.inspector_id)?.nombre || 'Sin inspector',
             balanza_nombre: resolvedTaraStr,

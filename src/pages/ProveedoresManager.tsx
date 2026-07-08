@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plus, Edit2, Trash2, Search, X, Loader2 } from 'lucide-react';
 import { ContactosTab } from '../components/ContactosTab';
@@ -43,19 +43,7 @@ export function ProveedoresManager() {
   
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  useEffect(() => {
-    fetchData();
-    if (toastMessage) {
-      const timer = setTimeout(() => setToastMessage(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toastMessage]);
-
-  const showToast = (type: 'success' | 'error', text: string) => {
-    setToastMessage({ type, text });
-  };
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -65,12 +53,27 @@ export function ProveedoresManager() {
 
       if (error) throw error;
       setProveedores(data || []);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error fetching data:', err);
       showToast('error', 'Error al cargar los proveedores.');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  const showToast = (type: 'success' | 'error', text: string) => {
+    setToastMessage({ type, text });
   };
 
   const fetchContactosParaSelect = async (proveedorId: string) => {
@@ -140,7 +143,7 @@ export function ProveedoresManager() {
       showToast('success', 'Proveedor guardado exitosamente.');
       handleCloseModal();
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error saving data:', err);
       showToast('error', 'Error al guardar el proveedor.');
     } finally {
@@ -158,7 +161,7 @@ export function ProveedoresManager() {
       if (error) throw error;
       showToast('success', 'Proveedor dado de baja exitosamente.');
       fetchData();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error deleting data:', err);
       showToast('error', 'Error al dar de baja el proveedor.');
     }

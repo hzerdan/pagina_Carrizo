@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, LogOut, Truck, X, LayoutDashboard, Database, ChevronDown, ChevronRight, ClipboardCheck } from 'lucide-react';
+import { MessageSquare, LogOut, Truck, X, LayoutDashboard, Database, ChevronDown, ChevronRight, ClipboardCheck, Wrench } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 
@@ -136,6 +136,26 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                             </div>
                         )}
                     </div>
+
+                    {/* Recursos técnicos (desarrollador) */}
+                    {user?.email === 'hzerdan@gmail.com' && (
+                        <Link
+                            to="/recursos-tecnicos"
+                            onClick={() => onClose()}
+                            className={cn(
+                                "flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-colors mt-2",
+                                pathname === '/recursos-tecnicos'
+                                    ? "bg-red-50 text-red-700"
+                                    : "text-red-600 hover:bg-red-50"
+                            )}
+                        >
+                            <Wrench className={cn(
+                                "mr-3 flex-shrink-0 h-5 w-5",
+                                pathname === '/recursos-tecnicos' ? "text-red-600" : "text-red-400"
+                            )} />
+                            Recursos Técnicos
+                        </Link>
+                    )}
                 </nav>
 
                 {/* Logout area */}

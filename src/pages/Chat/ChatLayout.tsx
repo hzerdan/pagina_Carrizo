@@ -47,7 +47,7 @@ export function ChatLayout() {
             const choferesMap = new Map(choferesRes.data?.map(c => [c.id, c.nombre_completo]) || []);
             const personalMap = new Map(personalRes.data?.map(p => [p.id, p.nombre_completo]) || []);
 
-            const mappedConversations = (convData || []).map((chat: any) => {
+            const mappedConversations = (convData as Conversation[] || []).map((chat) => {
                 let participant_name = '';
                 if (chat.participant_role === 'chofer' && chat.participant_id) {
                     participant_name = choferesMap.get(chat.participant_id) || '';
@@ -74,7 +74,7 @@ export function ChatLayout() {
         // Setup realtime subscription
         const channel = supabase
             .channel('public:conversations')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, (_payload) => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
                 // Refresh conversations on changes
                 fetchConversations();
             })
