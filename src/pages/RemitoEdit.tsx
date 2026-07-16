@@ -20,7 +20,16 @@ import {
   Loader2,
   Zap,
   Truck,
-  CheckSquare
+  CheckSquare,
+  XCircle,
+  Send,
+  Eye,
+  Sliders,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
+  Search,
+  Check
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { WhatsAppModal } from '../components/WhatsAppModal';
@@ -53,6 +62,11 @@ interface RemitoState {
   tiene_incidencias_carga?: boolean;
   ultimo_mensaje_chofer_at?: string | null;
   mensajes_sin_respuesta_count?: number;
+  deposito_carga_id?: number | null;
+  deposito_descarga_id?: number | null;
+  retry_count?: number;
+  tipo_mision_id?: number | null;
+  mision_estados_secuencia?: any[] | null;
 }
 
 export interface LogisticaPolitica {
@@ -130,10 +144,15 @@ export function RemitoEdit() {
     me_planillas_t48_emitidas: false,
     me_checklist_enviado_operario: false,
     tipo_mercado: null,
-    mision_estado: 'ESPERANDO_DOCS',
+    mision_estado: 'OPERACION_PENDIENTE',
     tiene_incidencias_carga: false,
     ultimo_mensaje_chofer_at: null,
     mensajes_sin_respuesta_count: 0,
+    deposito_carga_id: null,
+    deposito_descarga_id: null,
+    retry_count: 0,
+    tipo_mision_id: null,
+    mision_estados_secuencia: [],
   });
 
   const [catalogs, setCatalogs] = useState({
@@ -147,6 +166,15 @@ export function RemitoEdit() {
   const [operadores, setOperadores] = useState<any[]>([]);
   
   const [lugaresPesaje, setLugaresPesaje] = useState<any[]>([]);
+  const [depositos, setDepositos] = useState<any[]>([]);
+  const [showNewDepositoModal, setShowNewDepositoModal] = useState(false);
+  const [newDeposito, setNewDeposito] = useState({
+    nombre: '',
+    tipo: 'DEPOSITO_PROPIO', // o 'CLIENTE', etc.
+    funcion: 'AMBAS',
+    google_maps_link: '',
+    targetSelector: 'carga' as 'carga' | 'descarga'
+  });
 
   const [pesaje, setPesaje] = useState({
     tara: { momento: 'Antes de cargar', lugar_id: null as number | 0 | null }, // 0 = Nuevo
@@ -198,6 +226,20 @@ export function RemitoEdit() {
     motivo: '',
   });
 
+  const [misionTipos, setMisionTipos] = useState<any[]>([]);
+  const [mTypeSearch, setMTypeSearch] = useState('');
+  const [mTypeDropdownOpen, setMTypeDropdownOpen] = useState(false);
+  const [misionEstados, setMisionEstados] = useState<any[]>([]);
+  const [selectedEstadoToAdd, setSelectedEstadoToAdd] = useState<string>('');
+  const [showPersonalizarModal, setShowPersonalizarModal] = useState(false);
+  const [tempSequence, setTempSequence] = useState<any[]>([]);
+  const [editingTaskId, setEditingTaskId] = useState<any>(null);
+  const [openMsgTaskId, setOpenMsgTaskId] = useState<any>(null);
+  const [msgText, setMsgText] = useState('');
+  const [msgSending, setMsgSending] = useState(false);
+  const [msgSentSuccess, setMsgSentSuccess] = useState(false);
+  const [openConfigTaskId, setOpenConfigTaskId] = useState<any>(null);
+
 
 
   const fetchContext = useCallback(async () => {
@@ -238,11 +280,22 @@ export function RemitoEdit() {
         me_planillas_t48_emitidas: ctx.remito?.me_planillas_t48_emitidas || false,
         me_checklist_enviado_operario: ctx.remito?.me_checklist_enviado_operario || false,
         tipo_mercado: ctx.pedidos && ctx.pedidos.length > 0 ? ctx.pedidos[0].tipo_mercado : null,
-        mision_estado: ctx.remito?.mision_estado || 'ESPERANDO_DOCS',
+        mision_estado: ctx.remito?.mision_estado || 'OPERACION_PENDIENTE',
         tiene_incidencias_carga: !!ctx.remito?.tiene_incidencias_carga,
         ultimo_mensaje_chofer_at: ctx.remito?.ultimo_mensaje_chofer_at || null,
         mensajes_sin_respuesta_count: ctx.remito?.mensajes_sin_respuesta_count || 0,
+        deposito_carga_id: ctx.remito?.deposito_carga_id || null,
+        deposito_descarga_id: ctx.remito?.deposito_descarga_id || null,
+        retry_count: ctx.remito?.retry_count || 0,
+        tipo_mision_id: ctx.remito?.tipo_mision_id || null,
+        mision_estados_secuencia: ctx.remito?.mision_estados_secuencia || [],
       });
+
+      const { data: mtData } = await supabase.from('mision_tipos').select('*').eq('estado', 'ACTIVO');
+      if (mtData) setMisionTipos(mtData);
+
+      const { data: meData } = await supabase.from('mision_estados_definicion').select('*').eq('estado', 'ACTIVO').order('orden_logistico_default');
+      if (meData) setMisionEstados(meData);
 
       const savedProtocol = ctx.remito?.protocolo_control || [];
       const catalogTasks = ctx.catalogos.tareas_control || [];
@@ -278,12 +331,32 @@ export function RemitoEdit() {
               isAsignadaChofer = true;
             }
           }
+
+          // Resolver el código de estado (string) a partir de estado_id
+          let resolvedEstadoCode = item.estado_id;
+          if (typeof item.estado_id === 'number') {
+            const matchedState = meData?.find(s => s.id === item.estado_id);
+            if (matchedState) {
+              resolvedEstadoCode = matchedState.codigo;
+            }
+          } else if (!item.estado_id) {
+            // Si no tiene estado_id (por ser del protocolo antiguo), buscar en el catálogo
+            const catTask = catalogTasks.find((c: any) => c.id === item.id || c.tarea_template === item.tarea_template || c.tarea === item.tarea);
+            if (catTask && typeof catTask.estado_id === 'number') {
+              const matchedState = meData?.find(s => s.id === catTask.estado_id);
+              if (matchedState) {
+                resolvedEstadoCode = matchedState.codigo;
+              }
+            }
+          }
+
           return {
             ...item,
             tarea_template: item.tarea_template || item.tarea,
             done: item.estado === 'COMPLETADO',
             tarea: item.tarea || item.tarea_template,
-            asignada_a_chofer: isAsignadaChofer
+            asignada_a_chofer: isAsignadaChofer,
+            estado_id: resolvedEstadoCode
           };
         }));
       }
@@ -292,6 +365,11 @@ export function RemitoEdit() {
       const { data: lugaresRes } = await supabase.from('lugares_pesaje').select('*');
       if (lugaresRes) {
         setLugaresPesaje(lugaresRes);
+      }
+
+      const { data: depositosRes } = await supabase.from('depositos').select('*').eq('estado', 'ACTIVO').order('nombre');
+      if (depositosRes) {
+        setDepositos(depositosRes);
       }
 
       // Catalogos que el nuevo RPC resolverá de manera optimizada:
@@ -396,7 +474,7 @@ export function RemitoEdit() {
   }, [fetchContext]);
 
   const displayedChecklist = useMemo(() => {
-    return checklist.filter(item => item.tipo_tarea === "CONTROL_GENERAL" || item.tipo_tarea === "PESAJE_TARA" || item.tipo_tarea === "PESAJE_BRUTO");
+    return checklist.filter(item => !!item.tarea);
   }, [checklist]);
 
   // Derived computations
@@ -456,30 +534,51 @@ export function RemitoEdit() {
 
   const instruccionesGeneradas = instruccionesData.savedText;
 
-  const toggleChecklist = (index: number) => {
-    const newList = [...checklist];
-    const itemIndex = checklist.findIndex(c => c.tarea === displayedChecklist[index].tarea);
-    if(itemIndex > -1) {
-      const newDone = !newList[itemIndex].done;
-      newList[itemIndex].done = newDone;
-      newList[itemIndex].estado = newDone ? 'COMPLETADO' : 'PENDIENTE';
-      setChecklist(newList);
-    }
-  };
+  const generateWhatsAppDraft = useCallback(() => {
+    const choferName = resolvedChoferNombre || 'Chofer';
+    const currentMisionEstado = remito.mision_estado || 'OPERACION_PENDIENTE';
+    
+    const nextTask = checklist.find(t => 
+      t.estado_id === currentMisionEstado && 
+      !t.done && 
+      t.estado !== 'COMPLETADO' && 
+      t.asignada_a_chofer !== false
+    );
 
-  const toggleAsignadaChofer = (index: number) => {
-    const newList = [...checklist];
-    const itemIndex = checklist.findIndex(c => c.tarea === displayedChecklist[index].tarea);
-    if(itemIndex > -1) {
-      newList[itemIndex].asignada_a_chofer = !newList[itemIndex].asignada_a_chofer;
-      setChecklist(newList);
+    let formattedFechaHora = 'No establecida';
+    if (remito.fecha_hora_estimada_carga) {
+      try {
+        const dt = new Date(remito.fecha_hora_estimada_carga);
+        const day = String(dt.getDate()).padStart(2, '0');
+        const month = String(dt.getMonth() + 1).padStart(2, '0');
+        const year = dt.getFullYear();
+        const hours = String(dt.getHours()).padStart(2, '0');
+        const minutes = String(dt.getMinutes()).padStart(2, '0');
+        formattedFechaHora = `${day}/${month}/${year} ${hours}:${minutes}`;
+      } catch (e) {
+        formattedFechaHora = remito.fecha_hora_estimada_carga;
+      }
     }
-  };
 
-  const handleApproveTask = (index: number) => {
+    if (nextTask) {
+      if (nextTask.mensaje_template) {
+        return nextTask.mensaje_template
+          .replace(/\[chofer\]/gi, choferName)
+          .replace(/\{chofer\}/gi, choferName)
+          .replace(/\[chofer_nombre\]/gi, choferName)
+          .replace(/\{chofer_nombre\}/gi, choferName)
+          .replace(/\{fecha_hora_estimada_carga\}/gi, formattedFechaHora)
+          .replace(/\[fecha_hora_estimada_carga\]/gi, formattedFechaHora);
+      }
+      return `Hola ${choferName}, según tu hoja de ruta ahora corresponde: ${nextTask.tarea_template || nextTask.tarea}. Por favor confirmame cuando la inicies.`;
+    }
+    
+    return `Hola ${choferName}, por favor confírmanos tu estado actual en el viaje correspondiente al remito #${remito.ref || ''}.`;
+  }, [resolvedChoferNombre, remito.mision_estado, remito.ref, remito.fecha_hora_estimada_carga, checklist]);
+
+  const handleApproveTask = (itemIndex: number) => {
     const newList = [...checklist];
-    const itemIndex = checklist.findIndex(c => c.tarea === displayedChecklist[index].tarea);
-    if (itemIndex > -1) {
+    if (itemIndex > -1 && itemIndex < newList.length) {
       newList[itemIndex].done = true;
       newList[itemIndex].estado = 'COMPLETADO';
       
@@ -500,13 +599,32 @@ export function RemitoEdit() {
     }
   };
 
-  const handleRejectTask = (index: number) => {
-    const newList = [...checklist];
-    const itemIndex = checklist.findIndex(c => c.tarea === displayedChecklist[index].tarea);
-    if (itemIndex > -1) {
-      newList[itemIndex].done = false;
-      newList[itemIndex].estado = 'RECHAZADO';
-      setChecklist(newList);
+  const handleSendDirectMsg = async (_taskId: any) => {
+    if (!msgText.trim()) return;
+    setMsgSending(true);
+    setMsgSentSuccess(false);
+    try {
+      const { data, error } = await supabase.rpc('enviar_mensaje_directo_chofer', {
+        p_remito_id: Number(id),
+        p_mensaje: msgText
+      });
+      if (error) throw error;
+      
+      const res = Array.isArray(data) ? data[0] : data;
+      if (res && res.success === false) {
+        throw new Error(res.error || "Error al enviar mensaje");
+      }
+
+      setMsgSentSuccess(true);
+      setMsgText('');
+      setTimeout(() => {
+        setMsgSentSuccess(false);
+        setOpenMsgTaskId(null);
+      }, 3000);
+    } catch (err: any) {
+      alert("Error al enviar mensaje directo: " + err.message);
+    } finally {
+      setMsgSending(false);
     }
   };
 
@@ -527,6 +645,42 @@ export function RemitoEdit() {
       throw new Error(`No se pudo crear la patente ${patenteStr} (${tipo}): ${error.message}`);
     }
     return data.id;
+  };
+
+  const handleSaveNewDeposito = async () => {
+    if (!newDeposito.nombre.trim()) {
+      alert("Por favor ingrese el nombre del depósito.");
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('depositos')
+        .insert({
+          nombre: newDeposito.nombre.toUpperCase().trim(),
+          tipo: newDeposito.tipo,
+          funcion: newDeposito.funcion,
+          google_maps_link: newDeposito.google_maps_link.trim() || null,
+          estado: 'ACTIVO'
+        })
+        .select('*')
+        .single();
+
+      if (error) throw error;
+
+      setDepositos(prev => [...prev, data].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+
+      if (newDeposito.targetSelector === 'carga') {
+        setRemito(prev => ({ ...prev, deposito_carga_id: data.id }));
+      } else {
+        setRemito(prev => ({ ...prev, deposito_descarga_id: data.id }));
+      }
+
+      setShowNewDepositoModal(false);
+    } catch (err: any) {
+      console.error(err);
+      alert("Error al crear el depósito: " + err.message);
+    }
   };
 
   const resolveLugarPesaje = async (id: number | 0 | 'IGUAL' | null, nuevoObj: {nombre: string, direccion: string}): Promise<number | null> => {
@@ -867,7 +1021,12 @@ export function RemitoEdit() {
         me_checklist_enviado_operario: remito.me_checklist_enviado_operario,
         mision_estado: remito.mision_estado,
         tiene_incidencias_carga: remito.tiene_incidencias_carga,
-        ultimo_mensaje_chofer_at: remito.ultimo_mensaje_chofer_at
+        ultimo_mensaje_chofer_at: remito.ultimo_mensaje_chofer_at,
+        deposito_carga_id: remito.deposito_carga_id,
+        deposito_descarga_id: remito.deposito_descarga_id,
+        retry_count: remito.retry_count,
+        tipo_mision_id: remito.tipo_mision_id,
+        mision_estados_secuencia: remito.mision_estados_secuencia,
       };
 
       const { error } = await supabase.rpc('save_remito_update_admin', {
@@ -888,49 +1047,74 @@ export function RemitoEdit() {
     }
   };
 
-  const formatRelativeTime = (dateString: string | null | undefined) => {
-    if (!dateString) return 'Sin contacto';
-    const date = new Date(dateString);
+  const getLatencyInfo = () => {
+    if (!remito.ultimo_mensaje_chofer_at) return 'Sin contacto';
+    const lastContact = new Date(remito.ultimo_mensaje_chofer_at);
     const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
+    const diffMs = now.getTime() - lastContact.getTime();
+    const diffMin = Math.floor(diffMs / (1000 * 60));
     
-    if (diffMins < 1) return 'Hace instantes';
-    if (diffMins < 60) return `Hace ${diffMins} min`;
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `Hace ${diffHours} h`;
-    const diffDays = Math.floor(diffHours / 24);
-    return `Hace ${diffDays} días`;
+    // Buscar la tarea activa correspondiente al estado actual para obtener su tiempo de gracia
+    let activeTask = null;
+    if (remito.mision_estado === 'ESPERANDO_PAPELES') {
+      activeTask = checklist.find(c => c.id === 1);
+    } else if (remito.mision_estado === 'PESAJE_TARA_ORIGEN' || remito.mision_estado === 'PESAJE_TARA_DESTINO') {
+      activeTask = checklist.find(c => c.tipo_tarea === 'PESAJE_TARA');
+    } else if (remito.mision_estado === 'PESAJE_BRUTO_ORIGEN' || remito.mision_estado === 'PESAJE_BRUTO_DESTINO') {
+      activeTask = checklist.find(c => c.tipo_tarea === 'PESAJE_BRUTO');
+    } else if (remito.mision_estado === 'EN_CARGA') {
+      activeTask = checklist.find(c => c.tipo_tarea === 'CONTROL_GENERAL' && c.estado === 'PENDIENTE' && c.id !== 1);
+    }
+
+    const graciaMin = activeTask?.minutos_gracia !== undefined 
+      ? activeTask.minutos_gracia 
+      : (remito.mision_estado === 'CONTROL_ENTREGA' ? 30 : 60);
+
+    const reintentosMax = activeTask?.reintentos_max !== undefined 
+      ? activeTask.reintentos_max 
+      : 2;
+
+    const graceText = `(Gracia: ${graciaMin}m, Reintentos: ${remito.retry_count || 0}/${reintentosMax})`;
+
+    if (diffMin < 1) return `Hace instantes ${graceText}`;
+    if (diffMin < 60) return `Hace ${diffMin} min ${graceText}`;
+    const diffHours = Math.floor(diffMin / 60);
+    const remainingMin = diffMin % 60;
+    return `Hace ${diffHours}h ${remainingMin}m ${graceText}`;
   };
 
 
-  const isOrigen = useMemo(() => {
-    // Es Destino únicamente si se configuró explícitamente la tara en destino o el bruto en destino
-    const isDestino = pesaje.tara.momento === 'Después de descargar' || pesaje.bruto.momento === 'Antes de descargar';
-    return !isDestino;
-  }, [pesaje.tara.momento, pesaje.bruto.momento]);
 
-  const fsmSteps = useMemo(() => {
-    return [
-      { code: 'ESPERANDO_DOCS', label: 'Documentación', desc: 'Confirmación de papeles', isNA: false },
-      { code: 'PESAJE_1_ORIGEN', label: 'Tara Origen', desc: 'Pesaje inicial vacío', isNA: !isOrigen },
-      { code: 'EN_CARGA', label: 'Carga', desc: 'Carga y checklist', isNA: false },
-      { code: 'PESAJE_2_ORIGEN', label: 'Bruto Origen', desc: 'Pesaje cargado', isNA: !isOrigen },
-      { code: 'EN_TRANSITO', label: 'Tránsito', desc: 'Viaje a destino', isNA: false },
-      { code: 'PESAJE_1_DESTINO', label: 'Bruto Destino', desc: 'Pesaje bruto entrada', isNA: isOrigen },
-      { code: 'EN_DESCARGA', label: 'Descarga', desc: 'Descargando mercadería', isNA: false },
-      { code: 'PESAJE_2_DESTINO', label: 'Tara Destino', desc: 'Pesaje tara salida', isNA: isOrigen },
-      { code: 'MISION_COMPLETADA', label: 'Completada', desc: 'Fin del viaje', isNA: false },
-    ];
-  }, [isOrigen]);
 
   const activePath = useMemo(() => {
-    if (isOrigen) {
-      return ['ESPERANDO_DOCS', 'PESAJE_1_ORIGEN', 'EN_CARGA', 'PESAJE_2_ORIGEN', 'EN_TRANSITO', 'EN_DESCARGA', 'MISION_COMPLETADA'];
-    } else {
-      return ['ESPERANDO_DOCS', 'EN_CARGA', 'EN_TRANSITO', 'PESAJE_1_DESTINO', 'EN_DESCARGA', 'PESAJE_2_DESTINO', 'MISION_COMPLETADA'];
+    if (!remito.mision_estados_secuencia) return [];
+    return remito.mision_estados_secuencia
+      .filter((s: any) => s.activo !== false)
+      .map((s: any) => s.code);
+  }, [remito.mision_estados_secuencia]);
+
+  const fsmSteps = useMemo(() => {
+    if (!remito.mision_estados_secuencia || remito.mision_estados_secuencia.length === 0) {
+      // Fallback a secuencia por defecto si está vacía
+      return [
+        { code: 'OPERACION_PENDIENTE', label: 'Pendiente', desc: 'Faltan datos o inicio', orden: 10, isNA: false },
+        { code: 'ESPERANDO_PAPELES', label: 'Papeles', desc: 'Confirmación de papeles', orden: 20, isNA: false },
+        { code: 'PESAJE_TARA_ORIGEN', label: 'Tara Origen', desc: 'Pesaje inicial vacío', orden: 30, isNA: false },
+        { code: 'EN_CARGA', label: 'Carga', desc: 'Carga y checklist', orden: 40, isNA: false },
+        { code: 'PESAJE_BRUTO_ORIGEN', label: 'Bruto Origen', desc: 'Pesaje cargado', orden: 50, isNA: false },
+        { code: 'EN_TRANSITO', label: 'Tránsito', desc: 'Viaje a destino', orden: 60, isNA: false },
+        { code: 'CONTROL_ENTREGA', label: 'Entrega', desc: 'Remito Firmado', orden: 70, isNA: false },
+        { code: 'MISION_COMPLETADA', label: 'Completada', desc: 'Fin de la misión', orden: 80, isNA: false },
+      ];
     }
-  }, [isOrigen]);
+    return remito.mision_estados_secuencia.map((s: any, idx: number) => ({
+      code: s.code,
+      label: s.label,
+      desc: s.desc,
+      orden: s.orden_logistico_default || (idx + 1) * 10,
+      isNA: s.activo === false,
+    }));
+  }, [remito.mision_estados_secuencia]);
 
   const handleForceTransition = async (targetState: string) => {
     const confirmText = `¿Estás seguro de que quieres FORZAR la misión al estado "${targetState}"? Esto registrará un evento de transición forzada en el historial.`;
@@ -952,6 +1136,74 @@ export function RemitoEdit() {
       alert("Error al forzar transición: " + err.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleMisionTipoChange = async (val: number | null) => {
+    if (!val) {
+      setRemito(prev => ({ ...prev, tipo_mision_id: null }));
+      return;
+    }
+
+    if (window.confirm("⚠️ ADVERTENCIA: Esta acción sobrescribirá y eliminará el protocolo de control y tareas existentes para este remito. ¿Deseas re-inicializar el Road Map y el Checklist de acuerdo al Tipo de Misión seleccionado?")) {
+      try {
+        setIsSubmitting(true);
+        // Fetch default steps for this mission type
+        const { data: stepsData, error: stepsErr } = await supabase
+          .from('mision_tipo_pasos')
+          .select('mision_estados_definicion(codigo, nombre, descripcion)')
+          .eq('tipo_mision_id', val)
+          .order('orden_especifico', { ascending: true });
+        
+        if (stepsErr) throw stepsErr;
+        
+        const newSequence = stepsData.map((s: any) => ({
+          code: s.mision_estados_definicion.codigo,
+          label: s.mision_estados_definicion.nombre,
+          desc: s.mision_estados_definicion.descripcion,
+          activo: true
+        }));
+
+        // Fetch default active tasks for these states
+        const stateCodes = newSequence.map((s: any) => s.code);
+        const { data: tasksData, error: tasksErr } = await supabase
+          .from('catalogo_tareas_control')
+          .select('id, tarea_template, tipo_tarea, requiere_foto, requiere_aviso, orden_sugerido, tipo_dato_esperado, mensaje_template, mision_estados_definicion!inner(codigo)')
+          .eq('estado', 'ACTIVO')
+          .in('mision_estados_definicion.codigo', stateCodes);
+        
+        if (tasksErr) throw tasksErr;
+
+        const newChecklist = tasksData.map((c: any) => ({
+          id: c.id,
+          tarea: c.tarea_template,
+          tarea_template: c.tarea_template,
+          tipo_tarea: c.tipo_tarea,
+          requiere_foto: c.requiere_foto,
+          requiere_aviso: c.requiere_aviso,
+          orden_sugerido: c.orden_sugerido,
+          asignada_a_chofer: true,
+          done: false,
+          estado: 'PENDIENTE',
+          minutos_gracia: c.tipo_tarea === 'PESAJE_TARA' || c.tipo_tarea === 'PESAJE_BRUTO' ? 60 : 30,
+          reintentos_max: 2,
+          estado_id: c.mision_estados_definicion.codigo,
+          tipo_dato_esperado: c.tipo_dato_esperado || 'check',
+          valor_reportado: null,
+          calificacion: 0
+        }));
+
+        setRemito(prev => ({
+          ...prev,
+          tipo_mision_id: val,
+          mision_estados_secuencia: newSequence
+        }));
+        setChecklist(newChecklist);
+      } catch (err: any) {
+        alert("Error al cargar la secuencia del tipo de misión: " + err.message);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -1055,11 +1307,71 @@ export function RemitoEdit() {
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                Monitoreo físico del remito en tiempo real. Estado actual: <strong className="text-brand-700">{remito.mision_estado || 'ESPERANDO_DOCS'}</strong>
+                Monitoreo físico del remito en tiempo real. Estado actual: <strong className="text-brand-700">{remito.mision_estado || 'OPERACION_PENDIENTE'}</strong>
               </p>
             </div>
             
             <div className="flex flex-wrap gap-3 items-center text-xs">
+              {/* Searchable Select Tipo de Misión */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setMTypeDropdownOpen(!mTypeDropdownOpen)}
+                  className="px-3 py-2.5 rounded-lg border text-[11px] font-bold shadow-xs cursor-pointer transition-all bg-white text-gray-700 border-gray-200 hover:bg-gray-50 flex items-center gap-1.5 min-w-[170px]"
+                >
+                  <Search className="w-3.5 h-3.5 text-gray-400" />
+                  <span className="truncate">
+                    {misionTipos.find(mt => mt.id === remito.tipo_mision_id)?.nombre || "Seleccionar Misión Tipo..."}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 ml-auto" />
+                </button>
+
+                {mTypeDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setMTypeDropdownOpen(false)}></div>
+                    <div className="absolute right-0 mt-1 w-64 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-100 p-2 space-y-2">
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          placeholder="Buscar tipo de misión..."
+                          value={mTypeSearch}
+                          onChange={(e) => setMTypeSearch(e.target.value)}
+                          className="w-full pl-8 pr-3 py-1.5 text-xs bg-gray-50 border border-gray-200 rounded-lg focus:bg-white focus:border-brand-500 outline-none"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      <div className="max-h-48 overflow-y-auto space-y-0.5">
+                        {misionTipos
+                          .filter(mt => mt.nombre.toLowerCase().includes(mTypeSearch.toLowerCase()))
+                          .map(mt => (
+                            <button
+                              key={`mt-select-${mt.id}`}
+                              type="button"
+                              onClick={() => {
+                                handleMisionTipoChange(mt.id);
+                                setMTypeDropdownOpen(false);
+                                setMTypeSearch('');
+                              }}
+                              className={cn(
+                                "w-full text-left px-2.5 py-2 rounded-lg text-xs transition-all hover:bg-brand-50 cursor-pointer block",
+                                mt.id === remito.tipo_mision_id 
+                                  ? "bg-brand-50 text-brand-700 font-bold" 
+                                  : "text-gray-700"
+                              )}
+                            >
+                              {mt.nombre}
+                            </button>
+                          ))}
+                        {misionTipos.filter(mt => mt.nombre.toLowerCase().includes(mTypeSearch.toLowerCase())).length === 0 && (
+                          <div className="text-center py-4 text-xs text-gray-400 font-medium">No se encontraron tipos.</div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 flex items-center gap-2 shadow-xs">
                 <MessageSquare className="w-4 h-4 text-brand-500" />
                 <div>
@@ -1075,7 +1387,7 @@ export function RemitoEdit() {
                 <div>
                   <div className="font-semibold text-gray-700">Último contacto</div>
                   <div className="text-[10px] text-gray-500">
-                    {formatRelativeTime(remito.ultimo_mensaje_chofer_at)}
+                    {getLatencyInfo()}
                   </div>
                 </div>
               </div>
@@ -1110,6 +1422,20 @@ export function RemitoEdit() {
               >
                 {remito.tiene_incidencias_carga ? "Resolver Incidencia" : "Reportar Incidencia"}
               </button>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  if (remito.mision_estados_secuencia) {
+                    setTempSequence(JSON.parse(JSON.stringify(remito.mision_estados_secuencia)));
+                  }
+                  setShowPersonalizarModal(true);
+                }}
+                className="px-3 py-2.5 rounded-lg border text-[11px] font-bold shadow-xs cursor-pointer transition-all bg-white text-brand-700 border-brand-200 hover:bg-brand-50"
+              >
+                Personalizar Misión
+              </button>
+              
             </div>
           </div>
 
@@ -1118,24 +1444,35 @@ export function RemitoEdit() {
             <div className="flex items-center min-w-[800px] justify-between relative py-2">
               {fsmSteps.map((step, idx) => {
                 const isNA = step.isNA;
+                const stateTasks = checklist.filter((t: any) => t.estado_id === step.code && t.asignada_a_chofer !== false);
+                const hasTasks = stateTasks.length > 0;
+                const allTasksDone = hasTasks && stateTasks.every((t: any) => t.done || t.estado === 'COMPLETADO');
+                const isPast = activePath.indexOf(step.code) < activePath.indexOf(remito.mision_estado || 'OPERACION_PENDIENTE');
+
                 const status = isNA 
                   ? 'NA' 
-                  : activePath.indexOf(step.code) < activePath.indexOf(remito.mision_estado || 'ESPERANDO_DOCS')
-                    ? 'COMPLETED'
-                    : step.code === remito.mision_estado
-                      ? 'ACTIVE'
+                  : step.code === remito.mision_estado
+                    ? 'ACTIVE'
+                    : (hasTasks ? allTasksDone : isPast)
+                      ? 'COMPLETED'
                       : 'PENDING';
                 
                 // Determinar estado de la línea hacia la tarea previa
                 const prevStep = idx > 0 ? fsmSteps[idx - 1] : null;
                 const prevIsNA = prevStep ? prevStep.isNA : false;
+
+                const prevTasks = prevStep ? checklist.filter((t: any) => t.estado_id === prevStep.code && t.asignada_a_chofer !== false) : [];
+                const prevHasTasks = prevTasks.length > 0;
+                const prevAllTasksDone = prevHasTasks && prevTasks.every((t: any) => t.done || t.estado === 'COMPLETADO');
+                const prevIsPast = prevStep ? activePath.indexOf(prevStep.code) < activePath.indexOf(remito.mision_estado || 'OPERACION_PENDIENTE') : false;
+
                 const prevStatus = prevStep
                   ? prevIsNA
                     ? 'NA'
-                    : activePath.indexOf(prevStep.code) < activePath.indexOf(remito.mision_estado || 'ESPERANDO_DOCS')
-                      ? 'COMPLETED'
-                      : prevStep.code === remito.mision_estado
-                        ? 'ACTIVE'
+                    : prevStep.code === remito.mision_estado
+                      ? 'ACTIVE'
+                      : (prevHasTasks ? prevAllTasksDone : prevIsPast)
+                        ? 'COMPLETED'
                         : 'PENDING'
                   : null;
 
@@ -1174,7 +1511,7 @@ export function RemitoEdit() {
                         ) : status === 'NA' ? (
                           <span className="text-[9px]">N/A</span>
                         ) : (
-                          idx + 1
+                          <span className="text-[10px]">{step.orden || idx + 1}</span>
                         )}
                       </div>
                       
@@ -1210,7 +1547,7 @@ export function RemitoEdit() {
             <div className="flex gap-2 w-full sm:w-auto items-center">
               <select
                 id="select-forced-state"
-                defaultValue={remito.mision_estado || 'ESPERANDO_DOCS'}
+                defaultValue={remito.mision_estado || 'OPERACION_PENDIENTE'}
                 className="p-2 bg-white border border-gray-300 rounded-lg text-xs outline-none focus:border-brand-500 flex-1 sm:flex-none"
               >
                 {fsmSteps.filter(s => !s.isNA).map(s => (
@@ -1354,6 +1691,8 @@ export function RemitoEdit() {
             </div>
           </div>
 
+
+
           {/* Personal */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
@@ -1410,6 +1749,73 @@ export function RemitoEdit() {
                 <option value="">Seleccionar...</option>
                 {supervisors.map(p => (
                   <option key={`sup-${p.id}`} value={p.id}>{p.nombre}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Ubicaciones Físicas (Depósitos) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-gray-50">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">
+                <span>Depósito de Carga</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewDeposito({
+                      nombre: '',
+                      tipo: 'DEPOSITO_PROPIO',
+                      funcion: 'CARGA',
+                      google_maps_link: '',
+                      targetSelector: 'carga'
+                    });
+                    setShowNewDepositoModal(true);
+                  }}
+                  className="text-xs text-brand-600 hover:text-brand-700 font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <span>+ Crear nuevo</span>
+                </button>
+              </label>
+              <select
+                value={remito.deposito_carga_id || ''}
+                onChange={e => setRemito({...remito, deposito_carga_id: e.target.value ? Number(e.target.value) : null})}
+                className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+              >
+                <option value="">Seleccionar depósito...</option>
+                {depositos.filter(d => d.funcion === 'CARGA' || d.funcion === 'AMBAS').map(d => (
+                  <option key={`dep-c-${d.id}`} value={d.id}>{d.nombre} ({d.tipo})</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex justify-between items-center">
+                <span>Depósito de Descarga</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewDeposito({
+                      nombre: '',
+                      tipo: 'DEPOSITO_PROPIO',
+                      funcion: 'DESCARGA',
+                      google_maps_link: '',
+                      targetSelector: 'descarga'
+                    });
+                    setShowNewDepositoModal(true);
+                  }}
+                  className="text-xs text-brand-600 hover:text-brand-700 font-bold flex items-center gap-1 cursor-pointer"
+                >
+                  <span>+ Crear nuevo</span>
+                </button>
+              </label>
+              <select
+                value={remito.deposito_descarga_id || ''}
+                onChange={e => setRemito({...remito, deposito_descarga_id: e.target.value ? Number(e.target.value) : null})}
+                className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+              >
+                <option value="">Seleccionar depósito...</option>
+                {depositos.filter(d => d.funcion === 'DESCARGA' || d.funcion === 'AMBAS').map(d => (
+                  <option key={`dep-d-${d.id}`} value={d.id}>{d.nombre} ({d.tipo})</option>
                 ))}
               </select>
             </div>
@@ -1692,177 +2098,414 @@ export function RemitoEdit() {
 
         {/* Sección C: Checklist e Instrucciones */}
         <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-6">
-          <div className="flex justify-between items-center border-b border-gray-100 pb-2">
-            <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">C. Instrucciones y Protocolo</h2>
+          <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+            <div className="space-y-1">
+              <h2 className="text-lg font-bold text-gray-800">Protocolo de Control de la Misión</h2>
+              <p className="text-xs text-gray-500">Gestión de tareas, pesajes y auditoría operativa por cada hito de la hoja de ruta.</p>
+            </div>
             <button 
               type="button" 
               onClick={() => setShowWpModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors shadow-sm"
+              className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors shadow-sm cursor-pointer animate-none"
             >
               <MessageSquare className="w-4 h-4" />
               Enviar por WhatsApp
             </button>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 flex flex-col">
-              <label className="block text-sm font-bold text-gray-800 mb-2">Instrucciones Generadas</label>
-              <div className="w-full p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 outline-none select-none flex-1 overflow-y-auto whitespace-pre-wrap min-h-[120px]">
-                <div className="font-sans leading-relaxed">
-                  <div className="font-bold text-gray-400 mb-1 text-[10px] uppercase tracking-wider">Sección Pesaje</div>
-                  {instruccionesData.pesajeText}
-                  
-                  <div className="mt-4">
-                    <div className="font-bold text-gray-400 mb-1 text-[10px] uppercase tracking-wider">Sección Carga</div>
-                    <div>
-                      {instruccionesData.cargaText || <span className="text-gray-400 italic">Sin tareas de carga asignadas al chofer</span>}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-blue-50/30 p-5 rounded-xl border border-blue-100 flex flex-col">
-              <label className="block text-sm font-bold text-blue-800 mb-2">Observaciones / Indicaciones Generales</label>
-              <textarea 
-                value={observacionesExtras}
-                onChange={e => setObservacionesExtras(e.target.value)}
-                rows={4}
-                placeholder="Escribe aquí cualquier observación manual o indicación especial..."
-                className="w-full p-3 bg-white border border-blue-200 rounded-lg text-sm text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all flex-1"
-              />
-            </div>
+          {/* Observaciones Generales en la parte superior del protocolo de control */}
+          <div className="bg-blue-50/30 p-4 rounded-xl border border-blue-100">
+            <label className="block text-xs font-bold text-blue-800 uppercase tracking-wider mb-2">Observaciones / Indicaciones Generales</label>
+            <textarea 
+              value={observacionesExtras}
+              onChange={e => setObservacionesExtras(e.target.value)}
+              rows={2}
+              placeholder="Escribe aquí cualquier observación manual o indicación especial..."
+              className="w-full p-3 bg-white border border-blue-200 rounded-lg text-sm text-gray-700 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+            />
           </div>
 
-          <div className="bg-gray-50 p-5 rounded-xl border border-gray-200">
-            <h3 className="text-sm font-bold mb-4 text-gray-800">Checklist de Control (General)</h3>
-            <div className="space-y-3">
-              {displayedChecklist.map((task, index) => (
+          <div className="space-y-6">
+            {activePath.map(stateCode => {
+              const stateDef = remito.mision_estados_secuencia?.find((s: any) => s.code === stateCode);
+              const stateTasks = checklist.filter((t: any) => t.estado_id === stateCode);
+
+              const isActivePhase = stateCode === (remito.mision_estado || 'OPERACION_PENDIENTE');
+              const stepOrder = stateDef?.orden_logistico_default;
+
+              return (
                 <div 
-                  key={index} 
-                  className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-100 transition shadow-sm hover:border-brand-200"
+                  key={stateCode} 
+                  className={cn(
+                    "p-4 rounded-xl border shadow-xs transition-all bg-white",
+                    isActivePhase 
+                      ? "border-brand-500 ring-2 ring-brand-100/50 shadow-md" 
+                      : "border-gray-200"
+                  )}
                 >
-                  <label 
-                    className={`flex items-center gap-3 flex-1 ${
-                      !!remito.inspector_id && !task.asignada_a_chofer 
-                        ? 'opacity-60 cursor-not-allowed bg-gray-50/50' 
-                        : 'cursor-pointer'
-                    }`}
-                  >
-                    <input 
-                      type="checkbox" 
-                      checked={task.done} 
-                      onChange={() => !(!!remito.inspector_id && !task.asignada_a_chofer) && toggleChecklist(index)}
-                      disabled={!!remito.inspector_id && !task.asignada_a_chofer}
-                      className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50" 
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center flex-wrap gap-1.5 select-none">
-                        <span className={`text-sm ${!!remito.inspector_id && !task.asignada_a_chofer ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                          {task.tarea}
-                        </span>
-                        {task.estado && task.estado !== 'PENDIENTE' && task.estado !== 'COMPLETADO' && (
-                          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
-                            task.estado === 'REPORTADO_CHOFER' 
-                              ? 'bg-amber-100 text-amber-800 animate-pulse' 
-                              : task.estado === 'NO_REALIZABLE'
-                              ? 'bg-red-100 text-red-800'
-                              : task.estado === 'RECHAZADO'
-                              ? 'bg-rose-100 text-rose-800 border border-rose-200'
-                              : ''
-                          }`}>
-                            {task.estado === 'REPORTADO_CHOFER' ? 'Pendiente Operador' : task.estado === 'NO_REALIZABLE' ? 'No Realizable' : 'Rechazado'}
-                          </span>
-                        )}
-                      </div>
-                      {task.valor_reportado_chofer && (
-                        <div className="mt-1">
-                          {task.valor_reportado_chofer.startsWith('http') ? (
-                            <a 
-                              href={task.valor_reportado_chofer} 
-                              target="_blank" 
-                              rel="noopener noreferrer" 
-                              className="text-[9px] text-blue-700 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded-md border border-blue-100 font-medium inline-flex items-center gap-1 transition-colors cursor-pointer"
-                            >
-                              📷 Ver Foto Adjunta
-                            </a>
-                          ) : (
-                            <span className="text-[9px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-100 font-medium inline-block">
-                              Valor: <strong>{task.valor_reportado_chofer}</strong>
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </label>
-                  
-                  <div className="flex items-center gap-1.5 shrink-0 ml-4 border-l border-gray-100 pl-3">
-                    <span className="text-[10px] text-gray-400 font-medium">Gracia:</span>
-                    <input
-                      type="number"
-                      value={task.minutos_gracia !== undefined ? task.minutos_gracia : 30}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        const itemIndex = checklist.findIndex(c => c.tarea === task.tarea);
-                        if (itemIndex !== -1) {
-                          const newList = [...checklist];
-                          newList[itemIndex].minutos_gracia = isNaN(val) ? 0 : val;
-                          setChecklist(newList);
-                        }
-                      }}
-                      min={0}
-                      className="w-12 text-center p-1 border border-gray-200 rounded text-xs focus:ring-brand-500 focus:border-brand-500 font-semibold text-gray-700 bg-gray-50/50"
-                      title="Minutos de gracia para esta tarea"
-                    />
-                    <span className="text-[9px] text-gray-400 mr-2">min</span>
+                  <div className="flex items-center gap-2 mb-3 border-b border-gray-100 pb-2">
+                    <div className={cn(
+                      "w-2.5 h-2.5 rounded-full shadow-xs",
+                      isActivePhase ? "bg-brand-600 animate-pulse" : "bg-gray-400"
+                    )} />
+                    <span className="font-bold text-gray-800 text-xs uppercase tracking-wider">
+                      {stepOrder ? `${stepOrder} - ` : ''}{stateDef?.label || stateCode}
+                    </span>
+                    {isActivePhase && (
+                      <span className="text-[9px] bg-brand-50 text-brand-700 font-bold px-2 py-0.5 rounded-full border border-brand-100 uppercase ml-2">Fase Activa</span>
+                    )}
+                    <span className="text-[10px] text-gray-400 ml-auto">
+                      {stateDef?.desc ? `${stateDef.desc}` : ''}
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 ml-2 shrink-0">
-                    {task.estado === 'REPORTADO_CHOFER' && (
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleApproveTask(index);
-                          }}
-                          className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg transition-colors cursor-pointer"
-                          title="Aprobar Tarea"
-                        >
-                          <CheckSquare className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRejectTask(index);
-                          }}
-                          className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg transition-colors cursor-pointer"
-                          title="Rechazar Tarea"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                  <div className="space-y-3">
+                    {stateTasks.length === 0 ? (
+                      <div className="text-gray-400 text-xs italic py-2 px-1">
+                        No hay tareas de control registradas para esta fase.
                       </div>
-                    )}
+                    ) : (
+                      stateTasks.map((task) => {
+                        const isTaskCompleted = task.done || task.estado === 'COMPLETADO';
+                        return (
+                          <div 
+                            key={task.id || task.tarea} 
+                            className={cn(
+                              "flex flex-col p-3 rounded-lg border transition hover:border-brand-200 shadow-xs",
+                              task.estado === 'RECHAZADO'
+                                ? "bg-red-50/70 border-red-200 text-red-900"
+                                : "bg-gray-50/50 border-gray-150 text-gray-800"
+                            )}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              {/* Check de Realizado */}
+                              <label className="flex items-center gap-3 flex-1 cursor-pointer min-w-0">
+                                <input 
+                                  type="checkbox" 
+                                  checked={isTaskCompleted} 
+                                  onChange={() => {
+                                    const idx = checklist.findIndex(c => c.id === task.id || c.tarea === task.tarea);
+                                    if (idx > -1) {
+                                      const newList = [...checklist];
+                                      const newDone = !newList[idx].done;
+                                      newList[idx].done = newDone;
+                                      newList[idx].estado = newDone ? 'COMPLETADO' : 'PENDIENTE';
+                                      
+                                      // Copiar reporte de peso si aplica
+                                      if (newDone) {
+                                        if (newList[idx].tipo_tarea === 'PESAJE_TARA' && newList[idx].valor_reportado_chofer) {
+                                          setPesaje(prev => ({
+                                            ...prev,
+                                            tara: { ...prev.tara, momento: newList[idx].valor_reportado_chofer }
+                                          }));
+                                        } else if (newList[idx].tipo_tarea === 'PESAJE_BRUTO' && newList[idx].valor_reportado_chofer) {
+                                          setPesaje(prev => ({
+                                            ...prev,
+                                            bruto: { ...prev.bruto, momento: newList[idx].valor_reportado_chofer }
+                                          }));
+                                        }
+                                      }
+                                      setChecklist(newList);
+                                    }
+                                  }}
+                                  className="w-5 h-5 rounded border-gray-300 text-brand-600 focus:ring-brand-500" 
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center flex-wrap gap-1.5">
+                                    <span className={cn(
+                                      "text-sm font-semibold text-gray-800",
+                                      isTaskCompleted && "line-through text-gray-400"
+                                    )}>
+                                      {task.tarea}
+                                    </span>
+                                    {task.estado && task.estado !== 'PENDIENTE' && task.estado !== 'COMPLETADO' && (
+                                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${
+                                        task.estado === 'REPORTADO_CHOFER' 
+                                          ? 'bg-amber-100 text-amber-800 animate-pulse' 
+                                          : task.estado === 'NO_REALIZABLE'
+                                          ? 'bg-red-100 text-red-800'
+                                          : task.estado === 'RECHAZADO'
+                                          ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                                          : ''
+                                      }`}>
+                                        {task.estado === 'REPORTADO_CHOFER' ? 'Pendiente Operador' : task.estado === 'NO_REALIZABLE' ? 'No Realizable' : 'Rechazado'}
+                                      </span>
+                                    )}
+                                  </div>
 
-                    <button
-                      type="button"
-                      title="Solicitar cumplimiento al chofer vía Bot"
-                      onClick={() => toggleAsignadaChofer(index)}
-                      className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      <Truck 
-                        className={`w-5 h-5 transition-colors cursor-pointer ${
-                          task.asignada_a_chofer ? 'text-blue-600' : 'text-gray-300'
-                        }`}
-                      />
-                    </button>
+                                  {/* Indicadores de tipo de dato */}
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {/* Indicador 'Imagen' */}
+                                    {task.tipo_dato_esperado === 'imagen' && (
+                                      <div className="flex items-center gap-1">
+                                        {task.valor_reportado_chofer && task.valor_reportado_chofer.startsWith('http') ? (
+                                          <span className="flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                            📷 Evidencia Recibida
+                                          </span>
+                                        ) : (
+                                          <span className="flex items-center gap-1 text-[10px] bg-gray-100 text-gray-400 border border-gray-150 px-2 py-0.5 rounded-full">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                                            📷 Pendiente
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Valores Reportados (Edición Inline) */}
+                                    {task.tipo_dato_esperado === 'numero' && (
+                                      <div className="flex items-center">
+                                        {editingTaskId === task.id ? (
+                                          <input
+                                            type="text"
+                                            defaultValue={task.valor_reportado_chofer || ''}
+                                            onBlur={(e) => {
+                                              setEditingTaskId(null);
+                                              const val = e.target.value;
+                                              const idx = checklist.findIndex(c => c.id === task.id || c.tarea === task.tarea);
+                                              if (idx > -1) {
+                                                const newList = [...checklist];
+                                                newList[idx].valor_reportado_chofer = val;
+                                                newList[idx].valor_reportado = val;
+                                                setChecklist(newList);
+                                              }
+                                            }}
+                                            onKeyDown={(e) => {
+                                              if (e.key === 'Enter') {
+                                                e.currentTarget.blur();
+                                              }
+                                            }}
+                                            className="p-1 text-xs border border-amber-300 rounded bg-white w-24 text-center font-bold"
+                                            autoFocus
+                                          />
+                                        ) : (
+                                          <span 
+                                            onClick={() => setEditingTaskId(task.id)}
+                                            className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-100 font-bold cursor-pointer hover:bg-amber-100/50 transition-colors"
+                                            title="Click para editar"
+                                          >
+                                            Valor: {task.valor_reportado_chofer || '---'} ✏️
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </label>
+
+                              {/* Barra de Herramientas de la Tarea */}
+                              <div className="flex items-center gap-2 pl-3 border-l border-gray-150">
+                                {/* Selector de Performance (Semáforo de estrellas) */}
+                                <div className="flex items-center gap-1 border-r border-gray-150 pr-2">
+                                  {[1, 2, 3, 4, 5].map(star => (
+                                    <button
+                                      key={star}
+                                      type="button"
+                                      disabled={!task.asignada_a_chofer}
+                                      onClick={() => {
+                                        const idx = checklist.findIndex(c => c.id === task.id || c.tarea === task.tarea);
+                                        if (idx > -1) {
+                                          const newList = [...checklist];
+                                          newList[idx].calificacion = star;
+                                          setChecklist(newList);
+                                        }
+                                      }}
+                                      className={cn(
+                                        "focus:outline-none text-base transition-colors",
+                                        !task.asignada_a_chofer ? "opacity-30 cursor-not-allowed" : "cursor-pointer",
+                                        (task.calificacion || 0) >= star ? "text-amber-400" : "text-gray-200 hover:text-amber-300"
+                                      )}
+                                      title={`Calificar con ${star} estrellas`}
+                                    >
+                                      ★
+                                    </button>
+                                  ))}
+
+                                  <button
+                                    type="button"
+                                    disabled={!task.asignada_a_chofer}
+                                    onClick={() => {
+                                      const idx = checklist.findIndex(c => c.id === task.id || c.tarea === task.tarea);
+                                      if (idx > -1) {
+                                        const newList = [...checklist];
+                                        newList[idx].done = false;
+                                        newList[idx].estado = 'RECHAZADO';
+                                        setChecklist(newList);
+                                      }
+                                    }}
+                                    className={cn(
+                                      "p-1 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors ml-1",
+                                      !task.asignada_a_chofer ? "opacity-30 cursor-not-allowed" : "cursor-pointer"
+                                    )}
+                                    title="Rechazar Tarea (Marcar Incumplida)"
+                                  >
+                                    <XCircle className="w-4 h-4" />
+                                  </button>
+                                </div>
+
+                                {/* Botón de Mensajería Directa */}
+                                <button
+                                  type="button"
+                                  disabled={!task.asignada_a_chofer}
+                                  onClick={() => {
+                                    setOpenMsgTaskId(openMsgTaskId === task.id ? null : task.id);
+                                    setMsgText('');
+                                    setMsgSentSuccess(false);
+                                  }}
+                                  className={cn(
+                                    "p-1.5 rounded-lg border hover:bg-gray-100 transition-colors",
+                                    openMsgTaskId === task.id ? "border-brand-500 bg-brand-50 text-brand-600 font-bold" : "border-gray-200 text-gray-500",
+                                    !task.asignada_a_chofer ? "opacity-30 cursor-not-allowed" : "cursor-pointer"
+                                  )}
+                                  title="Enviar mensaje directo sobre esta tarea"
+                                >
+                                  <Send className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* Evidencia (Ver Adjunto) */}
+                                {task.valor_reportado_chofer && task.valor_reportado_chofer.startsWith('http') && (
+                                  <a 
+                                    href={task.valor_reportado_chofer} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="p-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors cursor-pointer"
+                                    title="Ver Evidencia Adjunta"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </a>
+                                )}
+
+                                {/* Configuración individual (minutos_gracia y reintentos) */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setOpenConfigTaskId(openConfigTaskId === task.id ? null : task.id);
+                                  }}
+                                  className={cn(
+                                    "p-1.5 rounded-lg border transition-colors text-gray-500 hover:bg-gray-100 cursor-pointer",
+                                    openConfigTaskId === task.id ? "border-amber-500 bg-amber-50" : "border-gray-200"
+                                  )}
+                                  title="Configurar Gracia y Reintentos"
+                                >
+                                  <Sliders className="w-3.5 h-3.5" />
+                                </button>
+
+                                {/* Truck Icon (Asignación al chofer) */}
+                                <button
+                                  type="button"
+                                  title="Asignar / Desasignar chofer"
+                                  onClick={() => {
+                                    const idx = checklist.findIndex(c => c.id === task.id || c.tarea === task.tarea);
+                                    if (idx > -1) {
+                                      const newList = [...checklist];
+                                      newList[idx].asignada_a_chofer = !newList[idx].asignada_a_chofer;
+                                      setChecklist(newList);
+                                    }
+                                  }}
+                                  className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <Truck 
+                                    className={cn(
+                                      "w-4 h-4 transition-colors",
+                                      task.asignada_a_chofer ? "text-blue-600" : "text-gray-300"
+                                    )}
+                                  />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Campo flotante de envío de WhatsApp directo */}
+                            {openMsgTaskId === task.id && (
+                              <div className="mt-2.5 p-3 bg-gray-100 border border-gray-150 rounded-lg flex flex-col gap-2 w-full animate-fadeIn">
+                                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Mensaje de WhatsApp al Chofer:</span>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder="Escribe un mensaje para enviárselo directamente al chofer..."
+                                    value={msgText}
+                                    onChange={e => setMsgText(e.target.value)}
+                                    className="flex-1 p-2 bg-white border border-gray-200 rounded text-xs focus:ring-1 focus:ring-brand-500 outline-none"
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') handleSendDirectMsg(task.id);
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    disabled={msgSending || !msgText.trim()}
+                                    onClick={() => handleSendDirectMsg(task.id)}
+                                    className="px-3 py-1 bg-brand-600 hover:bg-brand-700 text-white rounded text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                                  >
+                                    {msgSending ? (
+                                      <>
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        <span>Enviando...</span>
+                                      </>
+                                    ) : msgSentSuccess ? (
+                                      <>
+                                        <Check className="w-3 h-3 text-white" />
+                                        <span>✓ ¡Enviado!</span>
+                                      </>
+                                    ) : (
+                                      <span>Enviar</span>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Panel de configuración de minutos de gracia y reintentos */}
+                            {openConfigTaskId === task.id && (
+                              <div className="mt-2.5 p-3 bg-amber-50/40 border border-amber-100 rounded-lg flex items-center justify-between gap-4 w-full animate-fadeIn">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-gray-600 font-bold uppercase tracking-wider">Minutos Gracia:</span>
+                                  <input
+                                    type="number"
+                                    value={task.minutos_gracia !== undefined ? task.minutos_gracia : 30}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      const idx = checklist.findIndex(c => c.id === task.id || c.tarea === task.tarea);
+                                      if (idx > -1) {
+                                        const newList = [...checklist];
+                                        newList[idx].minutos_gracia = isNaN(val) ? 0 : val;
+                                        setChecklist(newList);
+                                      }
+                                    }}
+                                    min={0}
+                                    className="w-16 p-1 border border-gray-200 rounded text-xs text-center focus:ring-brand-500 font-bold bg-white"
+                                  />
+                                  <span className="text-[10px] text-gray-400 font-medium">min</span>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-gray-600 font-bold uppercase tracking-wider">Reintentos Máximos:</span>
+                                  <input
+                                    type="number"
+                                    value={task.reintentos_max !== undefined ? task.reintentos_max : 2}
+                                    onChange={(e) => {
+                                      const val = parseInt(e.target.value, 10);
+                                      const idx = checklist.findIndex(c => c.id === task.id || c.tarea === task.tarea);
+                                      if (idx > -1) {
+                                        const newList = [...checklist];
+                                        newList[idx].reintentos_max = isNaN(val) ? 0 : val;
+                                        setChecklist(newList);
+                                      }
+                                    }}
+                                    min={0}
+                                    className="w-16 p-1 border border-gray-200 rounded text-xs text-center focus:ring-brand-500 font-bold bg-white"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
-          </div>
-        </section>
+          </section>
 
         {/* Sección D: Configuración de Seguimiento */}
         <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-6">
@@ -2174,9 +2817,342 @@ export function RemitoEdit() {
             balanza_nombre: resolvedTaraStr,
             destino_nombre: resolvedBrutoStr,
             cliente_nombre: remito.cliente,
-            tareas: `${instruccionesData.savedText}${observacionesExtras ? '\n\nObservaciones Extra:\n' + observacionesExtras : ''}`
+            tareas: `${instruccionesData.savedText}${observacionesExtras ? '\n\nObservaciones Extra:\n' + observacionesExtras : ''}`,
+            sugeridoDraft: generateWhatsAppDraft()
           }}
         />
+      )}
+
+      {/* New Deposito Modal */}
+      {showNewDepositoModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowNewDepositoModal(false)}></div>
+          <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <span>Crear Depósito en Caliente</span>
+              </h3>
+              <button onClick={() => setShowNewDepositoModal(false)} className="p-2 hover:bg-white rounded-full transition-colors">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                <input
+                  type="text"
+                  value={newDeposito.nombre}
+                  onChange={(e) => setNewDeposito({ ...newDeposito, nombre: e.target.value })}
+                  placeholder="Ej. DEPOSITO CENTRAL CARRIZO"
+                  className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-brand-500 outline-none uppercase"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+                <select
+                  value={newDeposito.tipo}
+                  onChange={(e) => setNewDeposito({ ...newDeposito, tipo: e.target.value })}
+                  className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-brand-500 outline-none"
+                >
+                  <option value="DEPOSITO_PROPIO">Depósito Propio</option>
+                  <option value="CLIENTE">Depósito de Cliente</option>
+                  <option value="PROVEEDOR">Depósito de Proveedor</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Función</label>
+                <select
+                  value={newDeposito.funcion}
+                  onChange={(e) => setNewDeposito({ ...newDeposito, funcion: e.target.value })}
+                  className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-brand-500 outline-none"
+                >
+                  <option value="CARGA">Carga</option>
+                  <option value="DESCARGA">Descarga</option>
+                  <option value="AMBAS">Ambas</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Link de Google Maps</label>
+                <input
+                  type="text"
+                  value={newDeposito.google_maps_link}
+                  onChange={(e) => setNewDeposito({ ...newDeposito, google_maps_link: e.target.value })}
+                  placeholder="https://goo.gl/maps/..."
+                  className="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-sm text-gray-900 focus:ring-2 focus:ring-brand-500 outline-none"
+                />
+              </div>
+            </div>
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowNewDepositoModal(false)}
+                className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveNewDeposito}
+                className="px-4 py-2 bg-emerald-600 rounded-lg text-sm font-bold text-white hover:bg-emerald-700 shadow-sm transition-all"
+              >
+                Crear Depósito
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Personalizar Viaje */}
+      {showPersonalizarModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowPersonalizarModal(false)}></div>
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <span>Personalizar Secuencia de Misión</span>
+              </h3>
+              <button onClick={() => setShowPersonalizarModal(false)} className="p-2 hover:bg-white rounded-full transition-colors cursor-pointer">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+            
+            <div className="p-6 max-h-[450px] overflow-y-auto space-y-4">
+              <p className="text-xs text-gray-500 mb-4 font-medium leading-relaxed">
+                Tilda o destilda los hitos para activarlos o desactivarlos. Usa las flechas para reordenar, o la papelera para eliminarlos físicamente del Road Map de este remito.
+              </p>
+              
+              <div className="space-y-2.5">
+                {tempSequence.map((step, idx) => {
+                  const isBoundary = step.code === 'OPERACION_PENDIENTE' || step.code === 'MISION_COMPLETADA';
+                  
+                  return (
+                    <div 
+                      key={`${step.code}-${idx}`} 
+                      className={cn(
+                        "flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-xl transition-all shadow-xs",
+                        step.activo === false && "opacity-60 bg-gray-100"
+                      )}
+                    >
+                      <div className="flex items-center gap-3">
+                        {/* Checkbox Activo */}
+                        <input 
+                          type="checkbox" 
+                          checked={step.activo !== false}
+                          disabled={isBoundary}
+                          onChange={() => {
+                            const updated = [...tempSequence];
+                            updated[idx].activo = step.activo === false ? true : false;
+                            setTempSequence(updated);
+                          }}
+                          className="w-4.5 h-4.5 rounded border-gray-300 text-brand-600 focus:ring-brand-500 disabled:opacity-50"
+                          title={isBoundary ? "No se puede desactivar este estado" : "Activar/Desactivar"}
+                        />
+                        
+                        <div>
+                          <div className="font-bold text-gray-800 text-sm flex items-center gap-1.5">
+                            {step.label}
+                            {isBoundary && (
+                              <span className="text-[8px] bg-gray-200 text-gray-500 font-bold px-1.5 py-0.5 rounded">FIJO</span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-gray-400">{step.desc}</div>
+                        </div>
+                      </div>
+
+                      {/* Reordenación y eliminación */}
+                      {!isBoundary && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            disabled={idx <= 1}
+                            onClick={() => {
+                              const updated = [...tempSequence];
+                              const temp = updated[idx];
+                              updated[idx] = updated[idx - 1];
+                              updated[idx - 1] = temp;
+                              setTempSequence(updated);
+                            }}
+                            className="p-1 hover:bg-gray-200 rounded text-gray-500 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
+                            title="Subir orden"
+                          >
+                            <ArrowUp className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={idx >= tempSequence.length - 2}
+                            onClick={() => {
+                              const updated = [...tempSequence];
+                              const temp = updated[idx];
+                              updated[idx] = updated[idx + 1];
+                              updated[idx + 1] = temp;
+                              setTempSequence(updated);
+                            }}
+                            className="p-1 hover:bg-gray-200 rounded text-gray-500 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
+                            title="Bajar orden"
+                          >
+                            <ArrowDown className="w-4 h-4" />
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`¿Estás seguro de que quieres eliminar el hito "${step.label}" del viaje? Se borrarán sus tareas asociadas.`)) {
+                                const updated = tempSequence.filter((_, i) => i !== idx);
+                                setTempSequence(updated);
+                              }
+                            }}
+                            className="p-1 hover:bg-red-50 text-red-600 rounded cursor-pointer"
+                            title="Eliminar hito"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Agregar estado extra */}
+              <div className="border-t pt-4 mt-4 space-y-2">
+                <span className="font-bold text-gray-700 text-xs uppercase tracking-wider block">Agregar Hito Extra</span>
+                <div className="flex gap-2">
+                  <select
+                    value={selectedEstadoToAdd}
+                    onChange={(e) => setSelectedEstadoToAdd(e.target.value)}
+                    className="flex-1 p-2 bg-white border border-gray-200 rounded-lg text-xs outline-none focus:border-brand-500"
+                  >
+                    <option value="">Seleccionar estado para agregar...</option>
+                    {misionEstados
+                      .filter(me => !tempSequence.some(ts => ts.code === me.codigo))
+                      .map(me => (
+                        <option key={me.id} value={me.id}>{me.nombre} ({me.codigo})</option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!selectedEstadoToAdd}
+                    onClick={() => {
+                      const stateDef = misionEstados.find(e => e.id === Number(selectedEstadoToAdd));
+                      if (stateDef) {
+                        const updated = [...tempSequence];
+                        const lastItem = updated.pop();
+                        updated.push({
+                          code: stateDef.codigo,
+                          label: stateDef.nombre,
+                          desc: stateDef.descripcion || '',
+                          activo: true
+                        });
+                        if (lastItem) updated.push(lastItem);
+                        setTempSequence(updated);
+                        setSelectedEstadoToAdd('');
+                      }
+                    }}
+                    className="px-3.5 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold transition shadow-xs disabled:opacity-50 cursor-pointer shrink-0"
+                  >
+                    Agregar
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowPersonalizarModal(false)}
+                className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 transition-all cursor-pointer animate-none shadow-xs"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setIsSubmitting(true);
+                    
+                    // Identificamos códigos que fueron agregados para traer sus tareas por defecto del catálogo
+                    const originalCodes = remito.mision_estados_secuencia?.map((s: any) => s.code) || [];
+                    const addedCodes = tempSequence
+                      .map((s: any) => s.code)
+                      .filter((code: string) => !originalCodes.includes(code));
+                    
+                    let newTasksToAdd: any[] = [];
+                    if (addedCodes.length > 0) {
+                      const { data: fetchedTasks } = await supabase
+                        .from('catalogo_tareas_control')
+                        .select('id, tarea_template, tipo_tarea, requiere_foto, requiere_aviso, orden_sugerido, tipo_dato_esperado, mensaje_template, mision_estados_definicion!inner(codigo)')
+                        .eq('estado', 'ACTIVO')
+                        .in('mision_estados_definicion.codigo', addedCodes);
+                      
+                      if (fetchedTasks) {
+                        newTasksToAdd = fetchedTasks.map((c: any) => ({
+                          id: c.id,
+                          tarea: c.tarea_template,
+                          tarea_template: c.tarea_template,
+                          tipo_tarea: c.tipo_tarea,
+                          requiere_foto: c.requiere_foto,
+                          requiere_aviso: c.requiere_aviso,
+                          orden_sugerido: c.orden_sugerido,
+                          asignada_a_chofer: true,
+                          estado: 'PENDIENTE',
+                          minutos_gracia: c.tipo_tarea === 'PESAJE_TARA' || c.tipo_tarea === 'PESAJE_BRUTO' ? 60 : 30,
+                          reintentos_max: 2,
+                          estado_id: c.mision_estados_definicion.codigo,
+                          tipo_dato_esperado: c.tipo_dato_esperado || 'check',
+                          valor_reportado: null,
+                          calificacion: 0
+                        }));
+                      }
+                    }
+
+                    // Modificar el protocolo_control para marcar como asignada_a_chofer = false las tareas de estados desactivados
+                    const mergedProtocol = [...checklist, ...newTasksToAdd].map((task: any) => {
+                      const isStateActive = tempSequence.find(s => s.code === task.estado_id)?.activo !== false;
+                      return {
+                        ...task,
+                        asignada_a_chofer: isStateActive ? task.asignada_a_chofer : false
+                      };
+                    });
+
+                    // Si se borraron estados físicamente, quitamos sus tareas asociadas
+                    const currentTempCodes = tempSequence.map(s => s.code);
+                    const finalProtocol = mergedProtocol.filter(t => currentTempCodes.includes(t.estado_id));
+
+                    // Guardar en la base de datos
+                    const { error } = await supabase.rpc('save_remito_update_admin', {
+                      p_remito_id: Number(id),
+                      p_updates: {
+                        mision_estados_secuencia: tempSequence,
+                        protocolo_control: finalProtocol
+                      },
+                      p_admin_email: user?.email || 'admin'
+                    });
+
+                    if (error) throw error;
+                    
+                    setRemito(prev => ({
+                      ...prev,
+                      mision_estados_secuencia: tempSequence
+                    }));
+                    setChecklist(finalProtocol);
+                    setShowPersonalizarModal(false);
+                    alert("Hoja de ruta personalizada exitosamente.");
+                  } catch (err: any) {
+                    alert("Error al guardar la secuencia: " + err.message);
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 rounded-lg text-sm font-bold text-white shadow-sm transition-all cursor-pointer font-semibold"
+              >
+                Guardar Personalización
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       </div>

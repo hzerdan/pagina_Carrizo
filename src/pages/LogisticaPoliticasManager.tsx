@@ -29,6 +29,7 @@ export interface LogisticaPolitica {
   pedir_estimacion_demora_carga: boolean;
   enviar_recordatorios_carga: boolean;
   escalar_sin_respuesta: boolean;
+  minutos_gracia_documentacion: number;
   created_at: string;
   updated_at: string;
 }
@@ -42,6 +43,7 @@ const initialFormData = {
   intervalo_recordatorio_carga_corta_minutos: 60,
   intervalo_recordatorio_carga_larga_minutos: 90,
   max_recordatorios_sin_respuesta: 2,
+  minutos_gracia_documentacion: 30,
   pedir_confirmacion_fecha_carga: true,
   pedir_estimacion_demora_carga: true,
   enviar_recordatorios_carga: true,
@@ -103,6 +105,7 @@ export function LogisticaPoliticasManager() {
         intervalo_recordatorio_carga_corta_minutos: politica.intervalo_recordatorio_carga_corta_minutos,
         intervalo_recordatorio_carga_larga_minutos: politica.intervalo_recordatorio_carga_larga_minutos,
         max_recordatorios_sin_respuesta: politica.max_recordatorios_sin_respuesta,
+        minutos_gracia_documentacion: politica.minutos_gracia_documentacion || 30,
         pedir_confirmacion_fecha_carga: politica.pedir_confirmacion_fecha_carga,
         pedir_estimacion_demora_carga: politica.pedir_estimacion_demora_carga,
         enviar_recordatorios_carga: politica.enviar_recordatorios_carga,
@@ -152,8 +155,9 @@ export function LogisticaPoliticasManager() {
     if (formData.espera_respuesta_minutos <= 0 || 
         formData.umbral_carga_larga_minutos <= 0 || 
         formData.intervalo_recordatorio_carga_corta_minutos <= 0 || 
-        formData.intervalo_recordatorio_carga_larga_minutos <= 0) {
-      setErrorMsg('Los tiempos y umbrales deben ser mayores a 0.');
+        formData.intervalo_recordatorio_carga_larga_minutos <= 0 ||
+        formData.minutos_gracia_documentacion <= 0) {
+      setErrorMsg('Los tiempos, umbrales y minutos de gracia deben ser mayores a 0.');
       setIsSaving(false);
       return;
     }
@@ -173,6 +177,7 @@ export function LogisticaPoliticasManager() {
       intervalo_recordatorio_carga_corta_minutos: Math.floor(formData.intervalo_recordatorio_carga_corta_minutos),
       intervalo_recordatorio_carga_larga_minutos: Math.floor(formData.intervalo_recordatorio_carga_larga_minutos),
       max_recordatorios_sin_respuesta: Math.floor(formData.max_recordatorios_sin_respuesta),
+      minutos_gracia_documentacion: Math.floor(formData.minutos_gracia_documentacion),
     };
 
     try {
@@ -278,6 +283,7 @@ export function LogisticaPoliticasManager() {
                     <th className="px-6 py-4">Nombre</th>
                     <th className="px-6 py-4">Activa</th>
                     <th className="px-6 py-4">Espera Rpta.</th>
+                    <th className="px-6 py-4">Gracia Doc.</th>
                     <th className="px-6 py-4">Umbral Larga</th>
                     <th className="px-6 py-4">Int. Corta</th>
                     <th className="px-6 py-4">Int. Larga</th>
@@ -311,6 +317,7 @@ export function LogisticaPoliticasManager() {
                         </button>
                       </td>
                       <td className="px-6 py-4 text-gray-600 font-mono">{p.espera_respuesta_minutos}m</td>
+                      <td className="px-6 py-4 text-gray-600 font-mono">{p.minutos_gracia_documentacion || 30}m</td>
                       <td className="px-6 py-4 text-gray-600 font-mono">{p.umbral_carga_larga_minutos}m</td>
                       <td className="px-6 py-4 text-gray-600 font-mono">{p.intervalo_recordatorio_carga_corta_minutos}m</td>
                       <td className="px-6 py-4 text-gray-600 font-mono">{p.intervalo_recordatorio_carga_larga_minutos}m</td>
@@ -467,6 +474,18 @@ export function LogisticaPoliticasManager() {
                         required
                         value={formData.intervalo_recordatorio_carga_larga_minutos}
                         onChange={(e) => setFormData({...formData, intervalo_recordatorio_carga_larga_minutos: parseInt(e.target.value) || 0})}
+                        className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Gracia Documentación (minutos)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={formData.minutos_gracia_documentacion}
+                        onChange={(e) => setFormData({...formData, minutos_gracia_documentacion: parseInt(e.target.value) || 0})}
                         className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all text-sm"
                       />
                     </div>

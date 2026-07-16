@@ -16,6 +16,8 @@ export interface Deposito {
   latitude: number | null;
   longitude: number | null;
   estado: string;
+  funcion?: 'CARGA' | 'DESCARGA' | 'AMBAS' | null;
+  google_maps_link?: string | null;
 }
 
 interface FormData {
@@ -30,6 +32,8 @@ interface FormData {
   pais: string;
   latitude: string;
   longitude: string;
+  funcion: string;
+  google_maps_link: string;
 }
 
 const initialFormData: FormData = {
@@ -43,6 +47,8 @@ const initialFormData: FormData = {
   pais: '',
   latitude: '',
   longitude: '',
+  funcion: 'AMBAS',
+  google_maps_link: '',
 };
 
 export function DepositosManager() {
@@ -104,6 +110,8 @@ export function DepositosManager() {
         pais: deposito.pais || '',
         latitude: deposito.latitude?.toString() || '',
         longitude: deposito.longitude?.toString() || '',
+        funcion: deposito.funcion || 'AMBAS',
+        google_maps_link: deposito.google_maps_link || '',
       });
     } else {
       setFormData(initialFormData);
@@ -131,6 +139,8 @@ export function DepositosManager() {
         pais: formData.pais || null,
         latitude: formData.latitude ? parseFloat(formData.latitude) : null,
         longitude: formData.longitude ? parseFloat(formData.longitude) : null,
+        funcion: formData.funcion || 'AMBAS',
+        google_maps_link: formData.google_maps_link || null,
         estado: 'ACTIVO'
       };
 
@@ -240,8 +250,9 @@ export function DepositosManager() {
                 <tr className="bg-gray-50 border-b">
                   <th className="p-4 font-semibold text-gray-600">Nombre</th>
                   <th className="p-4 font-semibold text-gray-600">Tipo</th>
+                  <th className="p-4 font-semibold text-gray-600">Función</th>
                   <th className="p-4 font-semibold text-gray-600">Ubicación</th>
-                  <th className="p-4 font-semibold text-gray-600">Coordenadas</th>
+                  <th className="p-4 font-semibold text-gray-600">Maps</th>
                   <th className="p-4 font-semibold text-gray-600">Estado</th>
                   <th className="p-4 font-semibold text-gray-600 text-right">Acciones</th>
                 </tr>
@@ -255,11 +266,32 @@ export function DepositosManager() {
                             {d.tipo}
                         </span>
                     </td>
+                    <td className="p-4 text-gray-600">
+                        <span className={cn(
+                          "px-2 py-1 rounded text-xs font-medium uppercase",
+                          d.funcion === 'CARGA' ? "bg-blue-50 text-blue-700" :
+                          d.funcion === 'DESCARGA' ? "bg-amber-50 text-amber-700" :
+                          "bg-emerald-50 text-emerald-700"
+                        )}>
+                            {d.funcion || 'AMBAS'}
+                        </span>
+                    </td>
                     <td className="p-4 text-gray-600 text-sm">
                         {d.calle} {d.numero}, {d.localidad}, {d.provincia}
                     </td>
-                    <td className="p-4 text-gray-500 text-xs font-mono">
-                        {d.latitude && d.longitude ? `${d.latitude}, ${d.longitude}` : '-'}
+                    <td className="p-4 text-gray-600 text-sm">
+                        {d.google_maps_link ? (
+                          <a
+                            href={d.google_maps_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline inline-flex items-center gap-1 font-semibold text-xs"
+                          >
+                            <MapPin className="w-3.5 h-3.5" /> Ver Mapa
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 font-mono">-</span>
+                        )}
                     </td>
                     <td className="p-4">
                       <button
@@ -309,7 +341,7 @@ export function DepositosManager() {
                 ))}
                 {filteredDepositos.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-gray-500">
+                    <td colSpan={7} className="p-8 text-center text-gray-500">
                       No se encontraron depósitos activos.
                     </td>
                   </tr>
@@ -361,6 +393,32 @@ export function DepositosManager() {
                         <option value="CLIENTE">CLIENTE</option>
                         <option value="ADUANA">ADUANA</option>
                     </select>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Función *</label>
+                    <select
+                        required
+                        className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                        value={formData.funcion}
+                        onChange={(e) => setFormData({...formData, funcion: e.target.value})}
+                    >
+                        <option value="AMBAS">AMBAS (Carga y Descarga)</option>
+                        <option value="CARGA">CARGA</option>
+                        <option value="DESCARGA">DESCARGA</option>
+                    </select>
+                    </div>
+                    <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Link de Google Maps</label>
+                    <input
+                        type="text"
+                        placeholder="https://maps.app.goo.gl/..."
+                        className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={formData.google_maps_link}
+                        onChange={(e) => setFormData({...formData, google_maps_link: e.target.value})}
+                    />
                     </div>
                 </div>
 

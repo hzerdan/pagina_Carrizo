@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Send, MessageSquare, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,15 +17,11 @@ interface WhatsAppModalProps {
     destino_nombre?: string;
     cliente_nombre?: string;
     tareas: string;
+    sugeridoDraft?: string;
   };
 }
 
 // Helpers
-const removeLineBreaks = (str: string) => {
-  if (!str) return 'No informado';
-  return str.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
-};
-
 const safeSenderId = (id: unknown) => {
   if (typeof id === 'number') return id;
   if (typeof id === 'string') {
@@ -35,47 +31,19 @@ const safeSenderId = (id: unknown) => {
   return null;
 };
 
-const safeStr = (str: unknown) => {
-  return (str !== null && str !== undefined && String(str).trim()) || 'No informado';
-};
-
 export function WhatsAppModal({ isOpen, onClose, remitoData }: WhatsAppModalProps) {
   const { user, personalAcId } = useAuth();
   const [isSending, setIsSending] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [draftText, setDraftText] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setDraftText(remitoData.sugeridoDraft || remitoData.tareas || '');
+    }
+  }, [isOpen, remitoData.sugeridoDraft, remitoData.tareas]);
 
   if (!isOpen) return null;
-
-  // Preparar las variables para la plantilla de Twilio (2 variables ahora)
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('es-AR');
-  const timeStr = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
-
-  const serviceData = `Fecha: ${dateStr}
-Hora: ${timeStr}
-Balanza: ${remitoData.balanza_nombre}
-Inspector: ${remitoData.inspector_nombre}
-Remito: #${remitoData.ref}
-
-Indicaciones: 
-${remitoData.tareas}`;
-
-  const variables = {
-    '1': remitoData.chofer_nombre || 'Chofer',
-    '2': serviceData
-  };
-
-  // Preparar variables full
-  const variablesFull = {
-    '1': safeStr(remitoData.chofer_nombre),
-    '2': safeStr(remitoData.cliente_nombre),
-    '3': dateStr,
-    '4': timeStr,
-    '5': safeStr(remitoData.balanza_nombre),
-    '6': safeStr(remitoData.destino_nombre),
-    '7': `#${remitoData.ref}`,
-    '8': removeLineBreaks(remitoData.tareas)
-  };
 
   const handleSend = async () => {
     const cleanPhone = remitoData.chofer_telefono.replace(/\D/g, '');
@@ -101,17 +69,14 @@ ${remitoData.tareas}`;
 
       if (rpcError) throw new Error('Error al sincronizar conversación: ' + rpcError.message);
 
-      // 2. Disparar el webhook de n8n
+      // 2. Disparar el webhook de n8n como send_message con el texto editado libremente
       const payload = {
         conversation_id: conversationId,
         conversation_key: cleanPhone,
         sender_id: safeSenderId(personalAcId),
         sender_email: user?.email || 'admin@sistema.com',
-        action: 'send_instruction',
-        message: `Instrucciones para Remito #${remitoData.ref}`,
-        template_strategy: 'auto',
-        template_variables: variables,
-        template_variables_full: variablesFull,
+        action: 'send_message',
+        message: draftText.trim(),
         metadata: {
           remito_id: remitoData.id
         }
@@ -150,9 +115,9 @@ ${remitoData.tareas}`;
         <div className="bg-emerald-600 p-4 text-white flex justify-between items-center">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-5 h-5" />
-            <h2 className="font-bold">Enviar Instrucciones WhatsApp</h2>
+            <h2 className="font-bold">Enviar Mensaje WhatsApp</h2>
           </div>
-          <button onClick={onClose} className="hover:bg-white/20 p-1 rounded-full transition-colors">
+          <button onClick={onClose} className="hover:bg-white/20 p-1 rounded-full transition-colors cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -165,17 +130,17 @@ ${remitoData.tareas}`;
             <p className="text-emerald-600 font-mono text-sm">{remitoData.chofer_telefono}</p>
           </div>
 
-          {/* Previsualización de Datos (Plantilla) */}
+          {/* Editor del Mensaje */}
           <div className="space-y-3">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Previsualización del Mensaje</p>
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 text-sm space-y-4">
-              <p className="text-gray-600">
-                Hola <span className="font-bold text-gray-800">{variables['1']}</span>. Te enviamos la información requerida sobre el servicio solicitado.
-              </p>
-              <div className="bg-white p-3 rounded-lg border border-gray-100 font-mono text-xs text-gray-700 whitespace-pre-wrap shadow-inner">
-                {variables['2']}
-              </div>
-              <p className="text-gray-600">Gracias.</p>
+            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Contenido del Mensaje (Editable)</p>
+            <div className="bg-gray-50 rounded-xl p-2 border border-gray-200 text-sm">
+              <textarea
+                value={draftText}
+                onChange={(e) => setDraftText(e.target.value)}
+                rows={8}
+                className="w-full p-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 focus:ring-2 focus:ring-emerald-500 outline-none transition-all resize-y font-sans leading-relaxed shadow-inner"
+                placeholder="Escribe el mensaje a enviar..."
+              />
             </div>
           </div>
 
@@ -206,7 +171,7 @@ ${remitoData.tareas}`;
               ) : (
                 <>
                   <Send className="w-5 h-5" />
-                  {remitoData.chofer_telefono ? 'Enviar ahora' : 'Falta Teléfono'}
+                  {remitoData.chofer_telefono ? 'Enviar Mensaje Final' : 'Falta Teléfono'}
                 </>
               )}
             </button>

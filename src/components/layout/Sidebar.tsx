@@ -33,6 +33,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: 'Personal AC', path: '/personal', disabled: false },
         { name: 'Plantillas Documentales', path: '/plantillas', disabled: false },
         { name: 'Catálogo Tareas', path: '/catalogo-tareas', disabled: false },
+        { name: 'Estados de Misión', path: '/mision-estados', disabled: false },
+        { name: 'Tipos de Misión', path: '/mision-tipos', disabled: false },
         { name: 'Políticas Logística', path: '/logistica-politicas', disabled: false },
     ];
 

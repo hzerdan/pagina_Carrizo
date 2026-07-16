@@ -27,7 +27,9 @@ export function RecursosTecnicos() {
   const [resetting, setResetting] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [triggering, setTriggering] = useState(false);
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [simResult, setSimResult] = useState<any | null>(null);
+  const [customMessage, setCustomMessage] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const [metadataLabels, setMetadataLabels] = useState<Record<string, string>>({});
@@ -102,6 +104,7 @@ export function RecursosTecnicos() {
         setMessage({ type: 'error', text: `No se encontró ningún remito con ID #${remitoId}` });
       } else {
         setRemitoInfo(data);
+        setCustomMessage('');
       }
     } catch (err: any) {
       console.error(err);
@@ -115,7 +118,7 @@ export function RecursosTecnicos() {
     if (!remitoInfo) return;
 
     const confirmReset = window.confirm(
-      `¿Estás seguro de que quieres restablecer la misión del Remito #${remitoInfo.id} (${remitoInfo.remito_ref_externa})?\n\nESTO ELIMINARÁ TODO EL HISTORIAL DE CONVERSACIÓN ASOCIADO Y VOLVERÁ EL ESTADO A "ESPERANDO_DOCS".`
+      `¿Estás seguro de que quieres restablecer la misión del Remito #${remitoInfo.id} (${remitoInfo.remito_ref_externa})?\n\nESTO ELIMINARÁ TODO EL HISTORIAL DE CONVERSACIÓN ASOCIADO Y VOLVERÁ EL ESTADO A "OPERACION_PENDIENTE".`
     );
 
     if (!confirmReset) return;
@@ -139,7 +142,7 @@ export function RecursosTecnicos() {
       // Actualizar información mostrada
       setRemitoInfo({
         ...remitoInfo,
-        mision_estado: 'ESPERANDO_DOCS',
+        mision_estado: 'OPERACION_PENDIENTE',
         tiene_incidencias_carga: false,
       });
     } catch (err: any) {
@@ -163,6 +166,11 @@ export function RecursosTecnicos() {
 
       if (error) throw error;
       setSimResult(data);
+      if (data?.mensaje_a_enviar) {
+        setCustomMessage(data.mensaje_a_enviar);
+      } else {
+        setCustomMessage('');
+      }
     } catch (err: any) {
       console.error(err);
       setMessage({ type: 'error', text: 'Error al simular monitoreo: ' + err.message });
@@ -208,6 +216,45 @@ export function RecursosTecnicos() {
       setTriggering(false);
     }
   };
+ 
+  const handleForzarMensaje = async () => {
+    if (!remitoInfo || !customMessage.trim()) return;
+
+    const confirmSend = window.confirm(
+      `¿Estás seguro de que quieres enviar este mensaje al chofer Walter?\n\n"${customMessage}"`
+    );
+
+    if (!confirmSend) return;
+
+    setSendingMessage(true);
+    setMessage(null);
+
+    try {
+      const { data, error } = await supabase.rpc('forzar_mensaje_chofer', {
+        p_remito_id: remitoInfo.id,
+        p_mensaje: customMessage.trim()
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        setMessage({
+          type: 'success',
+          text: `Mensaje enviado al chofer con éxito.`
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: data?.error || 'No se pudo enviar el mensaje.'
+        });
+      }
+    } catch (err: any) {
+      console.error(err);
+      setMessage({ type: 'error', text: 'Error al forzar el mensaje: ' + err.message });
+    } finally {
+      setSendingMessage(false);
+    }
+  };
 
   const filteredEntries = remitoInfo && remitoInfo.metadata_extraida
     ? Object.entries(remitoInfo.metadata_extraida).filter(([key, val]) => {
@@ -245,7 +292,8 @@ export function RecursosTecnicos() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto py-6 px-4 font-sans space-y-6">
+    <div className="h-full w-full overflow-y-auto">
+      <div className="max-w-7xl mx-auto py-6 px-4 font-sans space-y-6">
       
       {/* Banner de alerta delgado en la parte superior */}
       <div className="bg-red-50 border border-red-200 text-red-800 rounded-xl px-4 py-2.5 flex items-center justify-between gap-3 text-xs shadow-xs">
@@ -600,7 +648,7 @@ export function RecursosTecnicos() {
           </div>
 
           {/* Columna Derecha: Acciones / Herramientas (4/12) */}
-          <div className="lg:col-span-4 lg:sticky lg:top-6 space-y-6">
+          <div className="lg:col-span-4 space-y-6">
             
             {/* Herramienta 1: Reset de Misión */}
             <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between space-y-4">
@@ -662,38 +710,50 @@ export function RecursosTecnicos() {
                       </p>
                     </div>
 
-                    {simResult.mensaje_a_enviar && (
-                      <div className="space-y-1 mt-2">
-                        <span className="text-gray-400 block font-bold text-[8px] uppercase">Mensaje de Recordatorio:</span>
-                        <div className="bg-brand-50 text-brand-900 p-2 rounded-lg border border-brand-100/70 text-[9px] font-medium flex gap-2">
-                          <MessageSquare className="w-3.5 h-3.5 text-brand-600 flex-shrink-0 mt-0.5" />
-                          <span>"{simResult.mensaje_a_enviar}"</span>
-                        </div>
-                      </div>
-                    )}
+                    <div className="space-y-1 mt-2">
+                      <span className="text-gray-400 block font-bold text-[8px] uppercase">Mensaje a Enviar al Chofer (Editable):</span>
+                      <textarea
+                        value={customMessage}
+                        onChange={(e) => setCustomMessage(e.target.value)}
+                        placeholder="Escribe un mensaje personalizado para enviar al chofer..."
+                        className="w-full p-2 bg-white text-gray-800 rounded-lg border border-gray-200 text-[10px] font-medium outline-none focus:ring-1 focus:ring-brand-500 min-h-[60px]"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
 
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleSimulateCron}
-                  disabled={simulating}
-                  className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 border border-gray-200"
-                >
-                  <Play className={`w-3.5 h-3.5 ${simulating ? 'animate-pulse' : ''}`} />
-                  {simulating ? 'Simulando...' : 'Evaluar Reglas'}
-                </button>
+              <div className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSimulateCron}
+                    disabled={simulating}
+                    className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 border border-gray-200"
+                  >
+                    <Play className={`w-3.5 h-3.5 ${simulating ? 'animate-pulse' : ''}`} />
+                    {simulating ? 'Simulando...' : 'Evaluar Reglas'}
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={handleTriggerAlert}
+                    disabled={triggering || !remitoInfo}
+                    className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                  >
+                    <Send className={`w-3.5 h-3.5 ${triggering ? 'animate-bounce' : ''}`} />
+                    {triggering ? 'Disparando...' : 'Disparar Alerta'}
+                  </button>
+                </div>
                 
                 <button
                   type="button"
-                  onClick={handleTriggerAlert}
-                  disabled={triggering || !remitoInfo}
-                  className="flex-1 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                  onClick={handleForzarMensaje}
+                  disabled={sendingMessage || !remitoInfo || !customMessage.trim()}
+                  className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
                 >
-                  <Send className={`w-3.5 h-3.5 ${triggering ? 'animate-bounce' : ''}`} />
-                  {triggering ? 'Disparando...' : 'Disparar Alerta'}
+                  <MessageSquare className={`w-3.5 h-3.5 ${sendingMessage ? 'animate-pulse' : ''}`} />
+                  {sendingMessage ? 'Enviando...' : 'Forzar Mensaje al Chofer'}
                 </button>
               </div>
             </section>
@@ -701,6 +761,7 @@ export function RecursosTecnicos() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

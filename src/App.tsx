@@ -20,6 +20,8 @@ import { LogisticaPoliticasManager } from './pages/LogisticaPoliticasManager';
 import { InspeccionesKanbanPage } from './pages/Inspecciones/InspeccionesKanbanPage';
 import { PublicInspectPage } from './pages/PublicInspect/PublicInspectPage';
 import { RecursosTecnicos } from './pages/RecursosTecnicos';
+import { MisionEstadosManager } from './pages/MisionEstadosManager';
+import { MisionTiposManager } from './pages/MisionTiposManager';
 
 function App() {
   return (
@@ -43,6 +45,8 @@ function App() {
             <Route path="/depositos" element={<DepositosManager />} />
             <Route path="/plantillas" element={<PlantillasManager />} />
             <Route path="/catalogo-tareas" element={<CatalogoTareasManager />} />
+            <Route path="/mision-estados" element={<MisionEstadosManager />} />
+            <Route path="/mision-tipos" element={<MisionTiposManager />} />
             <Route path="/logistica-politicas" element={<LogisticaPoliticasManager />} />
             <Route path="/inspecciones" element={<InspeccionesKanbanPage />} />
             <Route path="/recursos-tecnicos" element={<RecursosTecnicos />} />
