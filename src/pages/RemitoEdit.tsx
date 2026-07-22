@@ -1446,7 +1446,8 @@ export function RemitoEdit() {
                 const isNA = step.isNA;
                 const stateTasks = checklist.filter((t: any) => t.estado_id === step.code && t.asignada_a_chofer !== false);
                 const hasTasks = stateTasks.length > 0;
-                const allTasksDone = hasTasks && stateTasks.every((t: any) => t.done || t.estado === 'COMPLETADO');
+                const hasNonRealizableOrAlert = stateTasks.some((t: any) => t.estado === 'NO_REALIZABLE' || t.estado === 'RECHAZADO');
+                const allTasksDone = hasTasks && stateTasks.every((t: any) => t.done || ['COMPLETADO', 'REPORTADO_CHOFER', 'NO_REALIZABLE', 'OMITIDO', 'NO_APLICA', 'RECHAZADO'].includes(t.estado));
                 const isPast = activePath.indexOf(step.code) < activePath.indexOf(remito.mision_estado || 'OPERACION_PENDIENTE');
 
                 const status = isNA 
@@ -1463,7 +1464,7 @@ export function RemitoEdit() {
 
                 const prevTasks = prevStep ? checklist.filter((t: any) => t.estado_id === prevStep.code && t.asignada_a_chofer !== false) : [];
                 const prevHasTasks = prevTasks.length > 0;
-                const prevAllTasksDone = prevHasTasks && prevTasks.every((t: any) => t.done || t.estado === 'COMPLETADO');
+                const prevAllTasksDone = prevHasTasks && prevTasks.every((t: any) => t.done || ['COMPLETADO', 'REPORTADO_CHOFER', 'NO_REALIZABLE', 'OMITIDO', 'NO_APLICA', 'RECHAZADO'].includes(t.estado));
                 const prevIsPast = prevStep ? activePath.indexOf(prevStep.code) < activePath.indexOf(remito.mision_estado || 'OPERACION_PENDIENTE') : false;
 
                 const prevStatus = prevStep
@@ -1501,13 +1502,17 @@ export function RemitoEdit() {
                       {/* Indicador de Estado */}
                       <div className={cn(
                         "w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-sm transition-all duration-300 z-10",
-                        status === 'COMPLETED' && "bg-emerald-500 text-white ring-4 ring-emerald-100",
+                        status === 'COMPLETED' && (hasNonRealizableOrAlert ? "bg-amber-100 text-amber-800 border-2 border-amber-400 ring-4 ring-amber-50" : "bg-emerald-500 text-white ring-4 ring-emerald-100"),
                         status === 'ACTIVE' && "bg-brand-600 text-white ring-4 ring-brand-100",
                         status === 'PENDING' && "bg-white text-gray-400 border-2 border-gray-200",
                         status === 'NA' && "bg-gray-50 text-gray-300 border border-gray-200 border-dashed"
                       )}>
                         {status === 'COMPLETED' ? (
-                          <CheckCircle className="w-5 h-5 text-white" />
+                          hasNonRealizableOrAlert ? (
+                            <AlertTriangle className="w-4 h-4 text-amber-700" title="Etapa superada con observaciones / tareas no realizables" />
+                          ) : (
+                            <CheckCircle className="w-5 h-5 text-white" />
+                          )
                         ) : status === 'NA' ? (
                           <span className="text-[9px]">N/A</span>
                         ) : (

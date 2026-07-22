@@ -26,8 +26,8 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
   const [isSupervisor, setIsSupervisor] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionError, setTransitionError] = useState<string | null>(null);
+  const [savingTaskCode, setSavingTaskCode] = useState<string | null>(null);
 
   // Determinar si estamos en un estado transicionable
   const stateCode = instance?.estado_actual.split(':')[0].trim() || '';
@@ -35,7 +35,10 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
   const isState4 = stateCode === '4';
   const isState5 = stateCode === '5';
   const isState51 = stateCode === '5.1';
-  const isTransitionableState = isState32 || isState4 || isState5 || isState51;
+  const isState55 = stateCode === '5.5';
+  const isState57 = stateCode === '5.7';
+  const isState6 = stateCode === '6';
+  const isTransitionableState = isState32 || isState4 || isState5 || isState51 || isState55 || isState57 || isState6;
   const nextStateCode = (() => {
     if (isState32) return '4';
     if (isState4) return '5';
@@ -46,85 +49,110 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
       }
       return '5.5';
     }
+    if (isState55) return '6';
+    if (isState57 || isState6) return '7';
     return '';
   })();
+
+  // Función para cargar el checklist dinámico
+  const loadChecklist = async () => {
+    if (!instance) return;
+    try {
+      setIsLoadingChecklist(true);
+      if (stateCode === '5.1') {
+        const { data: remitoItems, error: remitoErr } = await supabase
+          .from('remito_items')
+          .select('remito_id, remitos(id, remito_ref_externa, protocolo_control, chofer_id)')
+          .or(`destino_instance_id.eq.${instance.instancia_id},origen_instance_id.eq.${instance.instancia_id}`)
+          .eq('origen_type', 'PEDIDO');
+
+        if (remitoErr) throw remitoErr;
+
+        const allTasks: ChecklistItem[] = [];
+        if (!remitoItems || remitoItems.length === 0) {
+          allTasks.push({
+            codigo: 'VAL_P_511',
+            nombre: 'Asociar remito al pedido',
+            es_bloqueante: true,
+            cumplido: false,
+            mensaje: 'No hay remito asociado a esta instancia.'
+          });
+        } else {
+          remitoItems.forEach((ri: any) => {
+            if (ri.remitos) {
+              if (!ri.remitos.chofer_id) {
+                allTasks.push({
+                  codigo: 'VAL_P_511',
+                  nombre: `Asignar chofer al remito (${ri.remitos.remito_ref_externa || ri.remito_id})`,
+                  es_bloqueante: true,
+                  cumplido: false,
+                  mensaje: 'Falta chofer asignado.'
+                });
+              }
+              const protocol = ri.remitos.protocolo_control || [];
+              const driverTasks = protocol.filter((t: any) => t.asignada_a_chofer);
+              driverTasks.forEach((t: any) => {
+                let msg = '';
+                if (t.estado === 'REPORTADO_CHOFER') msg = 'Reportado por chofer - Pendiente de aprobación';
+                else if (t.estado === 'PENDIENTE') msg = 'Pendiente';
+                else if (t.estado === 'NO_REALIZABLE') msg = 'No realizable';
+                else if (t.estado === 'RECHAZADO') msg = 'Rechazado';
+                
+                allTasks.push({
+                  codigo: t.tarea_template || t.tarea || `TASK_${t.id}`,
+                  nombre: t.tarea,
+                  es_bloqueante: true,
+                  cumplido: t.estado === 'COMPLETADO',
+                  mensaje: msg
+                });
+              });
+            }
+          });
+        }
+        setChecklist(allTasks);
+      } else {
+        const { data, error } = await supabase.rpc('get_checklist_instancia', {
+          p_instancia_id: instance.instancia_id
+        });
+
+        if (error) throw error;
+        setChecklist((data as ChecklistItem[]) || []);
+      }
+    } catch (err) {
+      console.error('Error fetching checklist:', err);
+    } finally {
+      setIsLoadingChecklist(false);
+    }
+  };
+
+  // Función para manejar el cambio de checkboxes de operador (Estado 7 / Manuales)
+  const handleToggleCheckbox = async (item: ChecklistItem) => {
+    if (!instance) return;
+    try {
+      setSavingTaskCode(item.codigo);
+      const isChecked = !item.cumplido;
+      const rpcParams: Record<string, any> = { p_instancia_id: instance.instancia_id };
+
+      if (item.codigo === 'VAL_P_701') rpcParams.p_revision_controles_carga_final = isChecked;
+      if (item.codigo === 'VAL_P_702') rpcParams.p_debito_interno_subconsignacion = isChecked;
+      if (item.codigo === 'VAL_P_703') rpcParams.p_reclamo_transporte_incompleto = isChecked;
+
+      const { error } = await supabase.rpc('guardar_checkboxes_estado_7', rpcParams);
+      if (error) throw error;
+
+      await loadChecklist();
+      onTransitionSuccess?.();
+    } catch (err: any) {
+      console.error('Error saving checkbox:', err);
+      alert('Error al guardar control del operador: ' + (err.message || err));
+    } finally {
+      setSavingTaskCode(null);
+    }
+  };
 
   // Efecto para cargar el checklist dinámico y los permisos de supervisor
   useEffect(() => {
     if (!instance || !isOpen) return;
-
-    const loadChecklist = async () => {
-      try {
-        setIsLoadingChecklist(true);
-        if (stateCode === '5.1') {
-          // Lógica para cargar las tareas dinámicas del chofer asociadas al remito
-          const { data: remitoItems, error: remitoErr } = await supabase
-            .from('remito_items')
-            .select('remito_id, remitos(id, remito_ref_externa, protocolo_control, chofer_id)')
-            .or(`destino_instance_id.eq.${instance.instancia_id},origen_instance_id.eq.${instance.instancia_id}`)
-            .eq('origen_type', 'PEDIDO');
-
-          if (remitoErr) throw remitoErr;
-
-          const allTasks: ChecklistItem[] = [];
-          if (!remitoItems || remitoItems.length === 0) {
-            allTasks.push({
-              codigo: 'VAL_P_511',
-              nombre: 'Asociar remito al pedido',
-              es_bloqueante: true,
-              cumplido: false,
-              mensaje: 'No hay remito asociado a esta instancia.'
-            });
-          } else {
-            remitoItems.forEach((ri: any) => {
-              if (ri.remitos) {
-                // Verificar si tiene chofer asignado
-                if (!ri.remitos.chofer_id) {
-                  allTasks.push({
-                    codigo: 'VAL_P_511',
-                    nombre: `Asignar chofer al remito (${ri.remitos.remito_ref_externa || ri.remito_id})`,
-                    es_bloqueante: true,
-                    cumplido: false,
-                    mensaje: 'Falta chofer asignado.'
-                  });
-                }
-                // Obtener tareas del protocolo
-                const protocol = ri.remitos.protocolo_control || [];
-                const driverTasks = protocol.filter((t: any) => t.asignada_a_chofer);
-                driverTasks.forEach((t: any) => {
-                  let msg = '';
-                  if (t.estado === 'REPORTADO_CHOFER') msg = 'Reportado por chofer - Pendiente de aprobación';
-                  else if (t.estado === 'PENDIENTE') msg = 'Pendiente';
-                  else if (t.estado === 'NO_REALIZABLE') msg = 'No realizable';
-                  else if (t.estado === 'RECHAZADO') msg = 'Rechazado';
-                  
-                  allTasks.push({
-                    codigo: t.tarea_template || t.tarea || `TASK_${t.id}`,
-                    nombre: t.tarea,
-                    es_bloqueante: true,
-                    cumplido: t.estado === 'COMPLETADO',
-                    mensaje: msg
-                  });
-                });
-              }
-            });
-          }
-          setChecklist(allTasks);
-        } else {
-          // Lógica original para otros estados
-          const { data, error } = await supabase.rpc('get_checklist_instancia', {
-            p_instancia_id: instance.instancia_id
-          });
-
-          if (error) throw error;
-          setChecklist((data as ChecklistItem[]) || []);
-        }
-      } catch (err) {
-        console.error('Error fetching checklist:', err);
-      } finally {
-        setIsLoadingChecklist(false);
-      }
-    };
 
     const checkSupervisorRole = async () => {
       if (!personalAcId) return;
@@ -172,6 +200,13 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
     try {
       setIsTransitioning(true);
       setTransitionError(null);
+
+      if (stateCode !== '5.1') {
+        await supabase.rpc('ejecutar_validaciones_iniciales', {
+          p_instancia_id: instance.instancia_id,
+          p_json_data: {}
+        });
+      }
 
       const rpcName = stateCode === '5.1'
         ? 'intentar_transicion_carga_mercaderia'
@@ -328,57 +363,129 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
             </div>
           </div>
 
-          {/* Pending Tasks (Checklist Inteligente) */}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider flex items-center gap-2">
-              Tareas Pendientes
-              {checklist.length > 0 && checklist.every(item => item.cumplido) && (
-                <span className="bg-green-100 text-green-700 text-[10px] px-2 py-0.5 rounded-full font-bold ml-1">COMPLETO</span>
-              )}
-            </h3>
-            
+          {/* Checklist Inteligente de Controles: Realizados vs Pendientes */}
+          <div className="space-y-6">
             {isLoadingChecklist ? (
               <div className="flex items-center justify-center p-6 text-gray-500 gap-2">
                 <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
-                <span className="text-sm">Evaluando requisitos...</span>
+                <span className="text-sm">Evaluando requisitos del estado...</span>
               </div>
             ) : checklist.length === 0 ? (
-              <div className="bg-green-50 text-green-800 p-4 rounded-xl border border-green-100 flex items-start gap-3">
-                <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+              <div className="bg-emerald-50 text-emerald-800 p-4 rounded-xl border border-emerald-100 flex items-start gap-3">
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                 <p className="text-sm font-medium">Sin tareas bloqueantes para este estado.</p>
               </div>
             ) : (
-              <ul className="space-y-3">
-                {checklist.map((item, idx) => {
-                  const Icon = item.cumplido ? CheckCircle2 : Circle;
-                  return (
-                    <li key={idx} className="flex items-start gap-3 group" title={item.mensaje}>
-                      <Icon className={cn(
-                        "w-5 h-5 mt-0.5 flex-shrink-0 transition-colors",
-                        item.cumplido ? "text-green-600" : 
-                        item.es_bloqueante ? "text-blue-500 group-hover:text-blue-600" : "text-gray-300 group-hover:text-gray-400"
-                      )} />
-                      <div className="flex-1 min-w-0">
-                        <p className={cn(
-                          "text-sm font-medium leading-tight flex items-center gap-2 flex-wrap",
-                          item.cumplido ? "text-gray-400 line-through" : "text-gray-700"
-                        )}>
-                          <span>{item.nombre}</span>
-                          <span className={cn(
-                            "text-[10px] font-bold px-1.5 py-0.5 rounded",
-                            item.es_bloqueante ? "text-blue-700 bg-blue-50" : "text-gray-500 bg-gray-100"
-                          )}>
-                            {item.es_bloqueante ? "Obligatorio" : "Opcional"}
-                          </span>
-                        </p>
-                        {item.mensaje && (
-                          <p className="text-xs text-gray-400 mt-1 italic">{item.mensaje}</p>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
+              <>
+                {/* Tareas Realizadas */}
+                {checklist.filter(item => item.cumplido).length > 0 && (
+                  <div>
+                    <h3 className="text-xs font-bold text-emerald-700 mb-3 uppercase tracking-wider flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      Tareas Realizadas / Cumplidas
+                      <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold ml-auto">
+                        {checklist.filter(item => item.cumplido).length}
+                      </span>
+                    </h3>
+                    <ul className="space-y-2.5">
+                      {checklist.filter(item => item.cumplido).map((item, idx) => {
+                        const isCheckable = ['VAL_P_701', 'VAL_P_702', 'VAL_P_703'].includes(item.codigo);
+                        return (
+                          <li key={`realizada-${idx}`} className="flex items-start gap-3 p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-100/60 transition-colors" title={item.mensaje}>
+                            {isCheckable ? (
+                              <input
+                                type="checkbox"
+                                checked={true}
+                                disabled={savingTaskCode === item.codigo}
+                                onChange={() => handleToggleCheckbox(item)}
+                                className="w-4 h-4 mt-0.5 text-emerald-600 rounded border-emerald-300 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
+                              />
+                            ) : (
+                              <CheckCircle2 className="w-4 h-4 mt-0.5 text-emerald-600 flex-shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-emerald-950 flex items-center gap-2 flex-wrap">
+                                <span>{item.nombre}</span>
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                  Realizado
+                                </span>
+                                {savingTaskCode === item.codigo && (
+                                  <Loader2 className="w-3 h-3 animate-spin text-emerald-600 ml-auto" />
+                                )}
+                              </p>
+                              {item.mensaje && (
+                                <p className="text-[11px] text-emerald-700/90 mt-0.5">{item.mensaje}</p>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Tareas Pendientes */}
+                {checklist.filter(item => !item.cumplido).length > 0 ? (
+                  <div>
+                    <h3 className="text-xs font-bold text-gray-700 mb-3 uppercase tracking-wider flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-500" />
+                      Tareas Pendientes
+                      <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold ml-auto">
+                        {checklist.filter(item => !item.cumplido).length}
+                      </span>
+                    </h3>
+                    <ul className="space-y-2.5">
+                      {checklist.filter(item => !item.cumplido).map((item, idx) => {
+                        const isCheckable = ['VAL_P_701', 'VAL_P_702', 'VAL_P_703'].includes(item.codigo);
+                        const Icon = item.es_bloqueante ? AlertCircle : Circle;
+
+                        return (
+                          <li key={`pendiente-${idx}`} className="flex items-start gap-3 p-2.5 rounded-lg bg-gray-50 border border-gray-200/80 transition-colors" title={item.mensaje}>
+                            {isCheckable ? (
+                              <input
+                                type="checkbox"
+                                checked={false}
+                                disabled={savingTaskCode === item.codigo}
+                                onChange={() => handleToggleCheckbox(item)}
+                                className="w-4 h-4 mt-0.5 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer flex-shrink-0"
+                              />
+                            ) : (
+                              <Icon className={cn(
+                                "w-4 h-4 mt-0.5 flex-shrink-0",
+                                item.es_bloqueante ? "text-blue-500" : "text-gray-400"
+                              )} />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-gray-800 flex items-center gap-2 flex-wrap">
+                                <span>{item.nombre}</span>
+                                <span className={cn(
+                                  "text-[9px] font-bold px-1.5 py-0.5 rounded",
+                                  item.es_bloqueante ? "text-blue-700 bg-blue-100/70 border border-blue-200" : "text-gray-600 bg-gray-200/60 border border-gray-300"
+                                )}>
+                                  {item.es_bloqueante ? "Obligatorio" : "Opcional"}
+                                </span>
+                                {savingTaskCode === item.codigo && (
+                                  <Loader2 className="w-3 h-3 animate-spin text-brand-500 ml-auto" />
+                                )}
+                              </p>
+                              {item.mensaje && (
+                                <p className="text-[11px] text-gray-500 mt-0.5 italic">{item.mensaje}</p>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ) : (
+                  checklist.length > 0 && (
+                    <div className="bg-emerald-50 text-emerald-800 p-3 rounded-xl border border-emerald-200 flex items-center gap-2 text-xs font-bold">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span>¡Todos los controles requeridos de este estado fueron cumplidos!</span>
+                    </div>
+                  )
+                )}
+              </>
             )}
           </div>
 
