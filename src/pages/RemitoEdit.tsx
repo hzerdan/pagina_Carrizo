@@ -1509,7 +1509,9 @@ export function RemitoEdit() {
                       )}>
                         {status === 'COMPLETED' ? (
                           hasNonRealizableOrAlert ? (
-                            <AlertTriangle className="w-4 h-4 text-amber-700" title="Etapa superada con observaciones / tareas no realizables" />
+                            <span title="Etapa superada con observaciones / tareas no realizables">
+                              <AlertTriangle className="w-4 h-4 text-amber-700" />
+                            </span>
                           ) : (
                             <CheckCircle className="w-5 h-5 text-white" />
                           )

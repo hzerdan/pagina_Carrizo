@@ -26,6 +26,7 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
   const [isSupervisor, setIsSupervisor] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionError, setTransitionError] = useState<string | null>(null);
   const [savingTaskCode, setSavingTaskCode] = useState<string | null>(null);
 
