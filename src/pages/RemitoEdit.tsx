@@ -29,7 +29,9 @@ import {
   ArrowDown,
   Trash2,
   Search,
-  Check
+  Check,
+  CheckCircle2,
+  Lock
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { WhatsAppModal } from '../components/WhatsAppModal';
@@ -915,6 +917,10 @@ export function RemitoEdit() {
   };
 
   const handleSubmit = async () => {
+    if (remito.estado === 'FINALIZADO' || remito.mision_estado === 'MISION_COMPLETADA') {
+      alert("Este remito se encuentra finalizado y no puede ser modificado.");
+      return;
+    }
     setIsSubmitting(true);
     try {
       // Resolver chofer nuevo o existente
@@ -1249,6 +1255,8 @@ export function RemitoEdit() {
     );
   }
 
+  const isReadOnly = remito.estado === 'FINALIZADO' || remito.mision_estado === 'MISION_COMPLETADA';
+
   return (
     <div className="h-full overflow-y-auto w-full relative" onClick={() => {
       setShowCamionList(false);
@@ -1273,7 +1281,14 @@ export function RemitoEdit() {
             <p className="text-sm text-gray-500 mt-1 ml-9">Pedido: {remito.pedido}</p>
           </div>
           <div className="flex flex-col items-end gap-1.5">
-            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${remito.estado === 'Datos Faltantes' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+              isReadOnly
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1'
+                : remito.estado === 'Datos Faltantes' 
+                  ? 'bg-amber-100 text-amber-700' 
+                  : 'bg-emerald-100 text-emerald-700'
+            }`}>
+              {isReadOnly && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
               {remito.estado}
             </span>
             {remito.cantidad_total !== null && remito.cantidad_total !== undefined && (
@@ -1284,7 +1299,18 @@ export function RemitoEdit() {
             )}
           </div>
         </div>
-        {remito.estado === 'Datos Faltantes' && (
+
+        {isReadOnly ? (
+          <div className="mt-4 text-xs bg-emerald-50 text-emerald-900 border border-emerald-200 p-3 rounded-lg flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2 font-medium">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Remito Finalizado - Operación completada y archivada. Este formulario está en modo solo lectura.</span>
+            </div>
+            <span className="px-2 py-0.5 bg-emerald-200 text-emerald-900 font-bold rounded text-[10px] uppercase tracking-wider shrink-0">
+              Solo Lectura
+            </span>
+          </div>
+        ) : remito.estado === 'Datos Faltantes' && (
           <div className="mt-4 text-xs bg-amber-50 text-amber-700 border border-amber-200 p-2 rounded flex items-center gap-2">
             <AlertTriangle className="w-4 h-4" />
             Completar datos para autorizar salida.
@@ -2739,10 +2765,20 @@ export function RemitoEdit() {
             </button>
             <button 
               onClick={handleSubmit} 
-              disabled={isSubmitting}
-              className="px-8 py-3 bg-gray-900 text-white font-bold rounded-xl shadow-xl hover:bg-black active:scale-[0.98] transition-all flex items-center justify-center gap-2 min-w-[200px]"
+              disabled={isSubmitting || isReadOnly}
+              className={cn(
+                "px-8 py-3 font-bold rounded-xl shadow-xl transition-all flex items-center justify-center gap-2 min-w-[200px]",
+                isReadOnly 
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed shadow-none border border-gray-300" 
+                  : "bg-gray-900 text-white hover:bg-black active:scale-[0.98]"
+              )}
             >
-              {isSubmitting ? (
+              {isReadOnly ? (
+                <span className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-gray-500" />
+                  Remito Finalizado
+                </span>
+              ) : isSubmitting ? (
                 <span className="flex items-center gap-2">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                   Guardando...

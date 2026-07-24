@@ -7,6 +7,7 @@ export interface PedidoVinculado {
   oc_ref?: string;
   cliente?: string;
   proveedor?: string;
+  estado_pedido_code?: string;
 }
 
 export interface RemitoActivo {
@@ -15,6 +16,9 @@ export interface RemitoActivo {
   archivo_url: string | null;
   chofer_nombre: string | null;
   chofer_telefono: string | null;
+  estado_asignacion?: string;
+  mision_estado?: string;
+  created_at?: string;
   instancias_vinculadas: PedidoVinculado[];
 }
 
