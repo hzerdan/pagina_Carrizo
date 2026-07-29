@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
-import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert } from 'lucide-react';
+import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert, Edit } from 'lucide-react';
 import type { InstanceData } from '../types';
 import { cn } from '../../../lib/utils';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
+import { EditorItemsPedidoModal } from './EditorItemsPedidoModal';
 
 interface InstanceDetailsDrawerProps {
   instance: InstanceData | null;
@@ -29,6 +30,46 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [transitionError, setTransitionError] = useState<string | null>(null);
   const [savingTaskCode, setSavingTaskCode] = useState<string | null>(null);
+
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [pedidoDbData, setPedidoDbData] = useState<any>(null);
+  const [isLoadingDbData, setIsLoadingDbData] = useState(false);
+
+  const handleOpenEditor = async () => {
+    if (!instance) return;
+    setIsLoadingDbData(true);
+    try {
+      const { data: instData, error: instErr } = await supabase
+        .from('pedido_instancias')
+        .select('id, current_data, saldo_pendiente, cantidad_requerida_original')
+        .eq('id', instance.instancia_id)
+        .maybeSingle();
+
+      if (instErr) throw instErr;
+      if (!instData) return;
+
+      const { data: vincData } = await supabase
+        .from('vinculaciones_pedido_oc')
+        .select('id, cantidad_vinculada, estado_vinculacion, oc_instance_id, oc_instancias(identificador_compuesto, ordenes_compra(proveedores(razon_social)))')
+        .eq('pedido_instance_id', instance.instancia_id);
+
+      const formattedVinculos = (vincData || []).map((v: any) => ({
+        ...v,
+        oc_ref: v.oc_instancias?.identificador_compuesto,
+        proveedor: v.oc_instancias?.ordenes_compra?.proveedores?.razon_social,
+      }));
+
+      setPedidoDbData({
+        ...instData,
+        vinculaciones_pedido_oc: formattedVinculos,
+      });
+      setIsEditorOpen(true);
+    } catch (err) {
+      console.error('Error al cargar datos del pedido para edición:', err);
+    } finally {
+      setIsLoadingDbData(false);
+    }
+  };
 
   // Determinar si estamos en un estado transicionable
   const stateCode = instance?.estado_actual.split(':')[0].trim() || '';
@@ -341,7 +382,24 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
 
           {/* Metrics List */}
           <div>
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">Métricas de Carga</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Métricas de Carga</h3>
+              <button
+                onClick={handleOpenEditor}
+                disabled={isLoadingDbData}
+                className="flex items-center gap-1.5 text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200/80 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+                title="Editar calidades y saldos del pedido"
+              >
+                {isLoadingDbData ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <>
+                    <Edit className="w-3.5 h-3.5 text-brand-600" />
+                    <span>Editar Calidades</span>
+                  </>
+                )}
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                 <div className="flex items-center gap-2 text-gray-500 mb-1">
@@ -615,6 +673,17 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
           </div>
         )}
       </div>
+
+      {/* Modal Editor de Items y Calidades del Pedido */}
+      <EditorItemsPedidoModal
+        isOpen={isEditorOpen}
+        onClose={() => setIsEditorOpen(false)}
+        onSuccess={() => {
+          onTransitionSuccess?.();
+        }}
+        instance={instance}
+        dbData={pedidoDbData}
+      />
     </>
   );
 }
