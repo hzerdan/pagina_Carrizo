@@ -19,16 +19,64 @@ import {
 } from 'lucide-react';
 
 
+export interface MetadataItem {
+  key: string;
+  label: string;
+}
+
+export interface ProductoMetadata {
+  descripcion_articulo?: string;
+  codigo_articulo?: string;
+  cantidad_de_bolsas?: number | string;
+  peso_total?: number | string;
+}
+
+export interface ProtocoloTask {
+  id: number;
+  tarea: string;
+  tarea_template?: string;
+  asignada_a_chofer?: boolean;
+  realizada_por_chofer?: boolean;
+  chofer_realizo?: boolean;
+  chofer_reporto_at?: string;
+  valor_reportado_chofer?: string | number | null;
+  estado?: string;
+  fecha_hora_reporte?: string;
+  valor_ingresado?: string | number | null;
+  foto_url?: string | null;
+}
+
+export interface RemitoInfoData {
+  id: number;
+  remito_ref_externa: string | null;
+  mision_estado: string | null;
+  tiene_incidencias_carga: boolean | null;
+  chofer_id: number | null;
+  metadata_extraida: Record<string, unknown> | null;
+  protocolo_control: ProtocoloTask[] | null;
+  choferes: { nombre_completo: string | null } | { nombre_completo: string | null }[] | null;
+}
+
+export interface SimResultData {
+  mensaje_a_enviar?: string;
+  debe_alertar?: boolean;
+  diferencia_minutos?: number | string;
+  intervalo_limite_minutos?: number | string;
+  alerta_enviada_reciente?: boolean;
+  motivo?: string;
+  [key: string]: unknown;
+}
+
 export function RecursosTecnicos() {
   const { user } = useAuth();
   const [remitoId, setRemitoId] = useState('');
-  const [remitoInfo, setRemitoInfo] = useState<any | null>(null);
+  const [remitoInfo, setRemitoInfo] = useState<RemitoInfoData | null>(null);
   const [loading, setLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [simulating, setSimulating] = useState(false);
   const [triggering, setTriggering] = useState(false);
   const [sendingMessage, setSendingMessage] = useState(false);
-  const [simResult, setSimResult] = useState<any | null>(null);
+  const [simResult, setSimResult] = useState<SimResultData | null>(null);
   const [customMessage, setCustomMessage] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -36,7 +84,6 @@ export function RecursosTecnicos() {
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [tempLabel, setTempLabel] = useState('');
   const [filterQuery, setFilterQuery] = useState('');
-
 
   // Verificar si es el usuario hzerdan@gmail.com
   const isAuthorized = user?.email === 'hzerdan@gmail.com';
@@ -48,13 +95,13 @@ export function RecursosTecnicos() {
         .select('key, label');
       if (error) throw error;
       if (data) {
-        const mapping = data.reduce((acc: Record<string, string>, item: any) => {
+        const mapping = (data as MetadataItem[]).reduce((acc: Record<string, string>, item: MetadataItem) => {
           acc[item.key] = item.label;
           return acc;
         }, {});
         setMetadataLabels(mapping);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching metadata labels:", err);
     }
   };
@@ -76,8 +123,9 @@ export function RecursosTecnicos() {
       if (error) throw error;
       setMetadataLabels(prev => ({ ...prev, [key]: tempLabel.trim() }));
       setEditingKey(null);
-    } catch (err: any) {
-      alert("Error al guardar la etiqueta: " + err.message);
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      alert("Error al guardar la etiqueta: " + errMsg);
     }
   };
 
@@ -103,12 +151,13 @@ export function RecursosTecnicos() {
       if (!data) {
         setMessage({ type: 'error', text: `No se encontró ningún remito con ID #${remitoId}` });
       } else {
-        setRemitoInfo(data);
+        setRemitoInfo(data as unknown as RemitoInfoData);
         setCustomMessage('');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       console.error(err);
-      setMessage({ type: 'error', text: 'Error al buscar el remito: ' + err.message });
+      setMessage({ type: 'error', text: 'Error al buscar el remito: ' + errMsg });
     } finally {
       setLoading(false);
     }
@@ -145,9 +194,10 @@ export function RecursosTecnicos() {
         mision_estado: 'OPERACION_PENDIENTE',
         tiene_incidencias_carga: false,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       console.error(err);
-      setMessage({ type: 'error', text: 'Error al restablecer la misión: ' + err.message });
+      setMessage({ type: 'error', text: 'Error al restablecer la misión: ' + errMsg });
     } finally {
       setResetting(false);
     }
@@ -171,9 +221,10 @@ export function RecursosTecnicos() {
       } else {
         setCustomMessage('');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       console.error(err);
-      setMessage({ type: 'error', text: 'Error al simular monitoreo: ' + err.message });
+      setMessage({ type: 'error', text: 'Error al simular monitoreo: ' + errMsg });
     } finally {
       setSimulating(false);
     }
@@ -209,9 +260,10 @@ export function RecursosTecnicos() {
           text: data?.error || 'No se pudo enviar el recordatorio.'
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       console.error(err);
-      setMessage({ type: 'error', text: 'Error al disparar la alerta: ' + err.message });
+      setMessage({ type: 'error', text: 'Error al disparar la alerta: ' + errMsg });
     } finally {
       setTriggering(false);
     }
@@ -248,9 +300,10 @@ export function RecursosTecnicos() {
           text: data?.error || 'No se pudo enviar el mensaje.'
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       console.error(err);
-      setMessage({ type: 'error', text: 'Error al forzar el mensaje: ' + err.message });
+      setMessage({ type: 'error', text: 'Error al forzar el mensaje: ' + errMsg });
     } finally {
       setSendingMessage(false);
     }
@@ -378,7 +431,9 @@ export function RecursosTecnicos() {
             </div>
             <div>
               <span className="text-gray-400 mr-1.5 font-bold uppercase text-[9px]">Chofer</span>
-              <span className="text-gray-800 font-medium">{remitoInfo.choferes?.nombre_completo || 'No asignado'}</span>
+              <span className="text-gray-800 font-medium">
+                {(Array.isArray(remitoInfo.choferes) ? remitoInfo.choferes[0]?.nombre_completo : remitoInfo.choferes?.nombre_completo) || 'No asignado'}
+              </span>
             </div>
           </div>
         )}
@@ -442,7 +497,7 @@ export function RecursosTecnicos() {
                       </td>
                     </tr>
                   ) : (
-                    filteredEntries.map(([key, val]: [string, any]) => {
+                    filteredEntries.map(([key, val]: [string, unknown]) => {
                       // Formatear valor según tipo
                       let displayVal: React.ReactNode = '';
                       if (val === null || val === undefined) {
@@ -455,9 +510,10 @@ export function RecursosTecnicos() {
                         );
                       } else if (Array.isArray(val)) {
                         if (key === 'productos') {
+                          const prods = val as ProductoMetadata[];
                           displayVal = (
                             <div className="space-y-2 bg-gray-50 p-2.5 rounded border border-gray-200/50 max-w-md">
-                              {val.map((prod: any, i: number) => (
+                              {prods.map((prod: ProductoMetadata, i: number) => (
                                 <div key={i} className="text-[10px] border-b border-gray-200 last:border-0 pb-1.5 last:pb-0">
                                   <p className="font-semibold text-gray-700">{prod.descripcion_articulo || 'Sin descripción'}</p>
                                   <p className="text-gray-500 mt-0.5">
@@ -469,10 +525,10 @@ export function RecursosTecnicos() {
                           );
                         } else if (key === 'protocolo_control') {
                           // Usar el protocolo de control en vivo (columna root) o caer a val (snapshot estático) si no se obtuvo
-                          const liveProtocol = remitoInfo.protocolo_control || val;
+                          const liveProtocol = (remitoInfo.protocolo_control || val) as ProtocoloTask[];
                           const total = liveProtocol.length;
-                          const completados = liveProtocol.filter((t: any) => t.estado === 'COMPLETADO').length;
-                          const reportados = liveProtocol.filter((t: any) => t.estado === 'REPORTADO_CHOFER').length;
+                          const completados = liveProtocol.filter((t: ProtocoloTask) => t.estado === 'COMPLETADO').length;
+                          const reportados = liveProtocol.filter((t: ProtocoloTask) => t.estado === 'REPORTADO_CHOFER').length;
                           displayVal = (
                             <div className="bg-gray-50 p-3 rounded-xl border border-gray-200/50 text-[10px] space-y-3 w-full max-w-2xl overflow-x-auto">
                               <p className="font-bold text-gray-700 border-b border-gray-200 pb-1.5 flex items-center justify-between">
@@ -496,7 +552,7 @@ export function RecursosTecnicos() {
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200/40">
-                                  {liveProtocol.map((t: any) => (
+                                  {liveProtocol.map((t: ProtocoloTask) => (
                                     <tr key={t.id} className="hover:bg-gray-100/50">
                                       <td className="py-1.5 font-mono text-gray-400 align-middle">{t.id}</td>
                                       <td className="py-1.5 px-2 font-medium text-gray-700 align-middle break-words max-w-[200px]">{t.tarea}</td>
@@ -537,9 +593,9 @@ export function RecursosTecnicos() {
                                       </td>
                                       <td className="py-1.5 px-2 align-middle">
                                         {t.valor_reportado_chofer ? (
-                                          t.valor_reportado_chofer.startsWith('http') ? (
+                                          String(t.valor_reportado_chofer).startsWith('http') ? (
                                             <a
-                                              href={t.valor_reportado_chofer}
+                                              href={String(t.valor_reportado_chofer)}
                                               target="_blank"
                                               rel="noopener noreferrer"
                                               className="text-[9px] text-blue-600 hover:underline bg-blue-50 px-1 py-0.5 rounded border border-blue-100 font-medium inline-block"

@@ -281,9 +281,10 @@ export function MisionTiposManager() {
       showToast('success', 'Tipo de misión y pasos guardados exitosamente.');
       handleCloseModal();
       fetchData();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       console.error('Error saving mission type:', err);
-      showToast('error', 'Error al guardar el tipo de misión: ' + err.message);
+      showToast('error', 'Error al guardar el tipo de misión: ' + errMsg);
     } finally {
       setSaving(false);
     }
@@ -305,9 +306,10 @@ export function MisionTiposManager() {
       if (error) throw error;
       showToast('success', `Tipo de misión ${nuevoEstado === 'ACTIVO' ? 'activado' : 'desactivado'} exitosamente.`);
       fetchData();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       console.error('Error toggling state:', err);
-      showToast('error', 'Error al cambiar el estado: ' + err.message);
+      showToast('error', 'Error al cambiar el estado: ' + errMsg);
     }
   };
 

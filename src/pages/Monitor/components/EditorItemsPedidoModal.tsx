@@ -17,12 +17,44 @@ interface ArticuloItem {
   peso_standard_kg: number;
 }
 
+export interface VinculacionData {
+  estado_vinculacion?: string;
+  cantidad_vinculada?: number;
+  cantidad_asignada?: number;
+  oc_ref?: string;
+  proveedor?: string;
+  oc_instancias?: {
+    identificador_compuesto?: string;
+  };
+}
+
+export interface RawProductData {
+  codigo_producto?: string;
+  codigo?: string;
+  nombre_producto?: string;
+  nombre?: string;
+  cantidad_bolsas?: number;
+  cantidad?: number;
+  peso_bolsa_kg?: number;
+  peso_por_bolsa_kg?: number;
+}
+
+export interface DbPedidoData {
+  vinculaciones_pedido_oc?: VinculacionData[];
+  vinculaciones?: VinculacionData[];
+  current_data?: {
+    productos?: RawProductData[];
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 interface EditorItemsPedidoModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   instance: InstanceData | null;
-  dbData: any;
+  dbData: DbPedidoData | null;
 }
 
 export function EditorItemsPedidoModal({
@@ -39,8 +71,8 @@ export function EditorItemsPedidoModal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Toneladas y bolsas calzadas vinculadas
-  const vinculos = dbData?.vinculaciones_pedido_oc || dbData?.vinculaciones || [];
-  const toneladasCalzadas = vinculos.reduce((acc: number, v: any) => {
+  const vinculos: VinculacionData[] = dbData?.vinculaciones_pedido_oc || dbData?.vinculaciones || [];
+  const toneladasCalzadas = vinculos.reduce((acc: number, v: VinculacionData) => {
     if (v.estado_vinculacion === 'APROBADA' || v.estado_vinculacion === 'PENDIENTE_VALIDACION') {
       return acc + (Number(v.cantidad_vinculada || v.cantidad_asignada) || 0);
     }
@@ -60,7 +92,7 @@ export function EditorItemsPedidoModal({
       const existingProds = dbData?.current_data?.productos;
       if (Array.isArray(existingProds) && existingProds.length > 0) {
         setProductos(
-          existingProds.map((p: any) => ({
+          existingProds.map((p: RawProductData) => ({
             codigo_producto: p.codigo_producto || p.codigo || 'AZ-STANDARD',
             nombre_producto: p.nombre_producto || p.nombre || 'Azúcar Estándar',
             cantidad_bolsas: Number(p.cantidad_bolsas || p.cantidad || 0),
@@ -192,9 +224,10 @@ export function EditorItemsPedidoModal({
 
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       console.error('Error editando items pedido:', err);
-      setErrorMessage(err.message || 'Ocurrió un error inesperado.');
+      setErrorMessage(errMsg || 'Ocurrió un error inesperado.');
     } finally {
       setIsLoading(false);
     }
@@ -252,7 +285,7 @@ export function EditorItemsPedidoModal({
                 <span>Órdenes de Compra Calzadas (Compromiso Inviolable)</span>
               </div>
               <div className="divide-y divide-blue-100 text-xs text-blue-800">
-                {vinculos.map((v: any, idx: number) => (
+                {vinculos.map((v: VinculacionData, idx: number) => (
                   <div key={idx} className="py-1.5 flex justify-between items-center">
                     <span>
                       OC: <strong className="font-mono">{v.oc_ref || v.oc_instancias?.identificador_compuesto}</strong> ({v.proveedor || 'Proveedor'})

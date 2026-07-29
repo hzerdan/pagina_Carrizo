@@ -141,9 +141,10 @@ export function MisionEstadosManager() {
       showToast('success', 'Estado guardado exitosamente.');
       handleCloseModal();
       fetchData();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       console.error('Error saving data:', err);
-      showToast('error', 'Error al guardar el estado: ' + err.message);
+      showToast('error', 'Error al guardar el estado: ' + errMsg);
     } finally {
       setSaving(false);
     }
@@ -165,9 +166,10 @@ export function MisionEstadosManager() {
       if (error) throw error;
       showToast('success', `Estado ${nuevoEstado === 'ACTIVO' ? 'activado' : 'desactivado'} exitosamente.`);
       fetchData();
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       console.error('Error toggling state:', err);
-      showToast('error', 'Error al cambiar el estado: ' + err.message);
+      showToast('error', 'Error al cambiar el estado: ' + errMsg);
     }
   };
 

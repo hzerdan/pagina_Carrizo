@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { X, Plus, Loader2, Search, Check, ChevronDown, Package } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { TIPOS_CARGA } from '../types';
-import type { PedidoElegible, InspeccionTemplate, Inspector, Deposito, TipoCarga } from '../types';
+import type { PedidoElegible, InspeccionTemplate, Inspector, Deposito, TipoCarga, ServicioInspeccion } from '../types';
 
 // ── Highlight helper (pure string, no regex) ────────────────────────
 function HighlightText({ text, query }: { text: string; query: string }) {
@@ -41,6 +41,8 @@ interface NuevaInspeccionModalProps {
 }
 
 interface FormState {
+  servicioId: number | null;
+  referenciaCliente: string;
   selectedPedidos: PedidoElegible[];
   inspectorId: number | null;
   templateId: number | null;
@@ -50,6 +52,8 @@ interface FormState {
 }
 
 const initialFormState: FormState = {
+  servicioId: null,
+  referenciaCliente: '',
   selectedPedidos: [],
   inspectorId: null,
   templateId: null,
@@ -63,6 +67,7 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
   const [saving, setSaving] = useState(false);
 
   // Dropdown data
+  const [servicios, setServicios] = useState<ServicioInspeccion[]>([]);
   const [pedidosElegibles, setPedidosElegibles] = useState<PedidoElegible[]>([]);
   const [inspectores, setInspectores] = useState<Inspector[]>([]);
   const [templates, setTemplates] = useState<InspeccionTemplate[]>([]);
@@ -88,7 +93,12 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
   const fetchDropdownData = useCallback(async () => {
     setLoadingData(true);
     try {
-      const [pedRes, inspRes, tplRes, depRes] = await Promise.all([
+      const [srvRes, pedRes, inspRes, tplRes, depRes] = await Promise.all([
+        supabase
+          .from('servicios')
+          .select('id, codigo_servicio, nombre, requiere_pedido_ac')
+          .eq('activo', true)
+          .order('nombre'),
         supabase.from('v_pedidos_elegibles_inspeccion').select('*'),
         supabase
           .from('personal_ac_roles')
@@ -101,6 +111,19 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
           .order('nombre'),
         supabase.from('depositos').select('id, nombre').order('nombre', { ascending: true }),
       ]);
+
+      if (srvRes.data) {
+        const srvList = srvRes.data as ServicioInspeccion[];
+        setServicios(srvList);
+        // Default to service with codigo_servicio 'INSP_EXP' or first item
+        const defaultSrv = srvList.find(s => s.codigo_servicio === 'INSP_EXP') || srvList[0];
+        if (defaultSrv) {
+          setForm(prev => ({ ...prev, servicioId: defaultSrv.id }));
+        }
+      } else if (srvRes.error) {
+        console.error('Error fetched servicios:', srvRes.error);
+        setToast({ type: 'error', text: 'Error al cargar servicios.' });
+      }
 
       if (pedRes.data) {
         setPedidosElegibles(pedRes.data as PedidoElegible[]);
@@ -226,28 +249,40 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
     }));
   };
 
+  const selectedServicio = useMemo(
+    () => servicios.find(s => s.id === form.servicioId),
+    [servicios, form.servicioId]
+  );
+  const requierePedido = selectedServicio ? selectedServicio.requiere_pedido_ac : true;
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (form.selectedPedidos.length === 0) {
-      setToast({ type: 'error', text: 'Debe seleccionar al menos un pedido.' });
+    if (!form.servicioId) {
+      setToast({ type: 'error', text: 'Debe seleccionar un tipo de servicio.' });
+      return;
+    }
+    if (requierePedido && form.selectedPedidos.length === 0) {
+      setToast({ type: 'error', text: 'Debe seleccionar al menos un pedido para este servicio.' });
       return;
     }
     if (!form.inspectorId || !form.templateId || !form.tipoCarga || !form.fechaPactada || !form.lugarId) {
-      setToast({ type: 'error', text: 'Todos los campos son obligatorios.' });
+      setToast({ type: 'error', text: 'Todos los campos marcados con * son obligatorios.' });
       return;
     }
 
     try {
       setSaving(true);
       const { error } = await supabase.rpc('crear_nueva_inspeccion_v2', {
-        p_pedido_instance_ids: form.selectedPedidos.map(p => p.id),
+        p_pedido_instance_ids: requierePedido ? form.selectedPedidos.map(p => p.id) : [],
         p_inspector_id: form.inspectorId,
         p_template_id: form.templateId,
         p_tipo_carga: form.tipoCarga.toUpperCase(),
         p_fecha_pactada: new Date(form.fechaPactada).toISOString(),
         p_lugar_id: form.lugarId,
         p_usuario_actor: usuarioActor,
+        p_servicio_id: form.servicioId,
+        p_referencia_cliente: form.referenciaCliente.trim() || null,
       });
 
       if (error) throw error;
@@ -292,7 +327,7 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-800">Nueva Inspección</h2>
-              <p className="text-xs text-gray-500">Control Documental de Exportación</p>
+              <p className="text-xs text-gray-500">Control Documental y Auditorías</p>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:bg-gray-100 p-2 rounded-lg">
@@ -309,18 +344,45 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
             </div>
           ) : (
             <form id="nuevaInspeccionForm" onSubmit={handleSave} className="space-y-5">
-              {/* ── Pedidos Searchable Multi-select ───────────────────── */}
-              <div ref={pedidoDropdownRef}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Pedidos <span className="text-red-500">*</span>
-                  </label>
-                  {form.selectedPedidos.length > 0 && (
-                    <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-                      {form.selectedPedidos.length} seleccionado{form.selectedPedidos.length !== 1 ? 's' : ''}
-                    </span>
-                  )}
-                </div>
+              {/* ── Tipo de Servicio ────────────────────────────────────── */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Tipo de Servicio <span className="text-red-500">*</span>
+                </label>
+                <select
+                  required
+                  value={form.servicioId ?? ''}
+                  onChange={e =>
+                    setForm({
+                      ...form,
+                      servicioId: e.target.value ? Number(e.target.value) : null,
+                      selectedPedidos: [],
+                    })
+                  }
+                  className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm bg-white font-medium text-gray-800"
+                >
+                  <option value="">Seleccionar servicio...</option>
+                  {servicios.map(s => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre} {!s.requiere_pedido_ac ? '(Sin Pedido AC)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* ── Pedidos / Referencia de Carga Externa ──────────────── */}
+              {requierePedido ? (
+                <div ref={pedidoDropdownRef}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Pedidos AC <span className="text-red-500">*</span>
+                    </label>
+                    {form.selectedPedidos.length > 0 && (
+                      <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
+                        {form.selectedPedidos.length} seleccionado{form.selectedPedidos.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
 
                 {/* Selected chips */}
                 {form.selectedPedidos.length > 0 && (
@@ -448,6 +510,23 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
                   </div>
                 )}
               </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Cliente / Referencia de Carga Externa <span className="text-gray-400 font-normal">(Opcional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ej: Cliente SugarCorp - Carga Contenedor #1234"
+                    value={form.referenciaCliente}
+                    onChange={e => setForm({ ...form, referenciaCliente: e.target.value })}
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm transition-shadow"
+                  />
+                  <p className="mt-1.5 text-xs text-indigo-600 bg-indigo-50 border border-indigo-100 p-2 rounded-lg">
+                    Este tipo de servicio opera de forma independiente (sin pedidos de AC). Toda la verificación se realiza según la plantilla asignada.
+                  </p>
+                </div>
+              )}
 
               {/* ── Inspector ──────────────────────────────────────────── */}
               <div>

@@ -9,7 +9,18 @@ export interface InspeccionKanban {
   export_doc_status: string;
   state_code: string;
   planilla_completada_url: string | null;
-  pedidos: PedidoVinculado[];
+  servicio_id: number | null;
+  servicio_nombre: string | null;
+  servicio_requiere_pedido: boolean;
+  referencia_cliente: string | null;
+  pedidos: PedidoVinculado[] | null;
+}
+
+export interface ServicioInspeccion {
+  id: number;
+  codigo_servicio: string;
+  nombre: string;
+  requiere_pedido_ac: boolean;
 }
 
 export interface PedidoVinculado {

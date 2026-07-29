@@ -557,7 +557,7 @@ export function RemitoEdit() {
         const hours = String(dt.getHours()).padStart(2, '0');
         const minutes = String(dt.getMinutes()).padStart(2, '0');
         formattedFechaHora = `${day}/${month}/${year} ${hours}:${minutes}`;
-      } catch (e) {
+      } catch {
         formattedFechaHora = remito.fecha_hora_estimada_carga;
       }
     }
@@ -601,7 +601,7 @@ export function RemitoEdit() {
     }
   };
 
-  const handleSendDirectMsg = async (_taskId: any) => {
+  const handleSendDirectMsg = async (taskId?: number | string) => {
     if (!msgText.trim()) return;
     setMsgSending(true);
     setMsgSentSuccess(false);
@@ -613,7 +613,13 @@ export function RemitoEdit() {
       if (error) throw error;
       
       const res = Array.isArray(data) ? data[0] : data;
-      if (res && res.success === false) {
+      if (res?.success) {
+        setMsgSentSuccess(true);
+        setMsgText('');
+        if (taskId) {
+          console.log(`Mensaje directo enviado relacionado a tarea #${taskId}`);
+        }
+      } else if (res && res.success === false) {
         throw new Error(res.error || "Error al enviar mensaje");
       }
 

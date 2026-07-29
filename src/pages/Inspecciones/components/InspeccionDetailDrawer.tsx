@@ -626,7 +626,7 @@ export function InspeccionDetailDrawer({
 
           <div>
             <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">
-              Pedidos Vinculados
+              {inspeccion.servicio_requiere_pedido ? 'Pedidos Vinculados' : 'Detalles del Servicio'}
             </h3>
             {inspeccion.pedidos && inspeccion.pedidos.length > 0 ? (
               <div className="space-y-2">
@@ -643,7 +643,10 @@ export function InspeccionDetailDrawer({
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">Sin pedidos vinculados.</p>
+              <div className="bg-amber-50/80 border border-amber-200/70 p-3.5 rounded-lg space-y-1">
+                <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">Servicio de Inspección Externa (Sin Pedido AC)</p>
+                <p className="text-sm text-amber-900 font-medium">{inspeccion.referencia_cliente || 'Verificación independiente coordinada según plantilla asignada.'}</p>
+              </div>
             )}
           </div>
 

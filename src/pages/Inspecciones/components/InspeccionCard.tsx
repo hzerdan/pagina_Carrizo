@@ -85,12 +85,19 @@ export function InspeccionCard({ inspeccion, onClick }: InspeccionCardProps) {
           onClick={() => onClick(inspeccion)}
           className="p-3.5 flex-1 flex flex-col cursor-pointer min-w-0"
         >
-          {/* Header: ID + Tipo Carga */}
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-xs font-bold text-gray-500 font-mono">
-              #INS-{inspeccion.id}
-            </span>
-            <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border", tipoCargaClass)}>
+          {/* Header: ID + Servicio + Tipo Carga */}
+          <div className="flex items-center justify-between mb-2.5 gap-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-xs font-bold text-gray-500 font-mono flex-shrink-0">
+                #INS-{inspeccion.id}
+              </span>
+              {inspeccion.servicio_nombre && (
+                <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-100 px-1.5 py-0.5 rounded truncate" title={inspeccion.servicio_nombre}>
+                  {inspeccion.servicio_nombre}
+                </span>
+              )}
+            </div>
+            <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full border flex-shrink-0", tipoCargaClass)}>
               {inspeccion.tipo_carga}
             </span>
           </div>
@@ -109,8 +116,8 @@ export function InspeccionCard({ inspeccion, onClick }: InspeccionCardProps) {
             <span className="text-xs text-gray-600">{fechaFormatted}</span>
           </div>
 
-          {/* Pedidos Badges */}
-          {inspeccion.pedidos && inspeccion.pedidos.length > 0 && (
+          {/* Pedidos Badges o Referencia Externa */}
+          {inspeccion.pedidos && inspeccion.pedidos.length > 0 ? (
             <div className="flex flex-wrap gap-1 mb-3">
               {inspeccion.pedidos.map((p, i) => (
                 <span
@@ -121,6 +128,13 @@ export function InspeccionCard({ inspeccion, onClick }: InspeccionCardProps) {
                   {p.identificador_compuesto}
                 </span>
               ))}
+            </div>
+          ) : (
+            <div className="mb-3">
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200/80 px-2 py-0.5 rounded-md truncate max-w-full">
+                <Package className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                <span className="truncate">{inspeccion.referencia_cliente || 'Servicio sin Pedido AC'}</span>
+              </span>
             </div>
           )}
 

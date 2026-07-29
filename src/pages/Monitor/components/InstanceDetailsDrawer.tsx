@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert, Edit } from 'lucide-react';
 import type { InstanceData } from '../types';
 import { cn } from '../../../lib/utils';
@@ -97,7 +97,7 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
   })();
 
   // Función para cargar el checklist dinámico
-  const loadChecklist = async () => {
+  const loadChecklist = useCallback(async () => {
     if (!instance) return;
     try {
       setIsLoadingChecklist(true);
@@ -165,7 +165,7 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
     } finally {
       setIsLoadingChecklist(false);
     }
-  };
+  }, [instance, stateCode]);
 
   // Función para manejar el cambio de checkboxes de operador (Estado 7 / Manuales)
   const handleToggleCheckbox = async (item: ChecklistItem) => {
@@ -220,7 +220,7 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
     loadChecklist();
     checkSupervisorRole();
     setTransitionError(null);
-  }, [instance, isOpen, personalAcId, stateCode]);
+  }, [instance, isOpen, loadChecklist, personalAcId]);
 
   if (!instance) return null;
 

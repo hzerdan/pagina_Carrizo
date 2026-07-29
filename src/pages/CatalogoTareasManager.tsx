@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plus, Edit2, Trash2, Search, X, Loader2, ClipboardList, ToggleLeft, ToggleRight, Eye, EyeOff, Camera, Bell, Clock, Sliders } from 'lucide-react';
 import { cn } from '../lib/utils';
+import type { MisionEstadoDef } from './MisionEstadosManager';
 
 export interface TareaControl {
   id: number;
@@ -52,7 +53,7 @@ const initialFormData: FormData = {
 
 export function CatalogoTareasManager() {
   const [tareas, setTareas] = useState<TareaControl[]>([]);
-  const [estados, setEstados] = useState<any[]>([]);
+  const [estados, setEstados] = useState<MisionEstadoDef[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showInactive, setShowInactive] = useState(false);
