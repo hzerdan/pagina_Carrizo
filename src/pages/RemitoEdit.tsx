@@ -255,7 +255,11 @@ export function RemitoEdit() {
       const ctx = Array.isArray(data) ? data[0].get_full_context_by_remito || data[0] : data;
       if (!ctx) throw new Error("No se encontraron datos para este remito.");
 
-      setCatalogs(ctx.catalogos);
+      setCatalogs({
+        camiones: ctx.catalogos?.camiones || [],
+        choferes: ctx.catalogos?.choferes || [],
+        personal: ctx.catalogos?.personal || [],
+      });
       
       setRemito({
         id: ctx.remito?.id || null,
@@ -400,13 +404,13 @@ export function RemitoEdit() {
         setObservacionesExtras(prevInstrucciones.split('Observaciones Extra:\n')[1]);
       }
 
-      if (ctx.remito?.camion_id) {
-        const c = ctx.catalogos.camiones.find((x: any) => x.id === ctx.remito.camion_id);
-        if (c) setSearchCamion(c.patente);
+      if (ctx.remito?.camion_id && ctx.catalogos?.camiones) {
+        const c = (ctx.catalogos.camiones || []).find((x: any) => x.id === ctx.remito.camion_id);
+        if (c) setSearchCamion(c.patente || '');
       }
-      if (ctx.remito?.acoplado_id) {
-        const c = ctx.catalogos.camiones.find((x: any) => x.id === ctx.remito.acoplado_id);
-        if (c) setSearchAcoplado(c.patente);
+      if (ctx.remito?.acoplado_id && ctx.catalogos?.camiones) {
+        const c = (ctx.catalogos.camiones || []).find((x: any) => x.id === ctx.remito.acoplado_id);
+        if (c) setSearchAcoplado(c.patente || '');
       }
 
       // 4. Cargar Políticas Logísticas y Overrides
@@ -572,7 +576,7 @@ export function RemitoEdit() {
           .replace(/\{fecha_hora_estimada_carga\}/gi, formattedFechaHora)
           .replace(/\[fecha_hora_estimada_carga\]/gi, formattedFechaHora);
       }
-      return `Hola ${choferName}, según tu hoja de ruta ahora corresponde: ${nextTask.tarea_template || nextTask.tarea}. Por favor confirmame cuando la inicies.`;
+      return `Hola ${choferName}, sobre Remito ${remito.ref}: ¿me confirmás cuando avances con ${nextTask.tarea_template || nextTask.tarea}?`;
     }
     
     return `Hola ${choferName}, por favor confírmanos tu estado actual en el viaje correspondiente al remito #${remito.ref || ''}.`;
@@ -1099,14 +1103,14 @@ export function RemitoEdit() {
 
 
   const activePath = useMemo(() => {
-    if (!remito.mision_estados_secuencia) return [];
+    if (!remito.mision_estados_secuencia || !Array.isArray(remito.mision_estados_secuencia)) return [];
     return remito.mision_estados_secuencia
-      .filter((s: any) => s.activo !== false)
+      .filter((s: any) => s && typeof s === 'object' && s.code && s.activo !== false)
       .map((s: any) => s.code);
   }, [remito.mision_estados_secuencia]);
 
   const fsmSteps = useMemo(() => {
-    if (!remito.mision_estados_secuencia || remito.mision_estados_secuencia.length === 0) {
+    if (!remito.mision_estados_secuencia || !Array.isArray(remito.mision_estados_secuencia) || remito.mision_estados_secuencia.length === 0) {
       // Fallback a secuencia por defecto si está vacía
       return [
         { code: 'OPERACION_PENDIENTE', label: 'Pendiente', desc: 'Faltan datos o inicio', orden: 10, isNA: false },
@@ -1119,13 +1123,15 @@ export function RemitoEdit() {
         { code: 'MISION_COMPLETADA', label: 'Completada', desc: 'Fin de la misión', orden: 80, isNA: false },
       ];
     }
-    return remito.mision_estados_secuencia.map((s: any, idx: number) => ({
-      code: s.code,
-      label: s.label,
-      desc: s.desc,
-      orden: s.orden_logistico_default || (idx + 1) * 10,
-      isNA: s.activo === false,
-    }));
+    return remito.mision_estados_secuencia
+      .filter((s: any) => s && typeof s === 'object' && s.code)
+      .map((s: any, idx: number) => ({
+        code: s.code,
+        label: s.label || s.code,
+        desc: s.desc || '',
+        orden: s.orden_logistico_default || (idx + 1) * 10,
+        isNA: s.activo === false,
+      }));
   }, [remito.mision_estados_secuencia]);
 
   const handleForceTransition = async (targetState: string) => {
@@ -2277,7 +2283,7 @@ export function RemitoEdit() {
                                     {/* Indicador 'Imagen' */}
                                     {task.tipo_dato_esperado === 'imagen' && (
                                       <div className="flex items-center gap-1">
-                                        {task.valor_reportado_chofer && task.valor_reportado_chofer.startsWith('http') ? (
+                                        {task.valor_reportado_chofer && typeof task.valor_reportado_chofer === 'string' && task.valor_reportado_chofer.startsWith('http') ? (
                                           <span className="flex items-center gap-1 text-[10px] bg-emerald-50 text-emerald-700 border border-emerald-100 px-2 py-0.5 rounded-full font-medium">
                                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                             📷 Evidencia Recibida
@@ -2402,7 +2408,7 @@ export function RemitoEdit() {
                                 </button>
 
                                 {/* Evidencia (Ver Adjunto) */}
-                                {task.valor_reportado_chofer && task.valor_reportado_chofer.startsWith('http') && (
+                                {task.valor_reportado_chofer && typeof task.valor_reportado_chofer === 'string' && task.valor_reportado_chofer.startsWith('http') && (
                                   <a 
                                     href={task.valor_reportado_chofer} 
                                     target="_blank" 

@@ -103,9 +103,9 @@ BEGIN
     END
   );
 
-  -- Definir la pregunta de confirmación incorporando la Referencia Humana del Remito
+  -- Definir la pregunta de confirmación incorporando la Referencia Humana del Remito y la Frase Exacta Solicitada
   IF v_template_code_resolved = 'REQ_CONFIRMACION_HORARIO' THEN
-    v_pregunta := v_ref_visible || E'\n¿confirmas que cargas a las ' || v_hora_estimada || ' hs? ¿Es correcto o si ha cambiado pasame el nuevo horario por aquí.';
+    v_pregunta := v_ref_visible || E'\n¿el horario probable de carga registrado es ' || v_hora_estimada || '? ¿Es correcto o si ha cambiado pasame la nueva fecha y hora por aquí.';
   ELSE
     v_pregunta := v_ref_visible || E'\n¿me confirmas si ya tienes la documentación física en mano (remito y órdenes)?';
   END IF;
