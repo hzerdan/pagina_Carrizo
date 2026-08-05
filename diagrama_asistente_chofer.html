@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Asistente Logístico de Carga - Arquímedes Carrizo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: rgba(30, 41, 59, 0.7);
+      --bg-card-hover: rgba(51, 65, 85, 0.8);
+      --border: rgba(255, 255, 255, 0.1);
+      --primary: #38bdf8;
+      --primary-glow: rgba(56, 189, 248, 0.25);
+      --accent: #818cf8;
+      --success: #34d399;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --radius-lg: 20px;
+      --radius-md: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: #090d16;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(129, 140, 248, 0.12) 0px, transparent 50%);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding: 40px 20px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    /* HEADER / HERO */
+    header {
+      text-align: center;
+      margin-bottom: 50px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 18px;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 50px;
+      color: var(--primary);
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 20px;
+      box-shadow: 0 0 20px var(--primary-glow);
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--primary);
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(56, 189, 248, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2.8rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #ffffff 0%, #cbd5e1 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 16px;
+    }
+
+    p.subtitle {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    /* ACTORS SECTION */
+    .actors-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      margin-bottom: 60px;
+    }
+
+    .actor-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 30px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .actor-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .actor-card:hover {
+      transform: translateY(-5px);
+      border-color: rgba(255, 255, 255, 0.2);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .actor-card:hover::before {
+      opacity: 1;
+    }
+
+    .actor-icon {
+      font-size: 2.5rem;
+      margin-bottom: 16px;
+      display: inline-block;
+    }
+
+    .actor-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+
+    .actor-desc {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
+
+    /* PIPELINE / FLOWCHART SECTION */
+    .section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 30px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .section-title span {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .flow-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-bottom: 60px;
+    }
+
+    .step-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px 30px;
+      display: grid;
+      grid-template-columns: 80px 1fr auto;
+      align-items: center;
+      gap: 20px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+
+    .step-card:hover {
+      background: var(--bg-card-hover);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+
+    .step-number {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--primary);
+      opacity: 0.7;
+      text-align: center;
+      background: rgba(56, 189, 248, 0.1);
+      padding: 12px;
+      border-radius: var(--radius-md);
+    }
+
+    .step-content h3 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .step-content p {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+    }
+
+    .step-tags {
+      display: flex;
+      gap: 8px;
+    }
+
+    .tag {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #e2e8f0;
+    }
+
+    .tag.highlight {
+      background: rgba(52, 211, 153, 0.15);
+      border-color: rgba(52, 211, 153, 0.3);
+      color: var(--success);
+    }
+
+    /* DEMO SIMULATOR */
+    .simulator-container {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 30px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 30px;
+      margin-bottom: 60px;
+    }
+
+    .sim-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sim-btn {
+      padding: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      color: #fff;
+      font-family: inherit;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sim-btn:hover, .sim-btn.active {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .chat-phone {
+      background: #020617;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      height: 520px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+
+    .phone-header {
+      background: #0f172a;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .phone-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .phone-info h4 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .phone-info p {
+      font-size: 0.75rem;
+      color: var(--success);
+    }
+
+    .chat-messages {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .msg {
+      max-width: 82%;
+      padding: 12px 16px;
+      border-radius: 16px;
+      font-size: 0.88rem;
+      line-height: 1.5;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .msg.bot {
+      background: #1e293b;
+      color: #f1f5f9;
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .msg.driver {
+      background: #0284c7;
+      color: #fff;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg.system {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+      align-self: center;
+      text-align: center;
+      font-size: 0.8rem;
+      max-width: 95%;
+    }
+
+    /* GOVERNANCE CARDS */
+    .gov-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .gov-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+    }
+
+    .gov-card h4 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .gov-card p {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 60px;
+      padding-top: 30px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- HERO HEADER -->
+    <header>
+      <div class="badge">
+        <span class="badge-dot"></span>
+        Arquímedes Carrizo • Logística Inteligente
+      </div>
+      <h1>Asistente Virtual de Carga para Choferes</h1>
+      <p class="subtitle">
+        Una solución automatizada por WhatsApp que guía al chofer paso a paso en el cumplimiento de hojas de ruta, pesajes y auditorías de carga, con supervisión humana inteligente y auto-desbloqueo conversacional.
+      </p>
+    </header>
+
+    <!-- ACTORS -->
+    <div class="actors-grid">
+      <div class="actor-card">
+        <div class="actor-icon">🚚</div>
+        <div class="actor-title">1. El Chofer</div>
+        <div class="actor-desc">
+          Interactúa por WhatsApp usando lenguaje natural, mensajes cortos o fotos. Recibe indicaciones precisas con ubicaciones y links a Google Maps.
+        </div>
+      </div>
+      <div class="actor-card">
+        <div class="actor-icon">🤖</div>
+        <div class="actor-title">2. Asistente IA</div>
+        <div class="actor-desc">
+          Evalúa las respuestas, valida fotos/tickets, secuencia las tareas del remito, evita insistencias incoherentes y destraba la operación ante cualquier contratiempo.
+        </div>
+      </div>
+      <div class="actor-card">
+        <div class="actor-icon">👨‍💼</div>
+        <div class="actor-title">3. Mesa de Control</div>
+        <div class="actor-desc">
+          Dashboard Web y alertas de Telegram. El supervisor puede intervenir en cualquier momento; al hacerlo, el bot se silencia y cede el control de forma transparente.
+        </div>
+      </div>
+    </div>
+
+    <!-- PIPELINE STEPS -->
+    <h2 class="section-title">
+      <span>📌 Flujo Operativo de una Misión de Carga</span>
+    </h2>
+
+    <div class="flow-steps">
+      
+      <div class="step-card">
+        <div class="step-number">01</div>
+        <div class="step-content">
+          <h3>Inicio y Recepción de Documentación</h3>
+          <p>El bot se presenta como asistente automático, presenta el listado de tareas asignadas y solicita la confirmación de la fecha/hora de carga programada.</p>
+        </div>
+        <div class="step-tags">
+          <span class="tag highlight">Papeles en mano</span>
+          <span class="tag">Horario Carga</span>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <div class="step-number">02</div>
+        <div class="step-content">
+          <h3>Pesaje en Vacío (Tara)</h3>
+          <p>Indica la Balanza de Tara asignada con dirección completa y Google Maps. Solicita el valor en kilos o foto del ticket de pesaje.</p>
+        </div>
+        <div class="step-tags">
+          <span class="tag">Balanza de Tara</span>
+          <span class="tag highlight">Validación Kilos / OCR</span>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <div class="step-number">03</div>
+        <div class="step-content">
+          <h3>Arribo y Verificaciones en Depósito</h3>
+          <p>Pide confirmación de arribo ("ya llegué"), solicita inspección visual del estado de las bolsas (húmedas/rotas) y evidencias fotográficas con patentes visibles.</p>
+        </div>
+        <div class="step-tags">
+          <span class="tag">Aviso Arribo</span>
+          <span class="tag highlight">Estado Bolsas</span>
+          <span class="tag">Fotos Carga</span>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <div class="step-number">04</div>
+        <div class="step-content">
+          <h3>Salida y Pesaje Completo (Bruto)</h3>
+          <p>Al finalizar la carga, solicita aviso de salida del depósito y coordina el pesaje de camión lleno en la Balanza de Bruto.</p>
+        </div>
+        <div class="step-tags">
+          <span class="tag highlight">Pesaje Bruto</span>
+          <span class="tag">Aviso de Salida</span>
+        </div>
+      </div>
+
+      <div class="step-card">
+        <div class="step-number">05</div>
+        <div class="step-content">
+          <h3>Tránsito y Entrega en Destino</h3>
+          <p>Acompaña al chofer durante el viaje sin exigir fotos en ruta. Al confirmar llegada a destino, solicita la foto del remito firmado.</p>
+        </div>
+        <div class="step-tags">
+          <span class="tag">Seguimiento ETA</span>
+          <span class="tag highlight">Remito Firmado</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- INTERACTIVE SIMULATOR -->
+    <h2 class="section-title">
+      <span>💬 Simulador Interactivo para Clientes</span>
+    </h2>
+
+    <div class="simulator-container">
+      <div class="sim-controls">
+        <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 10px;">Seleccioná un escenario para ver la interacción en tiempo real:</p>
+        
+        <button class="sim-btn active" onclick="loadScenario('ideal')">
+          <span>✅ 1. Flujo Fluido Completo</span>
+          <span>→</span>
+        </button>
+        <button class="sim-btn" onclick="loadScenario('impedimento')">
+          <span>⚠️ 2. Impedimento (No puede pesar)</span>
+          <span>→</span>
+        </button>
+        <button class="sim-btn" onclick="loadScenario('intervencion')">
+          <span>👨‍💼 3. Intervención del Supervisor</span>
+          <span>→</span>
+        </button>
+        <button class="sim-btn" onclick="loadScenario('alerta_final')">
+          <span>🚨 4. Alerta Final y Auto-Desbloqueo</span>
+          <span>→</span>
+        </button>
+      </div>
+
+      <div class="chat-phone">
+        <div class="phone-header">
+          <div class="phone-avatar">🤖</div>
+          <div class="phone-info">
+            <h4>Asistente Arquímedes Carrizo</h4>
+            <p>● En línea (Supervisado)</p>
+          </div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+          <!-- Dinámico -->
+        </div>
+      </div>
+    </div>
+
+    <!-- GOVERNANCE AND SECURITY -->
+    <h2 class="section-title">
+      <span>🛡️ Gobernanza, Seguridad y Resiliencia</span>
+    </h2>
+
+    <div class="gov-grid">
+      <div class="gov-card">
+        <h4>🛑 Control de Intervención Humana</h4>
+        <p>Si el supervisor responde en la web o atiende el chat, el bot y los recordatorios se silencian automáticamente para dejar el control al operador humano.</p>
+      </div>
+
+      <div class="gov-card">
+        <h4>🚨 Alerta Final y Sin Bloqueos</h4>
+        <p>Si se agotan los reintentos y el operador no intervino, se emite una Alerta Final a Telegram y el bot destraba la operatoria directamente con el chofer.</p>
+      </div>
+
+      <div class="gov-card">
+        <h4>🌙 Protección de Horarios Futuros</h4>
+        <p>Si la carga se reprograma para el día siguiente, el sistema suspende los monitoreos e inactividades nocturnas hasta el horario fijado.</p>
+      </div>
+
+      <div class="gov-card">
+        <h4>⏱️ Consolidación (Debounce)</h4>
+        <p>Agrupa múltiples mensajes cortos seguidos enviadas por el chofer en un único turno de evaluación, evitando respuestas duplicadas.</p>
+      </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer>
+      <p>© 2026 Arquímedes Carrizo • Sistema Inteligente de Gestión y Seguimiento de Flotas Logísticas</p>
+    </footer>
+
+  </div>
+
+  <script>
+    const scenarios = {
+      ideal: [
+        { type: 'driver', text: 'Ya tengo la documentación física en mano' },
+        { type: 'bot', text: '¡Excelente Sanabria! Registré que ya tenés los papeles.\n🤖 Soy el Asistente Automático de Arquímedes Carrizo.\n\nHola Sanabria, el horario de carga es 31/07 a las 17:30 hs. ¿Es correcto?' },
+        { type: 'driver', text: 'Sí, correcto' },
+        { type: 'bot', text: '¡Entendido Sanabria! Registré que el horario es correcto.\n\nAhora realizá el pesaje en vacío (Tara) en Balanza Bella Vista (Av. Juan XXIII) y pásame el peso en kg o foto del ticket.' },
+        { type: 'driver', text: 'Pesó 15500 kg' },
+        { type: 'bot', text: '¡Excelente Sanabria! Registré 15.500 kg de Tara.\n\nAhora dirigite a Depósito CONTROL UNION (Ruta 302 km 6.5) y avísame por aquí cuando llegues para continuar.' }
+      ],
+
+      impedimento: [
+        { type: 'bot', text: 'Ahora realizá el pesaje de Tara en Balanza Bella Vista y pásame el peso.' },
+        { type: 'driver', text: 'No puedo pesar, la balanza está cerrada' },
+        { type: 'bot', text: 'Entendido Sanabria, comprendo. Registré que no es posible realizar la Tara en este momento por balanza cerrada.' },
+        { type: 'bot', text: 'Para no demorar la carga, continuamos. Por favor dirigite al Depósito CONTROL UNION y avísame cuando llegues escribiendo "ya llegué".' }
+      ],
+
+      intervencion: [
+        { type: 'bot', text: 'Hola Sanabria, recordá realizar la verificación de las bolsas.' },
+        { type: 'system', text: '👨‍💼 OPERADOR HUMANO INTERVINO DESDE EL DASHBOARD WEB' },
+        { type: 'bot', text: '🤖 (Bot y Cronjobs silenciados automáticamente. El operador conversa con el chofer).' },
+        { type: 'driver', text: 'Hola Carlos, ya hablé con el encargado y nos autorizaron la salida.' },
+        { type: 'system', text: '🔄 EL OPERADOR DEVUELVE LA ATENCIÓN AL BOT' },
+        { type: 'bot', text: 'Hola Sanabria, veo que estuviste conversando con nuestro operador. Para continuar con tu hoja de ruta, nos queda el pesaje de Bruto. ¿Me confirmás cuando lo realices?' }
+      ],
+
+      alerta_final: [
+        { type: 'bot', text: 'Hola Sanabria, por favor recordá enviar la foto del inicio de la carga.' },
+        { type: 'system', text: '⚠️ Reintento 1/2 sin respuesta...' },
+        { type: 'system', text: '⚠️ Reintento 2/2 sin respuesta...' },
+        { type: 'system', text: '🚨 ALERTA FINAL ENVIADA A TELEGRAM (Sin acción del operador)' },
+        { type: 'bot', text: 'Hola Sanabria, para no demorar tu viaje omitimos la foto de inicio de carga. Por favor avísame cuando estés listo para salir del depósito hacia el pesaje de Bruto.' }
+      ]
+    };
+
+    function loadScenario(key) {
+      const container = document.getElementById('chatMessages');
+      container.innerHTML = '';
+      
+      // Active btn
+      document.querySelectorAll('.sim-btn').forEach(btn => btn.classList.remove('active'));
+      event.currentTarget.classList.add('active');
+
+      const data = scenarios[key];
+      data.forEach((msg, idx) => {
+        setTimeout(() => {
+          const div = document.createElement('div');
+          div.className = `msg ${msg.type}`;
+          div.innerText = msg.text;
+          container.appendChild(div);
+          container.scrollTop = container.scrollHeight;
+        }, idx * 400);
+      });
+    }
+
+    // Load initial
+    loadScenario('ideal');
+  </script>
+</body>
+</html>

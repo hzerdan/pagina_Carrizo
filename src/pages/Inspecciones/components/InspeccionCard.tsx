@@ -138,12 +138,25 @@ export function InspeccionCard({ inspeccion, onClick }: InspeccionCardProps) {
             </div>
           )}
 
-          {/* Estado Documental Badge */}
-          <div className="mt-auto">
+          {/* Estado Documental Badge + Progreso Planillas */}
+          <div className="mt-auto flex items-center justify-between gap-1">
             <span className={cn("inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full", statusColors.bg, statusColors.text)}>
               <FileCheck2 className="w-3 h-3" />
               {inspeccion.export_doc_status}
             </span>
+            {(inspeccion.cantidad_plantillas_requeridas > 1 || (inspeccion.cantidad_plantillas_recibidas || 0) > 0) && (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border",
+                  (inspeccion.cantidad_plantillas_recibidas || 0) >= (inspeccion.cantidad_plantillas_requeridas || 1)
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                    : "bg-amber-50 text-amber-800 border-amber-200"
+                )}
+                title={`Planillas recibidas: ${inspeccion.cantidad_plantillas_recibidas || 0} de ${inspeccion.cantidad_plantillas_requeridas || 1}`}
+              >
+                📄 {inspeccion.cantidad_plantillas_recibidas || 0}/{inspeccion.cantidad_plantillas_requeridas || 1}
+              </span>
+            )}
           </div>
         </div>
       </div>

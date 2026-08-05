@@ -49,6 +49,7 @@ interface FormState {
   tipoCarga: TipoCarga | '';
   fechaPactada: string;
   lugarId: number | null;
+  cantidadPlantillasRequeridas: number;
 }
 
 const initialFormState: FormState = {
@@ -60,6 +61,7 @@ const initialFormState: FormState = {
   tipoCarga: '',
   fechaPactada: '',
   lugarId: null,
+  cantidadPlantillasRequeridas: 1,
 };
 
 export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor }: NuevaInspeccionModalProps) {
@@ -283,6 +285,7 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
         p_usuario_actor: usuarioActor,
         p_servicio_id: form.servicioId,
         p_referencia_cliente: form.referenciaCliente.trim() || null,
+        p_cantidad_plantillas_requeridas: form.cantidadPlantillasRequeridas || 1,
       });
 
       if (error) throw error;
@@ -566,6 +569,22 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* ── Cantidad de Plantillas / Unidades ─────────────────── */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Plantillas a Recibir <span className="text-xs text-gray-500 font-normal">(Contenedores / Camiones a inspeccionar)</span> <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  required
+                  value={form.cantidadPlantillasRequeridas}
+                  onChange={e => setForm({ ...form, cantidadPlantillasRequeridas: Math.max(1, parseInt(e.target.value) || 1) })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm"
+                  placeholder="Ej. 1, 5, 10..."
+                />
               </div>
 
               {/* ── Tipo de Carga ──────────────────────────────────────── */}

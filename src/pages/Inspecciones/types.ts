@@ -1,5 +1,15 @@
 // ── Inspecciones Kanban – Types ────────────────────────────────────────
 
+/** Single received template item */
+export interface PlanillaRecibida {
+  id: number;
+  archivo_url: string;
+  nombre_archivo: string;
+  etiqueta_identificador: string | null;
+  created_at: string;
+  subido_por: string | null;
+}
+
 /** Row returned by public.v_inspecciones_kanban */
 export interface InspeccionKanban {
   id: number;
@@ -13,6 +23,9 @@ export interface InspeccionKanban {
   servicio_nombre: string | null;
   servicio_requiere_pedido: boolean;
   referencia_cliente: string | null;
+  cantidad_plantillas_requeridas: number;
+  cantidad_plantillas_recibidas: number;
+  planillas_recibidas: PlanillaRecibida[] | null;
   pedidos: PedidoVinculado[] | null;
 }
 

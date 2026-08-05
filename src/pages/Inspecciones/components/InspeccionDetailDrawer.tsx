@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   X,
   User,
@@ -17,13 +17,17 @@ import {
   AlertTriangle,
   Save,
   MapPin,
-  ArrowRight
+  ArrowRight,
+  Edit3,
+  Check,
+  Plus,
+  MessageSquare
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '../../../lib/utils';
 import { supabase } from '../../../lib/supabase';
-import type { InspeccionKanban, StateDefinition } from '../types';
+import type { InspeccionKanban, StateDefinition, PlanillaRecibida } from '../types';
 
 interface InspeccionDetailDrawerProps {
   isOpen: boolean;
@@ -73,17 +77,42 @@ export function InspeccionDetailDrawer({
   const [validationNotes, setValidationNotes] = useState('');
   const [isFinalizing, setIsFinalizing] = useState(false);
 
+  // Multi-planilla states
+  const [planillasList, setPlanillasList] = useState<PlanillaRecibida[]>([]);
+  const [uploadEtiqueta, setUploadEtiqueta] = useState('');
+  const [editingPlanillaId, setEditingPlanillaId] = useState<number | null>(null);
+  const [editingLabelText, setEditingLabelText] = useState('');
+  const [showExceptionModal, setShowExceptionModal] = useState(false);
+  const [exceptionReason, setExceptionReason] = useState('');
+  const [isAdvancingException, setIsAdvancingException] = useState(false);
+
+  // WhatsApp Inspector states
+  const [showWhatsAppConfirm, setShowWhatsAppConfirm] = useState(false);
+  const [whatsappDraftText, setWhatsappDraftText] = useState('');
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+
+  const fetchPlanillas = useCallback(async (insId?: number) => {
+    const targetId = insId || inspeccion?.id;
+    if (!targetId) return;
+    const { data: pData } = await supabase
+      .from('inspeccion_planillas_recibidas')
+      .select('*')
+      .eq('inspeccion_id', targetId)
+      .order('id', { ascending: true });
+    setPlanillasList((pData as PlanillaRecibida[]) || []);
+  }, [inspeccion?.id]);
 
   useEffect(() => {
     if (isOpen && inspeccion) {
       setLoadingDbData(true);
+      fetchPlanillas(inspeccion.id);
       const isEditablePhase = ['3.D0', '3.D1', '3.D2'].includes(inspeccion.state_code);
       
       const fetchAll = async () => {
         try {
           const { data } = await supabase
             .from('inspecciones')
-            .select('*, inspector:personal_ac(id, nombre_completo, email)')
+            .select('*, inspector:personal_ac(id, nombre_completo, email, celular), lugar_carga:depositos(id, nombre)')
             .eq('id', inspeccion.id)
             .single();
           let template_url = null;
@@ -144,7 +173,7 @@ export function InspeccionDetailDrawer({
       setValidationNotes('');
     }
 
-  }, [isOpen, inspeccion]);
+  }, [isOpen, inspeccion, fetchPlanillas]);
 
   if (!inspeccion) return null;
 
@@ -299,20 +328,14 @@ export function InspeccionDetailDrawer({
      }
   };
 
-  const handleUploadPlanilla = async () => {
+  const handleUploadPlanillaPersonalizada = async () => {
     if (!selectedFile || !inspeccion) return;
 
     try {
       setUploading(true);
       const ext = selectedFile.name.split('.').pop()?.toLowerCase() || 'bin';
       const timestamp = Date.now();
-      
-      let folder = '';
-      if (isEditablePhase) {
-        folder = 'personalizadas/';
-      }
-      
-      const storagePath = `${folder}planilla_ins_${inspeccion.id}_${timestamp}.${ext}`;
+      const storagePath = `personalizadas/planilla_ins_${inspeccion.id}_${timestamp}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
@@ -323,46 +346,231 @@ export function InspeccionDetailDrawer({
       const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
       const publicUrl = urlData.publicUrl;
 
-      const updateData: any = {};
-      if (isEditablePhase) {
-        updateData.planilla_personalizada_url = publicUrl;
-      } else {
-        updateData.planilla_completada_url = publicUrl;
-      }
-
       const { error: updateError } = await supabase
         .from('inspecciones')
-        .update(updateData)
+        .update({ planilla_personalizada_url: publicUrl })
         .eq('id', inspeccion.id);
 
       if (updateError) throw updateError;
 
-      setDbData((prev: any) => ({ ...prev, ...updateData }));
-
-      if (!isEditablePhase) {
-        const { error: transError } = await supabase.rpc('inspeccion_intentar_transicion', {
-          p_inspeccion_id: inspeccion.id,
-          p_nuevo_estado_code: '3.D3',
-          p_usuario_actor: usuarioActor,
-        });
-
-        if (transError) {
-          showToast('error', `Subido. Pero transición falló: ${transError.message}`);
-        } else {
-          showToast('success', 'Planilla final subida. Avanzado a Validación.');
-        }
-      } else {
-        showToast('success', 'Planilla personalizada guardada correcamente.');
-      }
+      setDbData((prev: any) => ({ ...prev, planilla_personalizada_url: publicUrl }));
+      showToast('success', 'Planilla personalizada guardada correctamente.');
 
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      onDataChanged();
+    } catch (err: any) {
+      console.error('Error uploading customized planilla:', err);
+      showToast('error', `Error al subir la planilla personalizada: ${err.message || 'Error desconocido'}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleUploadPlanillaRecibida = async () => {
+    if (!selectedFile || !inspeccion) return;
+
+    try {
+      setUploading(true);
+      const ext = selectedFile.name.split('.').pop()?.toLowerCase() || 'bin';
+      const timestamp = Date.now();
+      const storagePath = `completadas/planilla_ins_${inspeccion.id}_${timestamp}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .upload(storagePath, selectedFile, { upsert: false });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
+      const publicUrl = urlData.publicUrl;
+
+      const defaultTag = `Planilla #${planillasList.length + 1}`;
+      const tagToUse = uploadEtiqueta.trim() || defaultTag;
+
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('registrar_planilla_recibida', {
+        p_inspeccion_id: inspeccion.id,
+        p_archivo_url: publicUrl,
+        p_nombre_archivo: selectedFile.name,
+        p_etiqueta: tagToUse,
+        p_usuario_actor: usuarioActor
+      });
+
+      if (rpcErr) throw rpcErr;
+
+      if (rpcRes?.transicion_automatica) {
+        showToast('success', `Planilla subida (${rpcRes.cant_recibidas}/${rpcRes.cant_requeridas}). Transición automática a 3.D3 (En Revisión).`);
+      } else {
+        showToast('success', `Planilla "${tagToUse}" recibida (${rpcRes?.cant_recibidas || planillasList.length + 1}/${rpcRes?.cant_requeridas || 1}).`);
+      }
+
+      setSelectedFile(null);
+      setUploadEtiqueta('');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      
+      fetchPlanillas(inspeccion.id);
       onDataChanged();
     } catch (err: any) {
       console.error('Error uploading planilla:', err);
       showToast('error', `Error al subir la planilla: ${err.message || 'Error desconocido'}`);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleDeletePlanillaRecibida = async (planillaId: number) => {
+    if (!window.confirm('¿Estás seguro de eliminar esta planilla recibida?')) return;
+    try {
+      const { error } = await supabase.rpc('eliminar_planilla_recibida', {
+        p_planilla_id: planillaId,
+        p_usuario_actor: usuarioActor
+      });
+      if (error) throw error;
+      showToast('success', 'Planilla eliminada correctamente.');
+      fetchPlanillas();
+      onDataChanged();
+    } catch (err: any) {
+      showToast('error', `Error al eliminar la planilla: ${err.message}`);
+    }
+  };
+
+  const handleSavePlanillaLabel = async (planillaId: number) => {
+    if (!editingLabelText.trim()) return;
+    try {
+      const { error } = await supabase.rpc('actualizar_etiqueta_planilla', {
+        p_planilla_id: planillaId,
+        p_etiqueta: editingLabelText.trim()
+      });
+      if (error) throw error;
+      showToast('success', 'Etiqueta actualizada.');
+      setEditingPlanillaId(null);
+      fetchPlanillas();
+      onDataChanged();
+    } catch (err: any) {
+      showToast('error', `Error al actualizar etiqueta: ${err.message}`);
+    }
+  };
+
+  const handleAvanzarPorExcepcion = async () => {
+    if (!exceptionReason.trim()) {
+      showToast('error', 'Debe indicar un motivo obligatorio para el avance por excepción.');
+      return;
+    }
+    if (!inspeccion) return;
+
+    try {
+      setIsAdvancingException(true);
+      await supabase.rpc('log_inspeccion_evento', {
+        p_inspeccion_id: inspeccion.id,
+        p_estado_anterior_id: null,
+        p_nuevo_estado_id: null,
+        p_evento_tipo: 'AVANCE_EXCEPCION_PLANILLAS',
+        p_usuario_actor: usuarioActor,
+        p_metadata: {
+          motivo: exceptionReason.trim(),
+          recibidas: planillasList.length,
+          requeridas: inspeccion.cantidad_plantillas_requeridas
+        }
+      });
+
+      const { error } = await supabase.rpc('inspeccion_intentar_transicion', {
+        p_inspeccion_id: inspeccion.id,
+        p_nuevo_estado_code: '3.D3',
+        p_usuario_actor: usuarioActor
+      });
+
+      if (error) throw error;
+
+      showToast('success', 'Avance por excepción grabado. Inspección en estado 3.D3.');
+      setShowExceptionModal(false);
+      setExceptionReason('');
+      onDataChanged();
+      onClose();
+    } catch (err: any) {
+      showToast('error', `Error al avanzar por excepción: ${err.message}`);
+    } finally {
+      setIsAdvancingException(false);
+    }
+  };
+
+  const handleOpenWhatsAppModal = () => {
+    if (!inspeccion) return;
+    const templateLink = dbData?.planilla_personalizada_url || dbData?.template_url || '';
+    const inspectorName = dbData?.inspector?.nombre_completo || inspeccion.inspector_nombre || 'Inspector';
+    const lugarNombre = dbData?.lugar_carga?.nombre || 'Depósito asignado';
+
+    const draft = `Hola *${inspectorName}*, te enviamos la información para la inspección documental:
+
+📋 *Inspección:* #INS-${inspeccion.id}
+🏢 *Servicio:* ${inspeccion.servicio_nombre || 'Servicio de Inspección'}
+📍 *Lugar de Carga:* ${lugarNombre}
+🗓️ *Fecha Pactada:* ${fechaFormatted}
+📄 *Planillas Requeridas:* ${inspeccion.cantidad_plantillas_requeridas || 1} unidad(es)
+
+${templateLink ? `🔗 *Acceso a Plantilla:*\n${templateLink}\n\n` : ''}Por favor, completa las planillas requeridas y envíalas a la oficina.
+
+⚠️ *IMPORTANTE:* Por favor, NO responder a este mensaje automático por WhatsApp.`;
+
+    setWhatsappDraftText(draft);
+    setShowWhatsAppConfirm(true);
+  };
+
+  const handleSendWhatsAppInspector = async () => {
+    if (!inspeccion) return;
+    const rawPhone = dbData?.inspector?.celular || '';
+    const cleanPhone = rawPhone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      showToast('error', 'El inspector no posee un número de celular configurado en personal_ac.');
+      return;
+    }
+
+    try {
+      setSendingWhatsApp(true);
+
+      const inspectorId = dbData?.inspector?.id || null;
+      const inspectorName = dbData?.inspector?.nombre_completo || inspeccion.inspector_nombre || 'Inspector';
+      const { data: conversationId } = await supabase.rpc('get_or_create_conversation_for_inspector', {
+        p_inspector_id: inspectorId,
+        p_phone: cleanPhone,
+        p_inspeccion_id: inspeccion.id
+      });
+
+      const payload = {
+        conversation_id: conversationId || null,
+        conversation_key: cleanPhone,
+        nombre_inspector: inspectorName,
+        sender_id: null,
+        sender_email: usuarioActor,
+        action: 'send_message',
+        message: whatsappDraftText.trim(),
+        metadata: {
+          inspeccion_id: inspeccion.id,
+          tipo_actor: 'INSPECTOR'
+        }
+      };
+
+      const response = await fetch('https://hzerdan.app.n8n.cloud/webhook/whatsapp-salida-web', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error('Error al conectar con el servidor de envíos (n8n).');
+
+      await supabase.rpc('log_inspeccion_evento', {
+        p_inspeccion_id: inspeccion.id,
+        p_accion: 'WHATSAPP_ENVIADO_INSPECTOR',
+        p_usuario_actor: usuarioActor,
+        p_detalles: { celular: cleanPhone, mensaje: whatsappDraftText.trim(), conversation_id: conversationId }
+      });
+
+      showToast('success', 'Mensaje de WhatsApp enviado al inspector.');
+      setShowWhatsAppConfirm(false);
+      onDataChanged();
+    } catch (err: any) {
+      showToast('error', `Error al enviar WhatsApp: ${err.message}`);
+    } finally {
+      setSendingWhatsApp(false);
     }
   };
 
@@ -708,7 +916,7 @@ export function InspeccionDetailDrawer({
                           </button>
                           {selectedFile && (
                               <button
-                                  onClick={handleUploadPlanilla}
+                                  onClick={handleUploadPlanillaPersonalizada}
                                   disabled={uploading}
                                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
                               >
@@ -725,22 +933,39 @@ export function InspeccionDetailDrawer({
                     Comunicación con el Inspector
                   </h3>
                   
-                  <div className="p-5 bg-brand-50 border border-brand-100 rounded-xl space-y-3">
-                      <div>
-                        <h4 className="text-sm font-semibold text-brand-900">Enviar al Inspector</h4>
-                        <p className="text-xs text-brand-700">Notifica al inspector vía email con un enlace seguro (Edge Function) a la planilla personalizada.</p>
-                      </div>
+                  <div className="p-4 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
+                    <p className="text-xs text-gray-600">
+                      Envía los datos de la inspección y el enlace a la planilla al inspector a través del canal de tu preferencia:
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => setShowEmailConfirm(true)}
-                        disabled={sendingEmail || !dbData?.planilla_personalizada_url}
-                        className="w-full flex justify-center items-center gap-2 px-4 py-3 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700 disabled:opacity-50 disabled:bg-brand-300 transition"
+                        disabled={sendingEmail || !dbData?.inspector?.email}
+                        className="flex items-center justify-center gap-2 px-3 py-2.5 bg-brand-600 text-white rounded-lg text-xs font-bold hover:bg-brand-700 disabled:opacity-50 transition"
                       >
-                        {sendingEmail ? <Loader2 className="animate-spin w-5 h-5"/> : <Mail className="w-5 h-5" />}
-                        {sendingEmail ? 'Enviando...' : 'Enviar al Inspector'}
+                        {sendingEmail ? <Loader2 className="animate-spin w-4 h-4"/> : <Mail className="w-4 h-4" />}
+                        Enviar Email
                       </button>
-                      {!dbData?.planilla_personalizada_url && (
-                          <p className="text-xs text-center text-brand-600 font-semibold mt-1">Sube la planilla personalizada para habilitar el envío.</p>
-                      )}
+
+                      <button
+                        onClick={handleOpenWhatsAppModal}
+                        className="flex items-center justify-center gap-2 px-3 py-2.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition shadow-xs"
+                      >
+                        <MessageSquare className="w-4 h-4" />
+                        Enviar WhatsApp
+                      </button>
+                    </div>
+
+                    {!dbData?.inspector?.email ? (
+                      <p className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 font-medium">
+                        ⚠️ El inspector no posee un correo electrónico configurado en personal_ac.
+                      </p>
+                    ) : !dbData?.planilla_personalizada_url ? (
+                      <p className="text-[11px] text-blue-700 bg-blue-50 p-2 rounded border border-blue-200 font-medium">
+                        💡 Tip: Se generará un enlace seguro (Magic Link) de acceso a la inspección para el inspector.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -749,44 +974,125 @@ export function InspeccionDetailDrawer({
 
             {!isEditablePhase && (
                  <div className="space-y-4">
-                   <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">
-                     {isTerminalState ? "Documentación Final Cargada" : "Recepción de Planilla Final"}
+                   <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider flex items-center justify-between">
+                     <span>{isTerminalState ? "Documentación Final Cargada" : "Recepción de Planillas"}</span>
+                     <span className={cn(
+                       "text-xs font-bold px-2 py-0.5 rounded-full border",
+                       planillasList.length >= (inspeccion.cantidad_plantillas_requeridas || 1)
+                         ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                         : "bg-amber-50 text-amber-800 border-amber-200"
+                     )}>
+                       {planillasList.length} / {inspeccion.cantidad_plantillas_requeridas || 1} Recibidas
+                     </span>
                    </h3>
- 
-                   {loadingDbData && <div className="text-sm text-gray-400 mb-3">Cargando URLs documentales...</div>}
- 
-                   {dbData?.planilla_completada_url ? (
-                     <div className="flex items-center gap-2 mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-                       <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
-                       <span className="text-sm text-emerald-700 font-medium flex-1 truncate">
-                         Planilla cargada correctamente
-                       </span>
-                       <a
-                         href={dbData.planilla_completada_url}
-                         target="_blank"
-                         rel="noopener noreferrer"
-                         className="text-emerald-600 hover:text-emerald-800 p-1.5 bg-white border border-emerald-200 rounded-md shadow-sm hover:shadow transition"
-                       >
-                         <Download className="w-4 h-4" />
-                       </a>
-                     </div>
-                   ) : (
+
+                   {/* Barra de progreso de planillas */}
+                   <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                     <div
+                       className={cn(
+                         "h-full transition-all duration-300",
+                         planillasList.length >= (inspeccion.cantidad_plantillas_requeridas || 1) ? "bg-emerald-500" : "bg-amber-500"
+                       )}
+                       style={{ width: `${Math.min(100, Math.round((planillasList.length / (inspeccion.cantidad_plantillas_requeridas || 1)) * 100))}%` }}
+                     />
+                   </div>
+
+                   {loadingDbData && <div className="text-sm text-gray-400 mb-3">Cargando planillas...</div>}
+
+                   {/* Lista de planillas recibidas */}
+                   {planillasList.length === 0 ? (
                      <div className="flex items-center gap-2 mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
                        <FileText className="w-5 h-5 text-amber-500 flex-shrink-0" />
-                       <span className="text-sm text-amber-700 font-medium">
-                         Sin planilla cargada externamente ni subida manual.
+                       <span className="text-xs text-amber-800 font-medium">
+                         Aún no se han recibido planillas del inspector.
                        </span>
                      </div>
+                   ) : (
+                     <div className="space-y-2">
+                       {planillasList.map((p, idx) => (
+                         <div key={p.id || idx} className="p-3 bg-white border border-gray-200 rounded-xl flex items-center justify-between gap-2 shadow-xs hover:border-brand-300 transition">
+                           <div className="flex items-center gap-2 min-w-0 flex-1">
+                             <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                             <div className="min-w-0 flex-1">
+                               {editingPlanillaId === p.id ? (
+                                 <div className="flex items-center gap-1.5">
+                                   <input
+                                     type="text"
+                                     value={editingLabelText}
+                                     onChange={e => setEditingLabelText(e.target.value)}
+                                     className="text-xs font-bold text-gray-900 border rounded px-1.5 py-0.5 outline-none focus:ring-1 focus:ring-brand-500 w-full bg-white"
+                                     autoFocus
+                                   />
+                                   <button onClick={() => handleSavePlanillaLabel(p.id)} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded">
+                                     <Check className="w-3.5 h-3.5" />
+                                   </button>
+                                   <button onClick={() => setEditingPlanillaId(null)} className="p-1 text-gray-400 hover:bg-gray-100 rounded">
+                                     <X className="w-3.5 h-3.5" />
+                                   </button>
+                                 </div>
+                               ) : (
+                                 <div className="flex items-center gap-1.5 group">
+                                   <span className="text-xs font-bold text-gray-900 truncate">
+                                     {p.etiqueta_identificador || `Planilla #${idx + 1}`}
+                                   </span>
+                                   <button
+                                     onClick={() => {
+                                       setEditingPlanillaId(p.id);
+                                       setEditingLabelText(p.etiqueta_identificador || `Planilla #${idx + 1}`);
+                                     }}
+                                     className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-brand-600 transition"
+                                     title="Editar etiqueta"
+                                   >
+                                     <Edit3 className="w-3 h-3" />
+                                   </button>
+                                 </div>
+                               )}
+                               <p className="text-[11px] text-gray-500 truncate">{p.nombre_archivo}</p>
+                             </div>
+                           </div>
+
+                           <div className="flex items-center gap-1 flex-shrink-0">
+                             <a
+                               href={p.archivo_url}
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               className="p-1.5 text-gray-600 hover:text-brand-600 hover:bg-gray-100 rounded-lg transition"
+                               title="Ver/Descargar"
+                             >
+                               <ExternalLink className="w-4 h-4" />
+                             </a>
+                             {!isTerminalState && (
+                               <button
+                                 onClick={() => handleDeletePlanillaRecibida(p.id)}
+                                 className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                                 title="Eliminar planilla"
+                               >
+                                 <Trash2 className="w-4 h-4" />
+                               </button>
+                             )}
+                           </div>
+                         </div>
+                       ))}
+                     </div>
                    )}
- 
+
                    {!isTerminalState && (
-                     <>
+                     <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+                        <p className="text-xs font-bold text-gray-700 uppercase tracking-wider">Adjuntar Nueva Planilla</p>
+                        
+                        <input
+                          type="text"
+                          value={uploadEtiqueta}
+                          onChange={e => setUploadEtiqueta(e.target.value)}
+                          placeholder={`Nombre / Etiqueta (ej. Contenedor PCIU-123. Por defecto: Planilla #${planillasList.length + 1})`}
+                          className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-500 bg-white"
+                        />
+
                         {selectedFile && (
-                          <div className="flex items-center gap-2 mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                          <div className="flex items-center gap-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-xs">
                             <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                            <span className="text-blue-700 truncate flex-1">
-                              {selectedFile.name}{' '}
-                              <span className="text-blue-500">({(selectedFile.size / 1024).toFixed(0)} KB)</span>
+                            <span className="text-blue-700 truncate flex-1 font-medium">
+                              {selectedFile.name} <span className="text-blue-500">({(selectedFile.size / 1024).toFixed(0)} KB)</span>
                             </span>
                             <button
                               type="button"
@@ -800,32 +1106,32 @@ export function InspeccionDetailDrawer({
                             </button>
                           </div>
                         )}
-      
+
                         <input
                           ref={fileInputRef}
                           type="file"
-                          accept=".pdf,.xlsx,.xls"
+                          accept=".pdf,.xlsx,.xls,.png,.jpg,.jpeg"
                           className="hidden"
                           onChange={handleFileChange}
                         />
-      
+
                         <div className="flex gap-2">
                           <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
                             disabled={uploading}
-                            className="flex items-center gap-2 flex-1 justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50/30 transition disabled:opacity-50"
+                            className="flex items-center gap-2 flex-1 justify-center px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-lg text-xs font-medium text-gray-600 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50/30 transition disabled:opacity-50"
                           >
                             <Upload className="w-4 h-4" />
-                            {selectedFile ? 'Cambiar archivo' : 'Forzar Subida Manual'}
+                            {selectedFile ? 'Cambiar archivo' : 'Seleccionar Archivo...'}
                           </button>
-      
+
                           {selectedFile && (
                             <button
                               type="button"
-                              onClick={handleUploadPlanilla}
+                              onClick={handleUploadPlanillaRecibida}
                               disabled={uploading}
-                              className="flex items-center gap-2 px-5 py-3 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition text-sm font-medium disabled:opacity-50"
+                              className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition text-xs font-bold disabled:opacity-50"
                             >
                               {uploading ? (
                                 <>
@@ -834,17 +1140,31 @@ export function InspeccionDetailDrawer({
                                 </>
                               ) : (
                                 <>
-                                  <Upload className="w-4 h-4" />
-                                  Subir
+                                  <Plus className="w-4 h-4" />
+                                  Guardar Planilla
                                 </>
                               )}
                             </button>
                           )}
                         </div>
-                        <p className="text-[11px] text-gray-500 mt-2">
-                          Esto intenta avanzar al estado <span className="font-semibold">3.D3 (Validación)</span>.
-                        </p>
-                     </>
+
+                        {inspeccion.state_code === '3.D2' && planillasList.length < (inspeccion.cantidad_plantillas_requeridas || 1) && (
+                          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+                            <div className="flex items-start gap-2 text-amber-900 text-xs font-medium">
+                              <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                              <span>Faltan recibirse {(inspeccion.cantidad_plantillas_requeridas || 1) - planillasList.length} planilla(s). Si no se recibirán más, puedes hacer un avance por excepción.</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setShowExceptionModal(true)}
+                              className="w-full px-3 py-2 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 transition text-xs flex items-center justify-center gap-1.5"
+                            >
+                              <ArrowRight className="w-3.5 h-3.5" />
+                              Avanzar por Excepción (Motivo Obligatorio)
+                            </button>
+                          </div>
+                        )}
+                     </div>
                    )}
                  </div>
             )}
@@ -904,6 +1224,139 @@ export function InspeccionDetailDrawer({
                   className="flex-1 px-4 py-2.5 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 transition shadow-lg shadow-brand-200 disabled:opacity-50"
                 >
                   Enviar Ahora
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Exception Modal for Incomplete Planillas */}
+      {showExceptionModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden border border-gray-100 scale-in-center">
+            <div className="p-6">
+              <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 text-center mb-1">Avance por Excepción</h3>
+              <p className="text-xs text-gray-500 text-center mb-4">
+                Se han recibido <span className="font-bold text-amber-700">{planillasList.length}</span> de <span className="font-bold text-gray-900">{inspeccion.cantidad_plantillas_requeridas || 1}</span> planillas requeridas. Indica el motivo obligatorio para autorizar el pase a revisión.
+              </p>
+
+              <div className="space-y-2 mb-5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block">
+                  Motivo de Excepción <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={exceptionReason}
+                  onChange={e => setExceptionReason(e.target.value)}
+                  placeholder="Ej. Se canceló la carga de 2 contenedores por problemas de stock en origen..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-amber-500 outline-none min-h-[90px] resize-none bg-white"
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowExceptionModal(false)}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition text-xs"
+                  disabled={isAdvancingException}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAvanzarPorExcepcion}
+                  disabled={isAdvancingException || !exceptionReason.trim()}
+                  className="flex-1 px-4 py-2.5 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 transition shadow-lg shadow-amber-200 disabled:opacity-50 text-xs flex items-center justify-center gap-1.5"
+                >
+                  {isAdvancingException ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Procesando...
+                    </>
+                  ) : (
+                    'Confirmar Avance'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* WhatsApp Confirmation Modal */}
+      {showWhatsAppConfirm && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-gray-100 scale-in-center">
+            <div className="bg-emerald-600 p-4 text-white flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5" />
+                <h3 className="font-bold text-base">Enviar WhatsApp al Inspector</h3>
+              </div>
+              <button onClick={() => setShowWhatsAppConfirm(false)} className="hover:bg-white/20 p-1 rounded-full transition cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-emerald-50 rounded-xl p-3.5 border border-emerald-100 flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Destinatario</p>
+                  <p className="text-sm font-bold text-gray-900">{dbData?.inspector?.nombre_completo || inspeccion.inspector_nombre}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Celular</p>
+                  <p className="text-xs font-bold text-emerald-800 font-mono">{dbData?.inspector?.celular || 'Sin registrar'}</p>
+                </div>
+              </div>
+
+              {!dbData?.inspector?.celular && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 font-medium">
+                  ⚠️ El inspector no tiene un celular registrado en el catálogo de personal. Por favor actualiza su ficha de personal.
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block">
+                  Mensaje a Enviar (Editable)
+                </label>
+                <textarea
+                  value={whatsappDraftText}
+                  onChange={e => setWhatsappDraftText(e.target.value)}
+                  rows={9}
+                  className="w-full p-3 border border-gray-300 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 outline-none resize-y font-sans leading-relaxed bg-white shadow-inner"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowWhatsAppConfirm(false)}
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 font-bold rounded-lg hover:bg-gray-50 transition text-xs"
+                  disabled={sendingWhatsApp}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSendWhatsAppInspector}
+                  disabled={sendingWhatsApp || !dbData?.inspector?.celular || !whatsappDraftText.trim()}
+                  className="flex-[2] px-4 py-2.5 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 transition shadow-lg shadow-emerald-200 disabled:opacity-50 text-xs flex items-center justify-center gap-1.5"
+                >
+                  {sendingWhatsApp ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Enviando WhatsApp...
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare className="w-4 h-4" />
+                      Enviar Mensaje por WhatsApp
+                    </>
+                  )}
                 </button>
               </div>
             </div>
