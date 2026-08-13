@@ -14,9 +14,11 @@ import {
   CheckCircle2, 
   Lock, 
   RotateCcw,
-  Eye
+  Eye,
+  Plus
 } from 'lucide-react';
 import type { RemitoActivo } from '../types/remito';
+import { CargarRemitoLargoModal } from './Remitos/components/CargarRemitoLargoModal';
 
 type ToastType = 'info' | 'error';
 type EstadoFilterType = 'ACTIVOS' | 'FINALIZADOS' | 'TODOS';
@@ -26,6 +28,7 @@ export function RemitosList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<{ type: ToastType; text: string } | null>(null);
+  const [isCargarLargoOpen, setIsCargarLargoOpen] = useState(false);
 
   // Filters state
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilterType>('ACTIVOS');
@@ -231,8 +234,18 @@ export function RemitosList() {
           </div>
         </div>
 
-        {/* Filter Tabs: Activos | Finalizados | Todos */}
-        <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0 self-start md:self-auto border border-gray-200">
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsCargarLargoOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs sm:text-sm rounded-xl shadow-sm transition-all cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Cargar Remito Largo</span>
+          </button>
+
+          {/* Filter Tabs: Activos | Finalizados | Todos */}
+          <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0 border border-gray-200">
           <button
             onClick={() => setEstadoFilter('ACTIVOS')}
             className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
@@ -266,6 +279,7 @@ export function RemitosList() {
           </button>
         </div>
       </div>
+    </div>
 
       {/* Filter Toolbar: Nro Remito & Rango de Fechas */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row items-stretch md:items-center gap-4">
@@ -521,6 +535,16 @@ export function RemitosList() {
           {toastMessage.text}
         </div>
       )}
+
+      {/* Modal de Cargar Remito Largo desde Estación Intermedia */}
+      <CargarRemitoLargoModal 
+        isOpen={isCargarLargoOpen}
+        onClose={() => setIsCargarLargoOpen(false)}
+        onSuccess={() => {
+          showToast('info', 'Remito Largo emitido y stock descontado con éxito');
+          fetchRemitos();
+        }}
+      />
     </div>
   );
 }

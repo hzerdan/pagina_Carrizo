@@ -169,15 +169,19 @@ export function MonitorCard({ instance, onClick }: MonitorCardProps) {
 
           {/* Entities and Logistics Info */}
           <div className="mt-auto space-y-2">
-             <div className="flex items-center text-xs text-gray-600">
-               <Building2 className="w-3.5 h-3.5 mr-2 text-gray-400 flex-shrink-0" />
-               <span className="truncate" title={instance.cliente}>{instance.cliente}</span>
-             </div>
+             {instance.cliente && (
+               <div className="flex items-center text-xs text-gray-600">
+                 <Building2 className="w-3.5 h-3.5 mr-2 text-gray-400 flex-shrink-0" />
+                 <span className="truncate" title={instance.cliente}>{instance.cliente}</span>
+               </div>
+             )}
              
-             <div className="flex items-center text-xs text-gray-600">
-               <User className="w-3.5 h-3.5 mr-2 text-gray-400 flex-shrink-0" />
-               <span className="truncate" title={instance.proveedor}>{instance.proveedor}</span>
-             </div>
+             {instance.proveedor && (
+               <div className="flex items-center text-xs text-gray-600">
+                 <User className="w-3.5 h-3.5 mr-2 text-gray-400 flex-shrink-0" />
+                 <span className="truncate" title={instance.proveedor}>{instance.proveedor}</span>
+               </div>
+             )}
 
              {instance.nro_remito && (
                <div className="flex items-center text-xs text-brand-700 pt-1 font-medium bg-brand-50 w-fit px-2 py-0.5 rounded">

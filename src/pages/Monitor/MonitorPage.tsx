@@ -3,28 +3,60 @@ import { MonitorFilters } from './components/MonitorFilters';
 import { MonitorBoard } from './components/MonitorBoard';
 import { TransitionModal } from './components/TransitionModal';
 import { InstanceDetailsDrawer } from './components/InstanceDetailsDrawer';
-import type { InstanceData, StateDefinition } from './types';
+import { TraceabilityModal } from './components/TraceabilityModal';
+import type { InstanceData, StateDefinition, EntityType, FilterState } from './types';
+import { DEFAULT_FILTERS } from './types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { RefreshCw, AlertCircle } from 'lucide-react';
 import type { DragEndEvent } from '@dnd-kit/core';
+import { cn } from '../../lib/utils';
 
 export function MonitorPage() {
   const { user } = useAuth();
   
+  const [activeTab, setActiveTab] = useState<EntityType>('PEDIDO');
   const [data, setData] = useState<InstanceData[]>([]);
   const [stateDefs, setStateDefs] = useState<StateDefinition[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [tipoMercado, setTipoMercado] = useState<string>('TODOS');
-  const [colorAlerta, setColorAlerta] = useState<string>('TODOS');
-  const [searchPedido, setSearchPedido] = useState<string>('');
+  // Estados de filtros independientes para Pedidos y OC
+  const [filtersPedido, setFiltersPedido] = useState<FilterState>(DEFAULT_FILTERS);
+  const [filtersOC, setFiltersOC] = useState<FilterState>(DEFAULT_FILTERS);
   const [selectedInstance, setSelectedInstance] = useState<InstanceData | null>(null);
+  const [traceabilityInstance, setTraceabilityInstance] = useState<InstanceData | null>(null);
 
-  // Filtros de estado para el Kanban
-  const [stateFilterMode, setStateFilterMode] = useState<'TODOS' | 'CON_TARJETAS' | 'SELECCIONADOS'>('TODOS');
-  const [selectedStates, setSelectedStates] = useState<string[]>([]);
+  // Filtros activos según la pestaña seleccionada
+  const activeFilters = activeTab === 'PEDIDO' ? filtersPedido : filtersOC;
+
+  const setActiveFilterField = <K extends keyof FilterState>(field: K, value: FilterState[K]) => {
+    if (activeTab === 'PEDIDO') {
+      setFiltersPedido(prev => ({ ...prev, [field]: value }));
+    } else {
+      setFiltersOC(prev => ({ ...prev, [field]: value }));
+    }
+  };
+
+  // Resetear únicamente los filtros de la pestaña activa
+  const handleResetFilters = useCallback(() => {
+    if (activeTab === 'PEDIDO') {
+      setFiltersPedido(DEFAULT_FILTERS);
+    } else {
+      setFiltersOC(DEFAULT_FILTERS);
+    }
+  }, [activeTab]);
+
+  // Comprobar si hay filtros activos en la pestaña actual
+  const isFiltered = useMemo(() => {
+    return (
+      activeFilters.tipoMercado !== DEFAULT_FILTERS.tipoMercado ||
+      activeFilters.colorAlerta !== DEFAULT_FILTERS.colorAlerta ||
+      activeFilters.searchPedido !== DEFAULT_FILTERS.searchPedido ||
+      activeFilters.stateFilterMode !== DEFAULT_FILTERS.stateFilterMode ||
+      activeFilters.selectedStates.length > 0
+    );
+  }, [activeFilters]);
 
   // Transition State
   const [pendingTransition, setPendingTransition] = useState<{
@@ -38,9 +70,12 @@ export function MonitorPage() {
       setIsLoading(true);
       setError(null);
       
+      const viewName = activeTab === 'PEDIDO' ? 'vw_monitor_instancias_activas' : 'vw_monitor_oc_instancias_activas';
+      const fsmId = activeTab === 'PEDIDO' ? 1 : 2;
+
       const [instancesRes, statesRes] = await Promise.all([
-        supabase.from('vw_monitor_instancias_activas').select('*'),
-        supabase.from('state_definitions').select('state_code, name').eq('fsm_id', 1).order('state_code', { ascending: true })
+        supabase.from(viewName).select('*'),
+        supabase.from('state_definitions').select('state_code, name').eq('fsm_id', fsmId).order('state_code', { ascending: true })
       ]);
 
       if (instancesRes.error) throw new Error(instancesRes.error.message);
@@ -54,22 +89,51 @@ export function MonitorPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [activeTab]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
+  // Handler al cambiar de Tab: conserva los filtros previamente elegidos en cada pestaña
+  const handleTabChange = (newTab: EntityType) => {
+    if (newTab !== activeTab) {
+      setActiveTab(newTab);
+      setSelectedInstance(null);
+      setTraceabilityInstance(null);
+    }
+  };
+
   // Filtrado en el frontend
   const filteredData = useMemo(() => {
     return data.filter(instance => {
-      const matchMercado = tipoMercado === 'TODOS' || instance.tipo_mercado === tipoMercado;
-      const matchAlerta = colorAlerta === 'TODOS' || instance.color_alerta === colorAlerta;
-      const matchPedido = !searchPedido || (instance.nro_pedido && instance.nro_pedido.toLowerCase().includes(searchPedido.toLowerCase()));
+      const matchMercado = activeFilters.tipoMercado === 'TODOS' || instance.tipo_mercado === activeFilters.tipoMercado;
+      const matchAlerta = activeFilters.colorAlerta === 'TODOS' || instance.color_alerta === activeFilters.colorAlerta;
       
-      return matchMercado && matchAlerta && matchPedido;
+      const query = activeFilters.searchPedido.toLowerCase();
+      const matchPedido = !activeFilters.searchPedido || (
+        (instance.nro_pedido && instance.nro_pedido.toLowerCase().includes(query)) ||
+        (instance.cliente && instance.cliente.toLowerCase().includes(query)) ||
+        (instance.proveedor && instance.proveedor.toLowerCase().includes(query)) ||
+        (instance.referencia_humana && instance.referencia_humana.toLowerCase().includes(query))
+      );
+
+      // Filtro de Finalizadas (Afecta ÚNICAMENTE a las tarjetas en estados terminales '7' y '99')
+      const code = instance.estado_actual.split(':')[0].trim();
+      const isFinalState = code === '7' || code === '99';
+      let matchFinalizadas = true;
+      if (isFinalState) {
+        const horas = Number(instance.horas_transcurridas) || 0;
+        if (activeFilters.finalizadasFilterMode === 'RECIENTES') {
+          matchFinalizadas = horas <= 72;
+        } else if (activeFilters.finalizadasFilterMode === 'ANTIGUAS') {
+          matchFinalizadas = horas > 72;
+        }
+      }
+      
+      return matchMercado && matchAlerta && matchPedido && matchFinalizadas;
     });
-  }, [data, tipoMercado, colorAlerta, searchPedido]);
+  }, [data, activeFilters]);
 
   // Estados que actualmente contienen tarjetas
   const statesWithCards = useMemo(() => {
@@ -83,29 +147,36 @@ export function MonitorPage() {
 
   // Definiciones de estado (columnas) filtradas para el tablero
   const filteredStateDefs = useMemo(() => {
-    if (stateFilterMode === 'TODOS') {
+    if (activeFilters.stateFilterMode === 'TODOS') {
       return stateDefs;
     }
-    if (stateFilterMode === 'CON_TARJETAS') {
+    if (activeFilters.stateFilterMode === 'CON_TARJETAS') {
       return stateDefs.filter(stateDef => 
-        statesWithCards.has(stateDef.state_code) || selectedStates.includes(stateDef.state_code)
+        statesWithCards.has(stateDef.state_code) || activeFilters.selectedStates.includes(stateDef.state_code)
       );
     }
-    if (stateFilterMode === 'SELECCIONADOS') {
-      return stateDefs.filter(stateDef => selectedStates.includes(stateDef.state_code));
+    if (activeFilters.stateFilterMode === 'SELECCIONADOS') {
+      return stateDefs.filter(stateDef => activeFilters.selectedStates.includes(stateDef.state_code));
     }
     return stateDefs;
-  }, [stateDefs, stateFilterMode, statesWithCards, selectedStates]);
+  }, [stateDefs, activeFilters.stateFilterMode, activeFilters.selectedStates, statesWithCards]);
 
   // Handler para cambiar el modo de filtro de estados y pre-poblar selecciones
   const handleStateFilterModeChange = useCallback((mode: 'TODOS' | 'CON_TARJETAS' | 'SELECCIONADOS') => {
-    setStateFilterMode(mode);
-    if (mode === 'SELECCIONADOS') {
-      setSelectedStates(Array.from(statesWithCards));
-    } else if (mode === 'CON_TARJETAS') {
-      setSelectedStates([]);
+    if (activeTab === 'PEDIDO') {
+      setFiltersPedido(prev => ({
+        ...prev,
+        stateFilterMode: mode,
+        selectedStates: mode === 'SELECCIONADOS' ? Array.from(statesWithCards) : []
+      }));
+    } else {
+      setFiltersOC(prev => ({
+        ...prev,
+        stateFilterMode: mode,
+        selectedStates: mode === 'SELECCIONADOS' ? Array.from(statesWithCards) : []
+      }));
     }
-  }, [statesWithCards]);
+  }, [activeTab, statesWithCards]);
 
   const toggleRefresh = () => {
     setSelectedInstance(null); // Optional: close drawer on refresh
@@ -153,7 +224,10 @@ export function MonitorPage() {
     
     try {
       setIsTransitioning(true);
-      const { error: rpcError } = await supabase.rpc('transicionar_instancia_manual', {
+
+      const rpcName = activeTab === 'PEDIDO' ? 'transicionar_instancia_manual' : 'transicionar_instancia_oc_manual';
+
+      const { error: rpcError } = await supabase.rpc(rpcName, {
         p_instancia_id: pendingTransition.instance.instancia_id,
         p_nuevo_estado_code: pendingTransition.newStateCode,
         p_usuario_nombre: user?.email || 'unknown',
@@ -186,14 +260,42 @@ export function MonitorPage() {
             </p>
           </div>
           
-          <button 
-            onClick={toggleRefresh}
-            disabled={isLoading}
-            className="flex flex-shrink-0 items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Actualizar
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Tabs Selector */}
+            <div className="flex items-center p-1 bg-gray-200/70 rounded-xl border border-gray-200/80 shadow-inner">
+              <button
+                onClick={() => handleTabChange('PEDIDO')}
+                className={cn(
+                  "px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer",
+                  activeTab === 'PEDIDO'
+                    ? "bg-white text-brand-700 shadow-sm font-bold"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
+                )}
+              >
+                Pedidos
+              </button>
+              <button
+                onClick={() => handleTabChange('OC')}
+                className={cn(
+                  "px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer",
+                  activeTab === 'OC'
+                    ? "bg-white text-brand-700 shadow-sm font-bold"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-white/50"
+                )}
+              >
+                Órdenes de Compra (OC)
+              </button>
+            </div>
+
+            <button 
+              onClick={toggleRefresh}
+              disabled={isLoading}
+              className="flex flex-shrink-0 items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-50 shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              Actualizar
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -209,18 +311,23 @@ export function MonitorPage() {
          {/* Filtros */}
         <div className="mb-4 flex-shrink-0">
           <MonitorFilters 
-            tipoMercado={tipoMercado}
-            setTipoMercado={setTipoMercado}
-            colorAlerta={colorAlerta}
-            setColorAlerta={setColorAlerta}
-            searchPedido={searchPedido}
-            setSearchPedido={setSearchPedido}
-            stateFilterMode={stateFilterMode}
+            tipoMercado={activeFilters.tipoMercado}
+            setTipoMercado={(val) => setActiveFilterField('tipoMercado', val)}
+            colorAlerta={activeFilters.colorAlerta}
+            setColorAlerta={(val) => setActiveFilterField('colorAlerta', val)}
+            searchPedido={activeFilters.searchPedido}
+            setSearchPedido={(val) => setActiveFilterField('searchPedido', val)}
+            finalizadasFilterMode={activeFilters.finalizadasFilterMode}
+            setFinalizadasFilterMode={(val) => setActiveFilterField('finalizadasFilterMode', val)}
+            stateFilterMode={activeFilters.stateFilterMode}
             setStateFilterMode={handleStateFilterModeChange}
-            selectedStates={selectedStates}
-            setSelectedStates={setSelectedStates}
+            selectedStates={activeFilters.selectedStates}
+            setSelectedStates={(val) => setActiveFilterField('selectedStates', val)}
             stateDefs={stateDefs}
             statesWithCards={statesWithCards}
+            activeTab={activeTab}
+            onResetFilters={handleResetFilters}
+            isFiltered={isFiltered}
           />
         </div>
 
@@ -244,6 +351,8 @@ export function MonitorPage() {
         instance={selectedInstance}
         onClose={() => setSelectedInstance(null)}
         onTransitionSuccess={fetchData}
+        entityType={activeTab}
+        onOpenTraceability={(inst) => setTraceabilityInstance(inst)}
       />
 
       {/* Modal de Transición Manual */}
@@ -256,6 +365,16 @@ export function MonitorPage() {
         newStateCode={pendingTransition?.newStateCode || null}
         stateDefs={stateDefs}
       />
+
+      {/* Modal de Trazabilidad e Historial Cronológico (Fase 1) */}
+      <TraceabilityModal
+        isOpen={!!traceabilityInstance}
+        onClose={() => setTraceabilityInstance(null)}
+        instance={traceabilityInstance}
+        entityType={activeTab}
+      />
     </div>
   );
 }
+
+

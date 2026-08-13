@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Filter, Search, ChevronDown } from 'lucide-react';
-import type { StateDefinition } from '../types';
+import { Filter, Search, ChevronDown, RotateCcw } from 'lucide-react';
+import type { StateDefinition, FinalizadasFilterMode } from '../types';
 import { cn } from '../../../lib/utils';
 
 interface MonitorFiltersProps {
@@ -10,12 +10,17 @@ interface MonitorFiltersProps {
   setColorAlerta: (value: string) => void;
   searchPedido: string;
   setSearchPedido: (value: string) => void;
+  finalizadasFilterMode: FinalizadasFilterMode;
+  setFinalizadasFilterMode: (value: FinalizadasFilterMode) => void;
   stateFilterMode: 'TODOS' | 'CON_TARJETAS' | 'SELECCIONADOS';
   setStateFilterMode: (value: 'TODOS' | 'CON_TARJETAS' | 'SELECCIONADOS') => void;
   selectedStates: string[];
   setSelectedStates: (value: string[]) => void;
   stateDefs: StateDefinition[];
   statesWithCards: Set<string>;
+  activeTab?: 'PEDIDO' | 'OC';
+  onResetFilters?: () => void;
+  isFiltered?: boolean;
 }
 
 export function MonitorFilters({ 
@@ -25,24 +30,43 @@ export function MonitorFilters({
   setColorAlerta,
   searchPedido,
   setSearchPedido,
+  finalizadasFilterMode,
+  setFinalizadasFilterMode,
   stateFilterMode,
   setStateFilterMode,
   selectedStates,
   setSelectedStates,
   stateDefs,
-  statesWithCards
+  statesWithCards,
+  activeTab = 'PEDIDO',
+  onResetFilters,
+  isFiltered = false
 }: MonitorFiltersProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   return (
     <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col lg:flex-row gap-4 items-center justify-between mb-6">
-      <div className="flex items-center gap-2 text-gray-700 font-medium">
-        <Filter className="w-5 h-5 text-gray-500" />
-        <span>Filtros</span>
+      <div className="flex items-center gap-3 text-gray-700 font-medium">
+        <div className="flex items-center gap-2">
+          <Filter className="w-5 h-5 text-gray-500" />
+          <span>Filtros</span>
+        </div>
+
+        {isFiltered && onResetFilters && (
+          <button
+            type="button"
+            onClick={onResetFilters}
+            className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-gray-600 hover:text-red-700 bg-gray-100 hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-lg transition-colors cursor-pointer shadow-sm"
+            title="Restablecer todos los filtros a su estado original"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-gray-500 hover:text-red-600" />
+            <span>Restablecer</span>
+          </button>
+        )}
       </div>
       
       <div className="flex flex-wrap gap-4 w-full lg:w-auto items-center">
-        {/* Búsqueda por Pedido */}
+        {/* Búsqueda por Pedido u OC */}
         <div className="relative flex-1 min-w-[200px] sm:flex-initial">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search className="h-4 w-4 text-gray-400" />
@@ -51,7 +75,7 @@ export function MonitorFilters({
             type="text"
             value={searchPedido}
             onChange={(e) => setSearchPedido(e.target.value)}
-            placeholder="Buscar por Nº Pedido..."
+            placeholder={activeTab === 'OC' ? "Buscar por Nº OC o Proveedor..." : "Buscar por Nº Pedido o Cliente..."}
             className="block w-full pl-10 pr-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-gray-50 hover:bg-white transition-colors"
           />
         </div>
@@ -80,6 +104,20 @@ export function MonitorFilters({
             <option value="VERDE">Verde (Normal)</option>
             <option value="AMARILLO">Amarillo (+12hs)</option>
             <option value="ROJO">Rojo (+24hs)</option>
+          </select>
+        </div>
+
+        {/* Filtro de Finalizadas (Afecta únicamente a columnas de estado final 7 y 99) */}
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600 font-medium">Finalizadas:</label>
+          <select 
+            value={finalizadasFilterMode} 
+            onChange={(e) => setFinalizadasFilterMode(e.target.value as FinalizadasFilterMode)}
+            className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 bg-gray-50 hover:bg-white transition-colors cursor-pointer"
+          >
+            <option value="RECIENTES">Recientes (≤ 72hs)</option>
+            <option value="TODAS">Todas</option>
+            <option value="ANTIGUAS">Antiguas (&gt; 72hs)</option>
           </select>
         </div>
 

@@ -15,3 +15,9 @@ Antes de realizar cualquier cambio en un nodo de n8n, se debe seguir estrictamen
 1. **Fetch:** Descargar la definición actual del workflow o del nodo de interés a través de la API/MCP de n8n.
 2. **Modify:** Usar un script (preferentemente Python) para parsear el JSON, buscar el nodo específico por nombre o ID, y realizar la modificación quirúrgica en el campo exacto (ej. `node['parameters']['responses']['values'][1]['content'] = nuevo_prompt`).
 3. **Push:** Subir la actualización completa del workflow con el resto de la estructura original intacta.
+
+## ⚠️ Reglas Críticas para Funciones y RPCs en PostgreSQL (Supabase)
+
+### 1. Incluir Siempre `DROP FUNCTION IF EXISTS` Previas al `CREATE OR REPLACE FUNCTION`
+* En PostgreSQL, el comando `CREATE OR REPLACE FUNCTION` **no reemplaza** funciones si cambian los tipos o el orden de sus parámetros, generando versiones sobrecargadas duplicadas en el esquema `public` que provocan errores de ambigüedad (`Could not choose the best candidate function`).
+* Antes de definir cualquier `CREATE OR REPLACE FUNCTION`, se deben incluir explícitamente las sentencias `DROP FUNCTION IF EXISTS public.<nombre_funcion>(...);` contemplando las firmas de tipos previas para asegurar un reemplazo canónico limpio sin ambigüedades.

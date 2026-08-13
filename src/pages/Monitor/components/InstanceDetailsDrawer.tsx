@@ -12,6 +12,8 @@ interface InstanceDetailsDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onTransitionSuccess?: () => void;
+  entityType?: 'PEDIDO' | 'OC';
+  onOpenTraceability?: (instance: InstanceData) => void;
 }
 
 interface ChecklistItem {
@@ -22,7 +24,7 @@ interface ChecklistItem {
   mensaje: string;
 }
 
-export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionSuccess }: InstanceDetailsDrawerProps) {
+export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionSuccess, entityType = 'PEDIDO', onOpenTraceability }: InstanceDetailsDrawerProps) {
   const { user, personalAcId } = useAuth();
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
@@ -158,29 +160,53 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
         });
 
         if (error) throw error;
-        setChecklist((data as ChecklistItem[]) || []);
+        setChecklist(Array.isArray(data) ? (data as ChecklistItem[]) : []);
       }
     } catch (err) {
       console.error('Error fetching checklist:', err);
+      setChecklist([]);
     } finally {
       setIsLoadingChecklist(false);
     }
   }, [instance, stateCode]);
 
-  // Función para manejar el cambio de checkboxes de operador (Estado 7 / Manuales)
+  // Función para manejar el cambio de checkboxes de operador (Estado 7 / Sobres Estado 4 / Manuales)
   const handleToggleCheckbox = async (item: ChecklistItem) => {
     if (!instance) return;
     try {
       setSavingTaskCode(item.codigo);
       const isChecked = !item.cumplido;
-      const rpcParams: Record<string, any> = { p_instancia_id: instance.instancia_id };
 
-      if (item.codigo === 'VAL_P_701') rpcParams.p_revision_controles_carga_final = isChecked;
-      if (item.codigo === 'VAL_P_702') rpcParams.p_debito_interno_subconsignacion = isChecked;
-      if (item.codigo === 'VAL_P_703') rpcParams.p_reclamo_transporte_incompleto = isChecked;
+      if (item.codigo === 'VAL_P_MI_401' || item.codigo === 'VAL_P_MI_402') {
+        const { data: riData } = await supabase
+          .from('remito_items')
+          .select('remito_id')
+          .or(`destino_instance_id.eq.${instance.instancia_id},origen_instance_id.eq.${instance.instancia_id}`)
+          .eq('origen_type', 'PEDIDO')
+          .limit(1)
+          .maybeSingle();
 
-      const { error } = await supabase.rpc('guardar_checkboxes_estado_7', rpcParams);
-      if (error) throw error;
+        if (riData?.remito_id) {
+          const updatePayload = item.codigo === 'VAL_P_MI_401'
+            ? { mi_sobre_proveedor_preparado: isChecked }
+            : { mi_sobre_cliente_preparado: isChecked };
+
+          const { error } = await supabase
+            .from('remitos')
+            .update(updatePayload)
+            .eq('id', riData.remito_id);
+
+          if (error) throw error;
+        }
+      } else {
+        const rpcParams: Record<string, any> = { p_instancia_id: instance.instancia_id };
+        if (item.codigo === 'VAL_P_701') rpcParams.p_revision_controles_carga_final = isChecked;
+        if (item.codigo === 'VAL_P_702') rpcParams.p_debito_interno_subconsignacion = isChecked;
+        if (item.codigo === 'VAL_P_703') rpcParams.p_reclamo_transporte_incompleto = isChecked;
+
+        const { error } = await supabase.rpc('guardar_checkboxes_estado_7', rpcParams);
+        if (error) throw error;
+      }
 
       await loadChecklist();
       onTransitionSuccess?.();
@@ -217,6 +243,7 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
       }
     };
 
+    setChecklist([]);
     loadChecklist();
     checkSupervisorRole();
     setTransitionError(null);
@@ -227,13 +254,15 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
   const isYellow = instance.color_alerta === 'AMARILLO';
   const isRed = instance.color_alerta === 'ROJO';
 
+  const safeChecklist = Array.isArray(checklist) ? checklist : [];
+
   // Determinar si cumple todos los obligatorios
-  const missingBlocking = checklist.some(item => item.es_bloqueante && !item.cumplido);
-  const canAdvance = !missingBlocking && checklist.length > 0;
+  const missingBlocking = safeChecklist.some(item => item.es_bloqueante && !item.cumplido);
+  const canAdvance = !missingBlocking && safeChecklist.length > 0;
 
   // Manejar el avance normal
   const handleAdvance = async () => {
-    const missingOptionals = checklist.some(item => !item.es_bloqueante && !item.cumplido);
+    const missingOptionals = safeChecklist.some(item => !item.es_bloqueante && !item.cumplido);
     if (missingOptionals) {
       const confirm = window.confirm("Se avanzará al siguiente estado sin los datos opcionales. ¿Desea continuar?");
       if (!confirm) return;
@@ -243,24 +272,24 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
       setIsTransitioning(true);
       setTransitionError(null);
 
-      if (stateCode !== '5.1') {
-        await supabase.rpc('ejecutar_validaciones_iniciales', {
+      let res: { transicion_exitosa?: boolean; nuevo_estado_code?: string; mensaje_debug?: string } | null = null;
+
+      if (stateCode === '5.1') {
+        const { data, error } = await supabase.rpc('intentar_transicion_carga_mercaderia', {
+          p_instancia_id: instance.instancia_id
+        });
+        if (error) throw new Error(error.message);
+        res = data;
+      } else {
+        // ejecutar_validaciones_iniciales ejecuta las reglas del estado actual y transiciona automáticamente si todo pasa
+        const { data, error } = await supabase.rpc('ejecutar_validaciones_iniciales', {
           p_instancia_id: instance.instancia_id,
           p_json_data: {}
         });
+        if (error) throw new Error(error.message);
+        res = data;
       }
 
-      const rpcName = stateCode === '5.1'
-        ? 'intentar_transicion_carga_mercaderia'
-        : 'intentar_transicion_automatica_pedido';
-
-      const { data, error } = await supabase.rpc(rpcName, {
-        p_instancia_id: instance.instancia_id
-      });
-
-      if (error) throw new Error(error.message);
-
-      const res = data as { transicion_exitosa?: boolean; nuevo_estado_code?: string; mensaje_debug?: string } | null;
       if (res?.transicion_exitosa) {
         onTransitionSuccess?.();
         onClose();
@@ -288,7 +317,9 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
       setIsTransitioning(true);
       setTransitionError(null);
 
-      const { data, error } = await supabase.rpc('transicionar_instancia_manual', {
+      const rpcName = entityType === 'OC' ? 'transicionar_instancia_oc_manual' : 'transicionar_instancia_manual';
+
+      const { data, error } = await supabase.rpc(rpcName, {
         p_instancia_id: instance.instancia_id,
         p_nuevo_estado_code: nextStateCode, // Siguiente estado dinámico
         p_usuario_nombre: user?.email || 'unknown',
@@ -351,11 +382,22 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
           
           {/* Header Info */}
           <div>
-            <h2 className="text-xl font-bold text-gray-900 mb-2 truncate" title={instance.referencia_humana}>
+            <h2 className="text-sm font-bold font-mono text-gray-900 mb-3 break-all leading-snug tracking-tight bg-gray-50 p-2.5 rounded-xl border border-gray-200/80" title={instance.referencia_humana}>
               {instance.referencia_humana}
             </h2>
-            <div className="inline-block px-3 py-1 bg-brand-50 text-brand-700 text-sm font-semibold rounded-full border border-brand-100/50">
-              {instance.estado_actual}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-block px-3 py-1 bg-brand-50 text-brand-700 text-sm font-semibold rounded-full border border-brand-100/50">
+                {instance.estado_actual}
+              </div>
+              <button
+                type="button"
+                onClick={() => onOpenTraceability?.(instance)}
+                className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-full transition-colors cursor-pointer shadow-2xs"
+                title="Ver historial de eventos y trazabilidad cronológica"
+              >
+                <Clock className="w-3.5 h-3.5 text-gray-500" />
+                <span>Historial & Auditoría</span>
+              </button>
             </div>
           </div>
 
@@ -384,21 +426,23 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold text-gray-900 uppercase tracking-wider">Métricas de Carga</h3>
-              <button
-                onClick={handleOpenEditor}
-                disabled={isLoadingDbData}
-                className="flex items-center gap-1.5 text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200/80 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
-                title="Editar calidades y saldos del pedido"
-              >
-                {isLoadingDbData ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <>
-                    <Edit className="w-3.5 h-3.5 text-brand-600" />
-                    <span>Editar Calidades</span>
-                  </>
-                )}
-              </button>
+              {entityType === 'PEDIDO' && (
+                <button
+                  onClick={handleOpenEditor}
+                  disabled={isLoadingDbData}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200/80 px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50"
+                  title="Editar calidades y saldos del pedido"
+                >
+                  {isLoadingDbData ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      <Edit className="w-3.5 h-3.5 text-brand-600" />
+                      <span>Editar Calidades</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
@@ -429,7 +473,7 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
                 <Loader2 className="w-4 h-4 animate-spin text-brand-500" />
                 <span className="text-sm">Evaluando requisitos del estado...</span>
               </div>
-            ) : checklist.length === 0 ? (
+            ) : safeChecklist.length === 0 ? (
               <div className="bg-emerald-50 text-emerald-800 p-4 rounded-xl border border-emerald-100 flex items-start gap-3">
                 <CheckCircle2 className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
                 <p className="text-sm font-medium">Sin tareas bloqueantes para este estado.</p>
@@ -437,18 +481,18 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
             ) : (
               <>
                 {/* Tareas Realizadas */}
-                {checklist.filter(item => item.cumplido).length > 0 && (
+                {safeChecklist.filter(item => item.cumplido).length > 0 && (
                   <div>
                     <h3 className="text-xs font-bold text-emerald-700 mb-3 uppercase tracking-wider flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       Tareas Realizadas / Cumplidas
                       <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-bold ml-auto">
-                        {checklist.filter(item => item.cumplido).length}
+                        {safeChecklist.filter(item => item.cumplido).length}
                       </span>
                     </h3>
                     <ul className="space-y-2.5">
-                      {checklist.filter(item => item.cumplido).map((item, idx) => {
-                        const isCheckable = ['VAL_P_701', 'VAL_P_702', 'VAL_P_703'].includes(item.codigo);
+                      {safeChecklist.filter(item => item.cumplido).map((item, idx) => {
+                        const isCheckable = ['VAL_P_701', 'VAL_P_702', 'VAL_P_703', 'VAL_P_MI_401', 'VAL_P_MI_402'].includes(item.codigo);
                         return (
                           <li key={`realizada-${idx}`} className="flex items-start gap-3 p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-100/60 transition-colors" title={item.mensaje}>
                             {isCheckable ? (
@@ -484,18 +528,18 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
                 )}
 
                 {/* Tareas Pendientes */}
-                {checklist.filter(item => !item.cumplido).length > 0 ? (
+                {safeChecklist.filter(item => !item.cumplido).length > 0 ? (
                   <div>
                     <h3 className="text-xs font-bold text-gray-700 mb-3 uppercase tracking-wider flex items-center gap-2">
                       <Clock className="w-4 h-4 text-amber-500" />
                       Tareas Pendientes
                       <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold ml-auto">
-                        {checklist.filter(item => !item.cumplido).length}
+                        {safeChecklist.filter(item => !item.cumplido).length}
                       </span>
                     </h3>
                     <ul className="space-y-2.5">
-                      {checklist.filter(item => !item.cumplido).map((item, idx) => {
-                        const isCheckable = ['VAL_P_701', 'VAL_P_702', 'VAL_P_703'].includes(item.codigo);
+                      {safeChecklist.filter(item => !item.cumplido).map((item, idx) => {
+                        const isCheckable = ['VAL_P_701', 'VAL_P_702', 'VAL_P_703', 'VAL_P_MI_401', 'VAL_P_MI_402'].includes(item.codigo);
                         const Icon = item.es_bloqueante ? AlertCircle : Circle;
 
                         return (
@@ -537,7 +581,7 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
                     </ul>
                   </div>
                 ) : (
-                  checklist.length > 0 && (
+                  safeChecklist.length > 0 && (
                     <div className="bg-emerald-50 text-emerald-800 p-3 rounded-xl border border-emerald-200 flex items-center gap-2 text-xs font-bold">
                       <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                       <span>¡Todos los controles requeridos de este estado fueron cumplidos!</span>
