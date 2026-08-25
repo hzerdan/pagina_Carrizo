@@ -526,6 +526,57 @@ export function RemitoEdit() {
     return '...';
   }, [pesaje.bruto.lugar_id, nuevoLugarBruto.nombre, resolvedTaraStr, lugaresPesaje]);
 
+  const taraLugarObj = useMemo(() => {
+    if (!pesaje.tara.lugar_id || pesaje.tara.lugar_id === 0) return null;
+    return lugaresPesaje.find(l => l.id === pesaje.tara.lugar_id) || null;
+  }, [pesaje.tara.lugar_id, lugaresPesaje]);
+
+  const brutoLugarObj = useMemo(() => {
+    if (pesaje.bruto.lugar_id === 'IGUAL') return taraLugarObj;
+    if (!pesaje.bruto.lugar_id || pesaje.bruto.lugar_id === 0) return null;
+    return lugaresPesaje.find(l => l.id === pesaje.bruto.lugar_id) || null;
+  }, [pesaje.bruto.lugar_id, taraLugarObj, lugaresPesaje]);
+
+  const taraCoLocationInfo = useMemo(() => {
+    if (!taraLugarObj) return null;
+    const isDestino = pesaje.tara.momento === 'Después de descargar';
+    const targetDepId = isDestino ? remito.deposito_descarga_id : remito.deposito_carga_id;
+    const targetDep = depositos.find(d => d.id === targetDepId);
+    
+    if (taraLugarObj.deposito_id && targetDepId && taraLugarObj.deposito_id === targetDepId) {
+      return {
+        esMismoPredio: true,
+        depositoNombre: targetDep?.nombre || 'el depósito',
+        label: isDestino ? `Balanza en destino (Mismo predio: ${targetDep?.nombre})` : `Balanza en origen (Mismo predio: ${targetDep?.nombre})`,
+      };
+    }
+    return {
+      esMismoPredio: false,
+      depositoNombre: null,
+      label: isDestino ? 'Balanza externa en destino (Requiere traslado)' : 'Balanza externa en origen (Requiere traslado)',
+    };
+  }, [taraLugarObj, pesaje.tara.momento, remito.deposito_carga_id, remito.deposito_descarga_id, depositos]);
+
+  const brutoCoLocationInfo = useMemo(() => {
+    if (!brutoLugarObj) return null;
+    const isDestino = pesaje.bruto.momento === 'Antes de descargar';
+    const targetDepId = isDestino ? remito.deposito_descarga_id : remito.deposito_carga_id;
+    const targetDep = depositos.find(d => d.id === targetDepId);
+    
+    if (brutoLugarObj.deposito_id && targetDepId && brutoLugarObj.deposito_id === targetDepId) {
+      return {
+        esMismoPredio: true,
+        depositoNombre: targetDep?.nombre || 'el depósito',
+        label: isDestino ? `Balanza en destino (Mismo predio: ${targetDep?.nombre})` : `Balanza en origen (Mismo predio: ${targetDep?.nombre})`,
+      };
+    }
+    return {
+      esMismoPredio: false,
+      depositoNombre: null,
+      label: isDestino ? 'Balanza externa en destino (Requiere traslado)' : 'Balanza externa en origen (Requiere traslado)',
+    };
+  }, [brutoLugarObj, pesaje.bruto.momento, remito.deposito_carga_id, remito.deposito_descarga_id, depositos]);
+
   const instruccionesData = useMemo(() => {
     const pesajeText = `Pesaje:\n1. Hacer Tara (${pesaje.tara.momento}) en ${resolvedTaraStr}.\n2. Pesar Bruto (${pesaje.bruto.momento}) en ${resolvedBrutoStr}.`;
     
@@ -1823,7 +1874,19 @@ export function RemitoEdit() {
               </label>
               <select
                 value={remito.deposito_carga_id || ''}
-                onChange={e => setRemito({...remito, deposito_carga_id: e.target.value ? Number(e.target.value) : null})}
+                onChange={e => {
+                  const newDepId = e.target.value ? Number(e.target.value) : null;
+                  setRemito(prev => ({...prev, deposito_carga_id: newDepId}));
+                  if (newDepId && (!pesaje.tara.lugar_id || pesaje.tara.lugar_id === 0)) {
+                    const matchingBalanza = lugaresPesaje.find(l => l.deposito_id === newDepId);
+                    if (matchingBalanza) {
+                      setPesaje(prev => ({
+                        ...prev,
+                        tara: { ...prev.tara, lugar_id: matchingBalanza.id }
+                      }));
+                    }
+                  }
+                }}
                 className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
               >
                 <option value="">Seleccionar depósito...</option>
@@ -1855,7 +1918,19 @@ export function RemitoEdit() {
               </label>
               <select
                 value={remito.deposito_descarga_id || ''}
-                onChange={e => setRemito({...remito, deposito_descarga_id: e.target.value ? Number(e.target.value) : null})}
+                onChange={e => {
+                  const newDepId = e.target.value ? Number(e.target.value) : null;
+                  setRemito(prev => ({...prev, deposito_descarga_id: newDepId}));
+                  if (newDepId && pesaje.bruto.momento === 'Antes de descargar' && (!pesaje.bruto.lugar_id || pesaje.bruto.lugar_id === 0 || pesaje.bruto.lugar_id === 'IGUAL')) {
+                    const matchingBalanza = lugaresPesaje.find(l => l.deposito_id === newDepId);
+                    if (matchingBalanza) {
+                      setPesaje(prev => ({
+                        ...prev,
+                        bruto: { ...prev.bruto, lugar_id: matchingBalanza.id }
+                      }));
+                    }
+                  }
+                }}
                 className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
               >
                 <option value="">Seleccionar depósito...</option>
@@ -1985,9 +2060,16 @@ export function RemitoEdit() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Tara */}
             <div className="bg-blue-50/50 p-5 rounded-xl border-l-4 border-l-blue-500 border border-blue-100">
-              <div className="flex items-center gap-2 mb-4">
-                <Scale className="w-5 h-5 text-blue-500" />
-                <h3 className="font-bold text-gray-800">Pesaje Tara (Vacío)</h3>
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <Scale className="w-5 h-5 text-blue-500" />
+                  <h3 className="font-bold text-gray-800">Pesaje Tara (Vacío)</h3>
+                </div>
+                {taraCoLocationInfo && (
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${taraCoLocationInfo.esMismoPredio ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-blue-800 border border-blue-200'}`}>
+                    {taraCoLocationInfo.esMismoPredio ? '🏢 Mismo Predio (Interna)' : '🌐 Balanza Externa'}
+                  </span>
+                )}
               </div>
               {/* Alerta de peso de tara reportado por el chofer */}
               {(() => {
@@ -2027,7 +2109,14 @@ export function RemitoEdit() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500">Lugar</label>
+                  <label className="text-xs font-semibold text-gray-500 flex justify-between items-center">
+                    <span>Lugar</span>
+                    {taraCoLocationInfo && (
+                      <span className="text-[10px] text-gray-500 font-normal">
+                        {taraCoLocationInfo.label}
+                      </span>
+                    )}
+                  </label>
                   <select 
                     value={pesaje.tara.lugar_id === null ? '' : pesaje.tara.lugar_id}
                     onChange={e => setPesaje({...pesaje, tara: {...pesaje.tara, lugar_id: e.target.value === '0' ? 0 : Number(e.target.value)}})}
@@ -2035,7 +2124,9 @@ export function RemitoEdit() {
                   >
                     <option value="">Seleccionar balanza...</option>
                     {lugaresPesaje.map(b => (
-                      <option key={b.id} value={b.id}>{b.nombre}</option>
+                      <option key={b.id} value={b.id}>
+                        {b.nombre} {b.deposito_id ? '(🏢 Interna)' : ''}
+                      </option>
                     ))}
                     <option value="0" className="font-bold text-blue-600">+ Nuevo Lugar...</option>
                   </select>
@@ -2063,9 +2154,16 @@ export function RemitoEdit() {
 
             {/* Bruto */}
             <div className="bg-emerald-50/50 p-5 rounded-xl border-l-4 border-l-emerald-500 border border-emerald-100">
-              <div className="flex items-center gap-2 mb-4">
-                <Package className="w-5 h-5 text-emerald-500" />
-                <h3 className="font-bold text-gray-800">Pesaje Bruto (Lleno)</h3>
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <div className="flex items-center gap-2">
+                  <Package className="w-5 h-5 text-emerald-500" />
+                  <h3 className="font-bold text-gray-800">Pesaje Bruto (Lleno)</h3>
+                </div>
+                {brutoCoLocationInfo && (
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${brutoCoLocationInfo.esMismoPredio ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}`}>
+                    {brutoCoLocationInfo.esMismoPredio ? '🏢 Mismo Predio (Interna)' : '🌐 Balanza Externa'}
+                  </span>
+                )}
               </div>
               {/* Alerta de peso bruto reportado por el chofer */}
               {(() => {
@@ -2105,7 +2203,14 @@ export function RemitoEdit() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500">Lugar</label>
+                  <label className="text-xs font-semibold text-gray-500 flex justify-between items-center">
+                    <span>Lugar</span>
+                    {brutoCoLocationInfo && (
+                      <span className="text-[10px] text-gray-500 font-normal">
+                        {brutoCoLocationInfo.label}
+                      </span>
+                    )}
+                  </label>
                   <select 
                     value={pesaje.bruto.lugar_id === null ? '' : pesaje.bruto.lugar_id}
                     onChange={e => setPesaje({...pesaje, bruto: {...pesaje.bruto, lugar_id: e.target.value === 'IGUAL' ? 'IGUAL' : (e.target.value === '0' ? 0 : Number(e.target.value))}})}
@@ -2113,7 +2218,9 @@ export function RemitoEdit() {
                   >
                     <option value="IGUAL">Igual a Tara</option>
                     {lugaresPesaje.map(b => (
-                      <option key={b.id} value={b.id}>{b.nombre}</option>
+                      <option key={b.id} value={b.id}>
+                        {b.nombre} {b.deposito_id ? '(🏢 Interna)' : ''}
+                      </option>
                     ))}
                     <option value="0" className="font-bold text-emerald-600">+ Nuevo Lugar...</option>
                   </select>

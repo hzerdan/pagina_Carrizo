@@ -7,6 +7,7 @@ export interface LugarPesaje {
   nombre: string;
   direccion: string | null;
   google_maps_link: string | null;
+  deposito_id: number | null;
   estado: string;
 }
 
@@ -15,16 +16,25 @@ interface FormData {
   nombre: string;
   direccion: string;
   google_maps_link: string;
+  deposito_id: number | null;
+}
+
+interface DepositoOption {
+  id: number;
+  nombre: string;
+  tipo: string;
 }
 
 const initialFormData: FormData = {
   nombre: '',
   direccion: '',
   google_maps_link: '',
+  deposito_id: null,
 };
 
 export function LugaresPesajeManager() {
   const [lugares, setLugares] = useState<LugarPesaje[]>([]);
+  const [depositos, setDepositos] = useState<DepositoOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -37,13 +47,23 @@ export function LugaresPesajeManager() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('lugares_pesaje')
-        .select('*')
-        .eq('estado', 'ACTIVO');
+      const [lugaresRes, depositosRes] = await Promise.all([
+        supabase
+          .from('lugares_pesaje')
+          .select('*')
+          .eq('estado', 'ACTIVO'),
+        supabase
+          .from('depositos')
+          .select('id, nombre, tipo')
+          .eq('estado', 'ACTIVO')
+          .order('nombre')
+      ]);
 
-      if (error) throw error;
-      setLugares(data || []);
+      if (lugaresRes.error) throw lugaresRes.error;
+      if (depositosRes.error) throw depositosRes.error;
+
+      setLugares(lugaresRes.data || []);
+      setDepositos(depositosRes.data || []);
     } catch (err) {
       console.error('Error fetching data:', err);
       showToast('error', 'Error al cargar lugares de pesaje.');
@@ -74,6 +94,7 @@ export function LugaresPesajeManager() {
         nombre: lugar.nombre,
         direccion: lugar.direccion || '',
         google_maps_link: lugar.google_maps_link || '',
+        deposito_id: lugar.deposito_id !== undefined ? lugar.deposito_id : null,
       });
     } else {
       setFormData(initialFormData);
@@ -94,6 +115,7 @@ export function LugaresPesajeManager() {
         nombre: formData.nombre,
         direccion: formData.direccion,
         google_maps_link: formData.google_maps_link,
+        deposito_id: formData.deposito_id,
         estado: 'ACTIVO'
       };
 
@@ -184,46 +206,61 @@ export function LugaresPesajeManager() {
               <thead>
                 <tr className="bg-gray-50 border-b">
                   <th className="p-4 font-semibold text-gray-600">Nombre</th>
+                  <th className="p-4 font-semibold text-gray-600">Depósito Asociado (Predio)</th>
                   <th className="p-4 font-semibold text-gray-600">Dirección</th>
                   <th className="p-4 font-semibold text-gray-600">Ubicación Mapeada</th>
                   <th className="p-4 font-semibold text-gray-600 text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredLugares.map((l) => (
-                  <tr key={l.id} className="border-b hover:bg-gray-50">
-                    <td className="p-4 font-medium text-gray-900">{l.nombre}</td>
-                    <td className="p-4 text-gray-600">{l.direccion || '-'}</td>
-                    <td className="p-4 text-gray-600">
-                      {l.google_maps_link ? (
-                        <a href={l.google_maps_link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-                          Ver en Maps
-                        </a>
-                      ) : '-'}
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleOpenModal(l)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                          title="Editar"
-                        >
-                          <Edit2 className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(l.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                          title="Dar de baja"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredLugares.map((l) => {
+                  const dep = depositos.find(d => d.id === l.deposito_id);
+                  return (
+                    <tr key={l.id} className="border-b hover:bg-gray-50">
+                      <td className="p-4 font-medium text-gray-900">{l.nombre}</td>
+                      <td className="p-4">
+                        {dep ? (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                            🏢 {dep.nombre} (Interna)
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                            🌐 Balanza Externa / Pública
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4 text-gray-600">{l.direccion || '-'}</td>
+                      <td className="p-4 text-gray-600">
+                        {l.google_maps_link ? (
+                          <a href={l.google_maps_link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                            Ver en Maps
+                          </a>
+                        ) : '-'}
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={() => handleOpenModal(l)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                            title="Editar"
+                          >
+                            <Edit2 className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(l.id)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                            title="Dar de baja"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {filteredLugares.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="p-8 text-center text-gray-500">
+                    <td colSpan={5} className="p-8 text-center text-gray-500">
                       No se encontraron lugares de pesaje activos.
                     </td>
                   </tr>
@@ -250,14 +287,33 @@ export function LugaresPesajeManager() {
             <div className="p-6 overflow-y-auto flex-1">
               <form id="lugarPesajeForm" onSubmit={handleSave} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre de Balanza *</label>
                   <input
                     type="text"
                     required
                     className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Ej: Balanza Ing. Bella Vista"
                     value={formData.nombre}
                     onChange={(e) => setFormData({...formData, nombre: e.target.value})}
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Depósito Asociado (Opcional)</label>
+                  <select
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    value={formData.deposito_id || ''}
+                    onChange={(e) => setFormData({...formData, deposito_id: e.target.value ? Number(e.target.value) : null})}
+                  >
+                    <option value="">Ninguno (Balanza pública / externa)</option>
+                    {depositos.map(d => (
+                      <option key={d.id} value={d.id}>
+                        {d.nombre} ({d.tipo})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Si la balanza está ubicada dentro del mismo predio del depósito/ingenio, selecciónalo aquí para evitar pedir traslados innecesarios al chofer.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
