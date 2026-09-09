@@ -21,7 +21,10 @@ import {
   Edit3,
   Check,
   Plus,
-  MessageSquare
+  MessageSquare,
+  UserCheck,
+  Send,
+  Bell
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -61,21 +64,27 @@ export function InspeccionDetailDrawer({
   
   // Lists for dropdowns
   const [inspectores, setInspectores] = useState<{ id: number; nombre: string }[]>([]);
+  const [operadores, setOperadores] = useState<{ id: number; nombre: string }[]>([]);
   const [depositos, setDepositos] = useState<{ id: number; nombre: string }[]>([]);
   
   // Edit State
   const [editForm, setEditForm] = useState<{
     inspector_id: number | '';
+    operador_id: number | '';
     lugar_carga_id: number | '';
     fecha_hora_carga_pactada: string;
   }>({
     inspector_id: '',
+    operador_id: '',
     lugar_carga_id: '',
     fecha_hora_carga_pactada: ''
   });
   const [isSavingData, setIsSavingData] = useState(false);
   const [validationNotes, setValidationNotes] = useState('');
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [testingTelegram, setTestingTelegram] = useState(false);
+  const [testingAlertaT24, setTestingAlertaT24] = useState(false);
+  const [testingAlertaPost24, setTestingAlertaPost24] = useState(false);
 
   // Multi-planilla states
   const [planillasList, setPlanillasList] = useState<PlanillaRecibida[]>([]);
@@ -112,7 +121,7 @@ export function InspeccionDetailDrawer({
         try {
           const { data } = await supabase
             .from('inspecciones')
-            .select('*, inspector:personal_ac(id, nombre_completo, email, celular), lugar_carga:depositos(id, nombre)')
+            .select('*, inspector:personal_ac!inspecciones_inspector_id_fkey(id, nombre_completo, email, celular), operador:personal_ac!inspecciones_operador_id_fkey(id, nombre_completo, email, celular), lugar_carga:depositos(id, nombre)')
             .eq('id', inspeccion.id)
             .single();
           let template_url = null;
@@ -137,14 +146,16 @@ export function InspeccionDetailDrawer({
             
             setEditForm({
               inspector_id: data.inspector_id || '',
+              operador_id: data.operador_id || '',
               lugar_carga_id: data.lugar_carga_id || '',
               fecha_hora_carga_pactada: formattedDate
             });
           }
 
           if (isEditablePhase) {
-            const [inspRes, depRes] = await Promise.all([
+            const [inspRes, opRes, depRes] = await Promise.all([
               supabase.from('personal_ac_roles').select('personal_ac_id, personal_ac!inner(id, nombre_completo)').eq('role_id', 6),
+              supabase.from('personal_ac_roles').select('personal_ac_id, personal_ac!inner(id, nombre_completo)').in('role_id', [3, 5, 7, 8]),
               supabase.from('depositos').select('id, nombre').order('nombre')
             ]);
             
@@ -155,6 +166,14 @@ export function InspeccionDetailDrawer({
               }));
               const unique = Array.from(new Map(mapped.map(m => [m.id, m])).values());
               setInspectores(unique);
+            }
+            if (opRes.data) {
+              const mappedOp = (opRes.data as any[]).map(r => ({
+                id: r.personal_ac.id,
+                nombre: r.personal_ac.nombre_completo,
+              }));
+              const uniqueOp = Array.from(new Map(mappedOp.map(m => [m.id, m])).values());
+              setOperadores(uniqueOp);
             }
             if (depRes.data) {
               setDepositos(depRes.data);
@@ -295,7 +314,8 @@ export function InspeccionDetailDrawer({
          p_fecha: new Date(editForm.fecha_hora_carga_pactada).toISOString(),
          p_lugar_id: editForm.lugar_carga_id,
          p_inspector_id: editForm.inspector_id,
-         p_usuario_actor: usuarioActor
+         p_usuario_actor: usuarioActor,
+         p_operador_id: editForm.operador_id ? Number(editForm.operador_id) : null
       });
       if (error) throw error;
       
@@ -493,11 +513,23 @@ export function InspeccionDetailDrawer({
     }
   };
 
-  const handleOpenWhatsAppModal = () => {
+  const handleOpenWhatsAppModal = async () => {
     if (!inspeccion) return;
-    const templateLink = dbData?.planilla_personalizada_url || dbData?.template_url || '';
     const inspectorName = dbData?.inspector?.nombre_completo || inspeccion.inspector_nombre || 'Inspector';
     const lugarNombre = dbData?.lugar_carga?.nombre || 'Depósito asignado';
+
+    let portalUrl = '';
+    try {
+      const { data: mlData, error: mlError } = await supabase.rpc('crear_o_renovar_magic_link_inspeccion', {
+        p_inspeccion_id: inspeccion.id,
+        p_usuario_actor: usuarioActor
+      });
+      if (mlError) throw mlError;
+      portalUrl = `${window.location.origin}/inspect/${mlData?.token}`;
+    } catch (e) {
+      console.error('Error generando magic link para WhatsApp:', e);
+      portalUrl = `${window.location.origin}/inspect/`;
+    }
 
     const draft = `Hola *${inspectorName}*, te enviamos la información para la inspección documental:
 
@@ -507,12 +539,71 @@ export function InspeccionDetailDrawer({
 🗓️ *Fecha Pactada:* ${fechaFormatted}
 📄 *Planillas Requeridas:* ${inspeccion.cantidad_plantillas_requeridas || 1} unidad(es)
 
-${templateLink ? `🔗 *Acceso a Plantilla:*\n${templateLink}\n\n` : ''}Por favor, completa las planillas requeridas y envíalas a la oficina.
+🔗 *Acceso Seguro al Portal:*
+${portalUrl}
+
+Por favor, ingresa al enlace para descargar la plantilla de trabajo y subir las planillas completadas una vez finalizada la inspección.
 
 ⚠️ *IMPORTANTE:* Por favor, NO responder a este mensaje automático por WhatsApp.`;
 
     setWhatsappDraftText(draft);
     setShowWhatsAppConfirm(true);
+  };
+
+  const handleTestTelegramAlert = async () => {
+    if (!inspeccion) return;
+    try {
+      setTestingTelegram(true);
+      const { error } = await supabase.rpc('probar_alerta_telegram_inspeccion', {
+        p_inspeccion_id: inspeccion.id,
+        p_usuario_actor: usuarioActor
+      });
+      if (error) throw error;
+      showToast('success', 'Alerta de prueba enviada al grupo de Telegram.');
+    } catch (err: any) {
+      console.error('Error enviando alerta Telegram:', err);
+      showToast('error', `Error al enviar alerta Telegram: ${err.message || 'Error desconocido'}`);
+    } finally {
+      setTestingTelegram(false);
+    }
+  };
+
+  const handleTriggerInspectorAlert = async (tipoAlerta: 'RECORDATORIO_PREVIO_24H' | 'RECORDATORIO_PLANILLAS_POST_24H') => {
+    if (!inspeccion) return;
+    const isPrevia = tipoAlerta === 'RECORDATORIO_PREVIO_24H';
+    try {
+      if (isPrevia) setTestingAlertaT24(true);
+      else setTestingAlertaPost24(true);
+
+      const { data, error } = await supabase.rpc('enviar_alerta_inspector', {
+        p_inspeccion_id: inspeccion.id,
+        p_tipo_alerta: tipoAlerta,
+        p_usuario_actor: usuarioActor
+      });
+
+      if (error) throw error;
+      if (data && !(data as any).success) {
+        throw new Error((data as any).error || 'Error al procesar la alerta');
+      }
+
+      showToast('success', isPrevia ? 'Alerta T-24h enviada al inspector con éxito.' : 'Recordatorio T+24h de planillas enviado con éxito.');
+      onDataChanged();
+      
+      const { data: refreshed } = await supabase
+        .from('inspecciones')
+        .select('*, inspector:personal_ac!inspecciones_inspector_id_fkey(id, nombre_completo, email, celular), operador:personal_ac!inspecciones_operador_id_fkey(id, nombre_completo, email, celular), lugar_carga:depositos(id, nombre)')
+        .eq('id', inspeccion.id)
+        .single();
+      if (refreshed) {
+        setDbData((prev: any) => ({ ...prev, ...refreshed }));
+      }
+    } catch (err: any) {
+      console.error('Error enviando alerta a inspector:', err);
+      showToast('error', `Error al enviar alerta: ${err.message || 'Error desconocido'}`);
+    } finally {
+      if (isPrevia) setTestingAlertaT24(false);
+      else setTestingAlertaPost24(false);
+    }
   };
 
   const handleSendWhatsAppInspector = async () => {
@@ -760,11 +851,11 @@ ${templateLink ? `🔗 *Acceso a Plantilla:*\n${templateLink}\n\n` : ''}Por favo
                 </h3>
                 
                 <div>
-                   <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5"><User className="w-4 h-4 text-gray-400" /> Inspector Asignado</label>
+                   <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5"><User className="w-4 h-4 text-gray-400" /> Inspector Asignado <span className="text-red-500">*</span></label>
                    <select
                      value={editForm.inspector_id}
                      onChange={(e) => setEditForm(prev => ({...prev, inspector_id: parseInt(e.target.value)}))}
-                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none bg-white"
                    >
                      <option value="">Seleccionar inspector...</option>
                      {inspectores.map(i => <option key={i.id} value={i.id}>{i.nombre}</option>)}
@@ -772,11 +863,23 @@ ${templateLink ? `🔗 *Acceso a Plantilla:*\n${templateLink}\n\n` : ''}Por favo
                 </div>
 
                 <div>
-                   <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5"><MapPin className="w-4 h-4 text-gray-400" /> Lugar de Carga</label>
+                   <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5"><UserCheck className="w-4 h-4 text-gray-400" /> Operador Responsable AC <span className="text-gray-400 font-normal">(Opcional)</span></label>
+                   <select
+                     value={editForm.operador_id}
+                     onChange={(e) => setEditForm(prev => ({...prev, operador_id: e.target.value ? parseInt(e.target.value) : ''}))}
+                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none bg-white"
+                   >
+                     <option value="">Sin asignar (Opcional)...</option>
+                     {operadores.map(op => <option key={op.id} value={op.id}>{op.nombre}</option>)}
+                   </select>
+                </div>
+
+                <div>
+                   <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5"><MapPin className="w-4 h-4 text-gray-400" /> Lugar de Carga <span className="text-red-500">*</span></label>
                    <select
                      value={editForm.lugar_carga_id}
                      onChange={(e) => setEditForm(prev => ({...prev, lugar_carga_id: parseInt(e.target.value)}))}
-                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none bg-white"
                    >
                      <option value="">Seleccionar depósito...</option>
                      {depositos.map(d => <option key={d.id} value={d.id}>{d.nombre}</option>)}
@@ -784,7 +887,7 @@ ${templateLink ? `🔗 *Acceso a Plantilla:*\n${templateLink}\n\n` : ''}Por favo
                 </div>
 
                 <div>
-                   <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5"><CalendarClock className="w-4 h-4 text-gray-400" /> Fecha y Hora Pactada</label>
+                   <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-1.5"><CalendarClock className="w-4 h-4 text-gray-400" /> Fecha y Hora Pactada <span className="text-red-500">*</span></label>
                    <input
                      type="datetime-local"
                      value={editForm.fecha_hora_carga_pactada}
@@ -811,6 +914,14 @@ ${templateLink ? `🔗 *Acceso a Plantilla:*\n${templateLink}\n\n` : ''}Por favo
                  <div>
                    <p className="text-xs text-gray-500 font-medium">Inspector</p>
                    <p className="text-sm font-semibold text-gray-900">{inspeccion.inspector_nombre}</p>
+                 </div>
+               </div>
+
+               <div className="flex items-start gap-3">
+                 <UserCheck className="w-5 h-5 text-gray-400 mt-0.5 flex-shrink-0" />
+                 <div>
+                   <p className="text-xs text-gray-500 font-medium">Operador Responsable AC</p>
+                   <p className="text-sm font-semibold text-gray-900">{inspeccion.operador_nombre || dbData?.operador?.nombre_completo || 'Sin asignar'}</p>
                  </div>
                </div>
 
@@ -1168,6 +1279,105 @@ ${templateLink ? `🔗 *Acceso a Plantilla:*\n${templateLink}\n\n` : ''}Por favo
                    )}
                  </div>
             )}
+          </div>
+
+          {/* ── Alertas Automáticas al Inspector (T-24h y T+24h) ───────── */}
+          <div className="bg-indigo-50/80 border border-indigo-200 rounded-xl p-4 space-y-3">
+            <div>
+              <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                <Bell className="w-3.5 h-3.5 text-indigo-600" />
+                Alertas Automáticas al Inspector
+              </h4>
+              <p className="text-[11px] text-indigo-700 mt-0.5">
+                El sistema monitorea y notifica automáticamente por Email y WhatsApp según la fecha pactada.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {/* Alerta T-24h */}
+              <div className="bg-white rounded-lg p-3 border border-indigo-100 flex flex-col justify-between space-y-2">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-gray-800">Alerta Previa (T-24h)</span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                      dbData?.current_data?.alerta_t_menos_24h_enviada 
+                        ? 'bg-emerald-100 text-emerald-800' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {dbData?.current_data?.alerta_t_menos_24h_enviada ? 'Enviada' : 'Pendiente'}
+                    </span>
+                  </div>
+                  {dbData?.current_data?.alerta_t_menos_24h_at && (
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {new Date(dbData.current_data.alerta_t_menos_24h_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleTriggerInspectorAlert('RECORDATORIO_PREVIO_24H')}
+                  disabled={testingAlertaT24}
+                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-indigo-600 text-white rounded-md text-[11px] font-bold hover:bg-indigo-700 disabled:opacity-50 transition shadow-xs"
+                >
+                  {testingAlertaT24 ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                  Probar Alerta T-24h
+                </button>
+              </div>
+
+              {/* Alerta T+24h */}
+              <div className="bg-white rounded-lg p-3 border border-indigo-100 flex flex-col justify-between space-y-2">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-gray-800">Alerta Posterior (T+24h)</span>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                      dbData?.current_data?.alerta_t_mas_24h_enviada 
+                        ? 'bg-amber-100 text-amber-800' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {dbData?.current_data?.alerta_t_mas_24h_enviada ? 'Enviada' : 'Pendiente'}
+                    </span>
+                  </div>
+                  {dbData?.current_data?.alerta_t_mas_24h_at && (
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {new Date(dbData.current_data.alerta_t_mas_24h_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleTriggerInspectorAlert('RECORDATORIO_PLANILLAS_POST_24H')}
+                  disabled={testingAlertaPost24}
+                  className="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-amber-600 text-white rounded-md text-[11px] font-bold hover:bg-amber-700 disabled:opacity-50 transition shadow-xs"
+                >
+                  {testingAlertaPost24 ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                  Probar Alerta T+24h
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Alerta de Logística (Telegram Test) ────────────────────────── */}
+          <div className="bg-sky-50/80 border border-sky-200 rounded-xl p-4 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-bold text-sky-900 uppercase tracking-wider flex items-center gap-1.5">
+                  <Send className="w-3.5 h-3.5 text-sky-600" />
+                  Notificaciones de Logística (Telegram)
+                </h4>
+                <p className="text-[11px] text-sky-700 mt-0.5">
+                  Envía una alerta de prueba al grupo de Telegram con el estado actual, inspector y operador responsable.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleTestTelegramAlert}
+              disabled={testingTelegram}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-sky-600 text-white rounded-lg text-xs font-bold hover:bg-sky-700 disabled:opacity-50 transition shadow-xs"
+            >
+              {testingTelegram ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+              Probar Alerta Telegram
+            </button>
           </div>
 
           <div className="pt-8 mt-8 border-t-2 border-dashed border-gray-100">

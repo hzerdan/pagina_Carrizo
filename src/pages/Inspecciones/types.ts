@@ -15,6 +15,12 @@ export interface InspeccionKanban {
   id: number;
   tipo_carga: string;
   inspector_nombre: string;
+  inspector_email?: string | null;
+  inspector_celular?: string | null;
+  operador_id?: number | null;
+  operador_nombre?: string | null;
+  operador_email?: string | null;
+  operador_celular?: string | null;
   fecha_pactada: string;
   export_doc_status: string;
   state_code: string;
@@ -63,6 +69,12 @@ export interface InspeccionTemplate {
 
 /** Inspector – personal_ac with role_id = 6 */
 export interface Inspector {
+  id: number;
+  nombre: string;
+}
+
+/** Operador Responsable AC – personal_ac */
+export interface Operador {
   id: number;
   nombre: string;
 }

@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, User, CalendarClock, Package, FileCheck2 } from 'lucide-react';
+import { GripVertical, User, UserCheck, CalendarClock, Package, FileCheck2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '../../../lib/utils';
@@ -102,12 +102,20 @@ export function InspeccionCard({ inspeccion, onClick }: InspeccionCardProps) {
             </span>
           </div>
 
-          {/* Inspector */}
-          <div className="flex items-center gap-1.5 mb-2">
-            <User className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-            <span className="text-sm font-medium text-gray-800 truncate">
-              {inspeccion.inspector_nombre}
-            </span>
+          {/* Inspector y Operador Responsable */}
+          <div className="flex items-center justify-between gap-1 mb-2">
+            <div className="flex items-center gap-1.5 min-w-0 flex-1" title={`Inspector: ${inspeccion.inspector_nombre}`}>
+              <User className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+              <span className="text-xs font-medium text-gray-800 truncate">
+                {inspeccion.inspector_nombre}
+              </span>
+            </div>
+            {inspeccion.operador_nombre && (
+              <div className="flex items-center gap-1 text-[10px] text-teal-700 bg-teal-50 border border-teal-100 px-1.5 py-0.5 rounded flex-shrink-0" title={`Operador AC: ${inspeccion.operador_nombre}`}>
+                <UserCheck className="w-3 h-3 text-teal-600" />
+                <span className="truncate max-w-[85px] font-medium">{inspeccion.operador_nombre.split(' ')[0]}</span>
+              </div>
+            )}
           </div>
 
           {/* Fecha Pactada */}

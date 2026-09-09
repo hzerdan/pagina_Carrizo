@@ -49,10 +49,10 @@ Deno.serve(async (req: Request) => {
       .eq('tipo_entidad', 'INSPECCION')
       .is('used_at', null);
 
-    // 2. Generate Magic Link
+    // 2. Generate Magic Link con vigencia segura (mínimo 72 horas desde ahora)
     const token = crypto.randomUUID(); 
-    // Expiración: fecha_hora_carga_pactada + 48 horas
-    const expiresAt = new Date(new Date(inspeccion.fecha_hora_carga_pactada).getTime() + 48 * 60 * 60 * 1000).toISOString();
+    const fechaPactadaMs = inspeccion.fecha_hora_carga_pactada ? new Date(inspeccion.fecha_hora_carga_pactada).getTime() : Date.now();
+    const expiresAt = new Date(Math.max(Date.now() + 72 * 60 * 60 * 1000, fechaPactadaMs + 48 * 60 * 60 * 1000)).toISOString();
     
     // Insert into magic_links
     const { error: mlError } = await supabase

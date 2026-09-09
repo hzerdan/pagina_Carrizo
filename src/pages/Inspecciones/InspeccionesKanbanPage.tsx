@@ -22,6 +22,7 @@ export function InspeccionesKanbanPage() {
   // ── Filters ────────────────────────────────────────────────────────
   const [filterTipoCarga, setFilterTipoCarga] = useState<string>('TODOS');
   const [filterInspector, setFilterInspector] = useState<string>('TODOS');
+  const [filterOperador, setFilterOperador] = useState<string>('TODOS');
   const [filterServicio, setFilterServicio] = useState<string>('TODOS');
 
   // ── Modals / Drawers ──────────────────────────────────────────────
@@ -85,6 +86,11 @@ export function InspeccionesKanbanPage() {
     return Array.from(set).sort();
   }, [inspecciones]);
 
+  const operadoresUnicos = useMemo(() => {
+    const set = new Set(inspecciones.map(i => i.operador_nombre).filter((o): o is string => Boolean(o)));
+    return Array.from(set).sort();
+  }, [inspecciones]);
+
   const serviciosUnicos = useMemo(() => {
     const set = new Set(inspecciones.map(i => i.servicio_nombre).filter((s): s is string => Boolean(s)));
     return Array.from(set).sort();
@@ -95,10 +101,11 @@ export function InspeccionesKanbanPage() {
     return inspecciones.filter(i => {
       const matchTipo = filterTipoCarga === 'TODOS' || i.tipo_carga === filterTipoCarga;
       const matchInsp = filterInspector === 'TODOS' || i.inspector_nombre === filterInspector;
+      const matchOp = filterOperador === 'TODOS' || i.operador_nombre === filterOperador;
       const matchSrv = filterServicio === 'TODOS' || i.servicio_nombre === filterServicio;
-      return matchTipo && matchInsp && matchSrv;
+      return matchTipo && matchInsp && matchOp && matchSrv;
     });
-  }, [inspecciones, filterTipoCarga, filterInspector, filterServicio]);
+  }, [inspecciones, filterTipoCarga, filterInspector, filterOperador, filterServicio]);
 
   // ── Drag & Drop: Dual Transition Flow ─────────────────────────────
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -281,11 +288,25 @@ export function InspeccionesKanbanPage() {
             ))}
           </select>
 
-          {(filterTipoCarga !== 'TODOS' || filterInspector !== 'TODOS' || filterServicio !== 'TODOS') && (
+          <select
+            value={filterOperador}
+            onChange={e => setFilterOperador(e.target.value)}
+            className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            <option value="TODOS">Operador: Todos</option>
+            {operadoresUnicos.map(op => (
+              <option key={op} value={op}>
+                {op}
+              </option>
+            ))}
+          </select>
+
+          {(filterTipoCarga !== 'TODOS' || filterInspector !== 'TODOS' || filterOperador !== 'TODOS' || filterServicio !== 'TODOS') && (
             <button
               onClick={() => {
                 setFilterTipoCarga('TODOS');
                 setFilterInspector('TODOS');
+                setFilterOperador('TODOS');
                 setFilterServicio('TODOS');
               }}
               className="text-xs text-brand-600 hover:text-brand-700 font-medium underline underline-offset-2"

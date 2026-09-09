@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { X, Plus, Loader2, Search, Check, ChevronDown, Package } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { TIPOS_CARGA } from '../types';
-import type { PedidoElegible, InspeccionTemplate, Inspector, Deposito, TipoCarga, ServicioInspeccion } from '../types';
+import type { PedidoElegible, InspeccionTemplate, Inspector, Operador, Deposito, TipoCarga, ServicioInspeccion } from '../types';
 
 // ── Highlight helper (pure string, no regex) ────────────────────────
 function HighlightText({ text, query }: { text: string; query: string }) {
@@ -45,6 +45,7 @@ interface FormState {
   referenciaCliente: string;
   selectedPedidos: PedidoElegible[];
   inspectorId: number | null;
+  operadorId: number | null;
   templateId: number | null;
   tipoCarga: TipoCarga | '';
   fechaPactada: string;
@@ -57,6 +58,7 @@ const initialFormState: FormState = {
   referenciaCliente: '',
   selectedPedidos: [],
   inspectorId: null,
+  operadorId: null,
   templateId: null,
   tipoCarga: '',
   fechaPactada: '',
@@ -72,6 +74,7 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
   const [servicios, setServicios] = useState<ServicioInspeccion[]>([]);
   const [pedidosElegibles, setPedidosElegibles] = useState<PedidoElegible[]>([]);
   const [inspectores, setInspectores] = useState<Inspector[]>([]);
+  const [operadores, setOperadores] = useState<Operador[]>([]);
   const [templates, setTemplates] = useState<InspeccionTemplate[]>([]);
   const [depositos, setDepositos] = useState<Deposito[]>([]);
   const [loadingData, setLoadingData] = useState(false);
@@ -95,7 +98,7 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
   const fetchDropdownData = useCallback(async () => {
     setLoadingData(true);
     try {
-      const [srvRes, pedRes, inspRes, tplRes, depRes] = await Promise.all([
+      const [srvRes, pedRes, inspRes, opRes, tplRes, depRes] = await Promise.all([
         supabase
           .from('servicios')
           .select('id, codigo_servicio, nombre, requiere_pedido_ac')
@@ -106,6 +109,10 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
           .from('personal_ac_roles')
           .select('personal_ac_id, personal_ac!inner(id, nombre_completo)')
           .eq('role_id', 6),
+        supabase
+          .from('personal_ac_roles')
+          .select('personal_ac_id, personal_ac!inner(id, nombre_completo)')
+          .in('role_id', [3, 5, 7, 8]),
         supabase
           .from('inspeccion_templates')
           .select('id, codigo, nombre')
@@ -145,6 +152,15 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
       } else if (inspRes.error) {
         console.error('Error fetched inspectores:', inspRes.error);
         setToast({ type: 'error', text: 'Error al cargar inspectores. (Consulte la consola)'});
+      }
+
+      if (opRes.data) {
+        const mappedOp = (opRes.data as any[]).map(r => ({
+          id: r.personal_ac.id,
+          nombre: r.personal_ac.nombre_completo,
+        }));
+        const uniqueOp = Array.from(new Map(mappedOp.map(m => [m.id, m])).values());
+        setOperadores(uniqueOp);
       }
 
       if (tplRes.data) {
@@ -286,6 +302,7 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
         p_servicio_id: form.servicioId,
         p_referencia_cliente: form.referenciaCliente.trim() || null,
         p_cantidad_plantillas_requeridas: form.cantidadPlantillasRequeridas || 1,
+        p_operador_id: form.operadorId,
       });
 
       if (error) throw error;
@@ -546,6 +563,25 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
                   {inspectores.map(i => (
                     <option key={i.id} value={i.id}>
                       {i.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* ── Operador Responsable AC ────────────────────────────── */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Operador Responsable AC <span className="text-gray-400 font-normal">(Opcional)</span>
+                </label>
+                <select
+                  value={form.operadorId ?? ''}
+                  onChange={e => setForm({ ...form, operadorId: e.target.value ? Number(e.target.value) : null })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm bg-white"
+                >
+                  <option value="">Sin asignar (Opcional)...</option>
+                  {operadores.map(op => (
+                    <option key={op.id} value={op.id}>
+                      {op.nombre}
                     </option>
                   ))}
                 </select>
