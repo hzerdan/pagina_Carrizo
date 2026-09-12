@@ -657,6 +657,26 @@ Por favor, ingresa al enlace para descargar la plantilla de trabajo y subir las 
 
       showToast('success', 'Mensaje de WhatsApp enviado al inspector.');
       setShowWhatsAppConfirm(false);
+
+      if (inspeccion.state_code === '3.D0') {
+        await supabase.rpc('inspeccion_intentar_transicion', {
+          p_inspeccion_id: inspeccion.id,
+          p_nuevo_estado_code: '3.D1',
+          p_usuario_actor: usuarioActor
+        });
+
+        await supabase
+          .from('inspecciones')
+          .update({
+            current_data: {
+              ...(dbData?.current_data || {}),
+              alerta_t_menos_24h_enviada: true,
+              alerta_t_menos_24h_at: new Date().toISOString()
+            }
+          })
+          .eq('id', inspeccion.id);
+      }
+
       onDataChanged();
     } catch (err: any) {
       showToast('error', `Error al enviar WhatsApp: ${err.message}`);

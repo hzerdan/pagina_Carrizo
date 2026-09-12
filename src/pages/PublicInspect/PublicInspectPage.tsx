@@ -136,7 +136,18 @@ export function PublicInspectPage() {
     );
   }
 
-  const fechaFormatted = data.fecha_pactada ? format(parseISO(data.fecha_pactada), "EEEE dd 'de' MMMM yyyy · HH:mm", { locale: es }) : 'No especificada';
+  let fechaFormatted = 'No especificada';
+  if (data.fecha_pactada) {
+    try {
+      fechaFormatted = format(parseISO(data.fecha_pactada), "EEEE dd 'de' MMMM yyyy · HH:mm", { locale: es });
+    } catch {
+      try {
+        fechaFormatted = new Date(data.fecha_pactada).toLocaleString('es-AR', { dateStyle: 'full', timeStyle: 'short' });
+      } catch {
+        fechaFormatted = String(data.fecha_pactada);
+      }
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50/50 flex flex-col">
@@ -287,3 +298,5 @@ export function PublicInspectPage() {
     </div>
   );
 }
+
+export default PublicInspectPage;

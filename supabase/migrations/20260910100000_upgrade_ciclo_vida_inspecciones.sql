@@ -1,10 +1,10 @@
 -- ============================================================================
--- Migración: Alertas Automáticas para Inspectores (T-24h y T+24h)
--- Fecha: 2026-09-02
--- Regla AGENTS.md: Incluir siempre DROP FUNCTION IF EXISTS antes de CREATE
+-- Migración: Upgrade Ciclo de Vida y Alertas de Inspecciones Documentales
+-- Fecha: 2026-09-10
+-- Reglas AGENTS.md: Incluir siempre DROP FUNCTION IF EXISTS antes de CREATE
 -- ============================================================================
 
--- 1. Función para enviar alerta a un inspector (Email + WhatsApp)
+-- 1. Actualizar enviar_alerta_inspector (Eliminar force_freeform para permitir Content Template en n8n)
 DROP FUNCTION IF EXISTS public.enviar_alerta_inspector(bigint, text, text);
 DROP FUNCTION IF EXISTS public.enviar_alerta_inspector(bigint, text);
 
@@ -171,7 +171,7 @@ BEGIN
         v_email_status := 500;
     END;
 
-    -- 8. Despachar WhatsApp si el inspector tiene celular
+    -- 8. Despachar WhatsApp si el inspector tiene celular (Sin forzar freeform para permitir Content Templates de Twilio)
     IF v_inspector.celular IS NOT NULL AND TRIM(v_inspector.celular) <> '' THEN
         v_clean_phone := regexp_replace(v_inspector.celular, '\D', '', 'g');
         v_whatsapp_payload := jsonb_build_object(
@@ -179,7 +179,6 @@ BEGIN
             'action', 'send_instruction',
             'message', v_whatsapp_msg,
             'nombre_inspector', v_inspector.nombre_completo,
-            'force_freeform', true,
             'metadata', jsonb_build_object(
                 'inspeccion_id', p_inspeccion_id,
                 'tipo_alerta', p_tipo_alerta
@@ -253,91 +252,236 @@ BEGIN
 END;
 $$;
 
--- 2. Función de Monitoreo Periódico de Inspecciones
-DROP FUNCTION IF EXISTS public.ejecutar_monitoreo_inspecciones();
+GRANT EXECUTE ON FUNCTION public.enviar_alerta_inspector(bigint, text, text) TO anon, authenticated, service_role;
 
-CREATE OR REPLACE FUNCTION public.ejecutar_monitoreo_inspecciones()
-RETURNS jsonb
+
+-- 2. Actualizar actualizar_datos_inspeccion con reseteo inteligente de ciclo de vida
+DROP FUNCTION IF EXISTS public.actualizar_datos_inspeccion(bigint, timestamp with time zone, integer, integer, text);
+DROP FUNCTION IF EXISTS public.actualizar_datos_inspeccion(bigint, timestamp with time zone, integer, integer, text, integer);
+
+CREATE OR REPLACE FUNCTION public.actualizar_datos_inspeccion(
+    p_id bigint, 
+    p_fecha timestamp with time zone, 
+    p_lugar_id integer, 
+    p_inspector_id integer, 
+    p_usuario_actor text,
+    p_operador_id integer DEFAULT NULL
+) RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 DECLARE
-    v_rec RECORD;
-    v_alertas_previas_count INT := 0;
-    v_alertas_posteriores_count INT := 0;
-    v_res JSONB;
+    v_inspeccion RECORD;
+    v_hubo_cambios boolean := false;
+    v_fecha_cambio boolean := false;
+    v_detalles jsonb := '{}'::jsonb;
+    v_state_code text;
+    v_state_id_d0 integer;
+    v_effective_inspector_id integer;
 BEGIN
-    -- ──────────────────────────────────────────────────────────────────────────
-    -- 1. Evaluador T - 24 Horas: Inspecciones programadas próximas a realizarse
-    -- ──────────────────────────────────────────────────────────────────────────
-    FOR v_rec IN
-        SELECT i.id, i.inspector_id, i.fecha_hora_carga_pactada, sd.state_code
-        FROM public.inspecciones i
-        LEFT JOIN public.state_definitions sd ON i.current_state_id = sd.id
-        WHERE i.inspector_id IS NOT NULL
-          AND i.fecha_hora_carga_pactada IS NOT NULL
-          AND i.fecha_hora_carga_pactada BETWEEN NOW() AND (NOW() + INTERVAL '24 hours')
-          AND COALESCE((i.current_data->>'alerta_t_menos_24h_enviada')::boolean, false) = false
-          AND COALESCE(sd.state_code, '3.D0') IN ('3.D0', '3.D1')
-    LOOP
-        v_res := public.enviar_alerta_inspector(v_rec.id, 'RECORDATORIO_PREVIO_24H', 'CRON_MONITOREO_INSPECCIONES');
-        IF (v_res->>'success')::boolean THEN
-            v_alertas_previas_count := v_alertas_previas_count + 1;
-        END IF;
-    END LOOP;
+    SELECT i.*, sd.state_code INTO v_inspeccion 
+    FROM public.inspecciones i
+    LEFT JOIN public.state_definitions sd ON i.current_state_id = sd.id
+    WHERE i.id = p_id 
+    FOR UPDATE OF i;
 
-    -- ──────────────────────────────────────────────────────────────────────────
-    -- 2. Evaluador T + 24 Horas: Inspecciones pasadas que aún no subieron planillas
-    -- ──────────────────────────────────────────────────────────────────────────
-    FOR v_rec IN
-        SELECT i.id, i.inspector_id, i.fecha_hora_carga_pactada, sd.state_code,
-               (SELECT COUNT(*)::int FROM public.inspeccion_planillas_recibidas ipr WHERE ipr.inspeccion_id = i.id) AS cant_recibidas,
-               COALESCE(i.cantidad_plantillas_requeridas, 1) AS cant_requeridas
-        FROM public.inspecciones i
-        LEFT JOIN public.state_definitions sd ON i.current_state_id = sd.id
-        WHERE i.inspector_id IS NOT NULL
-          AND i.fecha_hora_carga_pactada IS NOT NULL
-          AND i.fecha_hora_carga_pactada <= (NOW() - INTERVAL '24 hours')
-          AND COALESCE((i.current_data->>'alerta_t_mas_24h_enviada')::boolean, false) = false
-          AND COALESCE(sd.state_code, '3.D0') IN ('3.D0', '3.D1', '3.D2')
-          AND i.resultado_final IS NULL
-    LOOP
-        -- Solo alertar si faltan planillas por recibir
-        IF v_rec.cant_recibidas < v_rec.cant_requeridas THEN
-            v_res := public.enviar_alerta_inspector(v_rec.id, 'RECORDATORIO_PLANILLAS_POST_24H', 'CRON_MONITOREO_INSPECCIONES');
-            IF (v_res->>'success')::boolean THEN
-                v_alertas_posteriores_count := v_alertas_posteriores_count + 1;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Inspección #% no encontrada.', p_id;
+    END IF;
+
+    v_state_code := COALESCE(v_inspeccion.state_code, v_inspeccion.export_doc_status);
+
+    IF v_state_code NOT IN ('3.D0', '3.D1', '3.D2') THEN
+        RAISE EXCEPTION 'No se pueden modificar datos operativos en estado %', v_state_code;
+    END IF;
+
+    IF v_inspeccion.fecha_hora_carga_pactada IS DISTINCT FROM p_fecha THEN
+        v_hubo_cambios := true;
+        v_fecha_cambio := true;
+        v_detalles := v_detalles || jsonb_build_object('fecha_anterior', v_inspeccion.fecha_hora_carga_pactada, 'fecha_nueva', p_fecha);
+    END IF;
+
+    IF v_inspeccion.lugar_carga_id IS DISTINCT FROM p_lugar_id THEN
+        v_hubo_cambios := true;
+        v_detalles := v_detalles || jsonb_build_object('lugar_anterior', v_inspeccion.lugar_carga_id, 'lugar_nuevo', p_lugar_id);
+    END IF;
+
+    IF v_inspeccion.inspector_id IS DISTINCT FROM p_inspector_id THEN
+        v_hubo_cambios := true;
+        v_detalles := v_detalles || jsonb_build_object('inspector_anterior', v_inspeccion.inspector_id, 'inspector_nuevo', p_inspector_id);
+    END IF;
+
+    IF v_inspeccion.operador_id IS DISTINCT FROM p_operador_id THEN
+        v_hubo_cambios := true;
+        v_detalles := v_detalles || jsonb_build_object('operador_anterior', v_inspeccion.operador_id, 'operador_nuevo', p_operador_id);
+    END IF;
+
+    IF v_hubo_cambios THEN
+        UPDATE public.inspecciones 
+        SET 
+            fecha_hora_carga_pactada = p_fecha,
+            lugar_carga_id = p_lugar_id,
+            inspector_id = p_inspector_id,
+            operador_id = p_operador_id,
+            updated_at = NOW()
+        WHERE id = p_id;
+
+        -- Sincronizar magic link si cambió el inspector
+        IF v_inspeccion.inspector_id IS DISTINCT FROM p_inspector_id THEN
+            UPDATE public.magic_links 
+            SET usuario_email = (SELECT email FROM public.personal_ac WHERE id = p_inspector_id)
+            WHERE instancia_id = p_id 
+              AND tipo_entidad = 'INSPECCION' 
+              AND used_at IS NULL;
+        END IF;
+
+        -- RESETEO INTELIGENTE DEL CICLO DE VIDA SI SE REPROGRAMA A FECHA FUTURA:
+        IF v_fecha_cambio AND p_fecha IS NOT NULL AND p_fecha > NOW() THEN
+            -- 1. Limpiar flags de alertas previas
+            UPDATE public.inspecciones
+            SET current_data = (COALESCE(current_data, '{}'::jsonb) - 'alerta_t_menos_24h_enviada' - 'alerta_t_menos_24h_at' - 'alerta_t_mas_24h_enviada' - 'alerta_t_mas_24h_at')
+            WHERE id = p_id;
+
+            -- 2. Si dista más de 24 horas, restablecer estado a 3.D0 (Programado)
+            IF p_fecha > (NOW() + INTERVAL '24 hours') THEN
+                SELECT id INTO v_state_id_d0 FROM public.state_definitions WHERE state_code = '3.D0';
+                IF v_state_id_d0 IS NOT NULL THEN
+                    UPDATE public.inspecciones SET current_state_id = v_state_id_d0 WHERE id = p_id;
+                END IF;
+            ELSE
+                -- 3. Si cae dentro de las próximas 24 horas y tiene inspector asignado, alertar de inmediato
+                v_effective_inspector_id := COALESCE(p_inspector_id, v_inspeccion.inspector_id);
+                IF v_effective_inspector_id IS NOT NULL THEN
+                    SELECT id INTO v_state_id_d0 FROM public.state_definitions WHERE state_code = '3.D0';
+                    IF v_state_id_d0 IS NOT NULL THEN
+                        UPDATE public.inspecciones SET current_state_id = v_state_id_d0 WHERE id = p_id;
+                    END IF;
+                    PERFORM public.enviar_alerta_inspector(p_id, 'RECORDATORIO_PREVIO_24H', p_usuario_actor);
+                END IF;
             END IF;
         END IF;
-    END LOOP;
 
-    RETURN jsonb_build_object(
-        'success', true,
-        'alertas_previas_t_menos_24h', v_alertas_previas_count,
-        'alertas_posteriores_t_mas_24h', v_alertas_posteriores_count,
-        'timestamp', NOW()
-    );
+        PERFORM public.log_inspeccion_evento(
+            p_id, 
+            'DATOS_INSPECCION_ACTUALIZADOS', 
+            p_usuario_actor, 
+            v_detalles
+        );
+    END IF;
+
+    RETURN true;
 END;
 $$;
 
--- Permisos de ejecución
-GRANT EXECUTE ON FUNCTION public.enviar_alerta_inspector(bigint, text, text) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.ejecutar_monitoreo_inspecciones() TO anon, authenticated, service_role;
+GRANT ALL ON FUNCTION public.actualizar_datos_inspeccion(bigint, timestamp with time zone, integer, integer, text, integer) TO anon, authenticated, service_role;
 
--- 3. Programación en pg_cron (Cada 10 minutos)
-DO $$
+
+-- 3. Actualizar crear_nueva_inspeccion_v2 con disparo inmediato si cae en ventana < 24hs
+DROP FUNCTION IF EXISTS public.crear_nueva_inspeccion_v2(bigint[], integer, integer, text, timestamp with time zone, integer, text, integer, text, integer, integer);
+
+CREATE OR REPLACE FUNCTION public.crear_nueva_inspeccion_v2(
+    p_pedido_instance_ids bigint[], 
+    p_inspector_id integer, 
+    p_template_id integer, 
+    p_tipo_carga text, 
+    p_fecha_pactada timestamp with time zone, 
+    p_lugar_id integer, 
+    p_usuario_actor text, 
+    p_servicio_id integer DEFAULT NULL, 
+    p_referencia_cliente text DEFAULT NULL, 
+    p_cantidad_plantillas_requeridas integer DEFAULT 1,
+    p_operador_id integer DEFAULT NULL
+) RETURNS bigint
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_inspeccion_id BIGINT;
+    v_pid BIGINT;
+    v_effective_servicio_id INTEGER := p_servicio_id;
+    v_requiere_pedido BOOLEAN := true;
+    v_current_data JSONB := '{}'::jsonb;
+    v_state_id_d0 INTEGER;
+    v_cant_req INTEGER := COALESCE(p_cantidad_plantillas_requeridas, 1);
 BEGIN
-    -- Desprogramar job previo si existía con ese comando
-    PERFORM cron.unschedule(jobid) 
-    FROM cron.job 
-    WHERE command ILIKE '%ejecutar_monitoreo_inspecciones%';
+    IF v_cant_req < 1 THEN
+        v_cant_req := 1;
+    END IF;
 
-    -- Programar nuevo job
-    PERFORM cron.schedule(
-        'monitoreo_inspecciones_alertas',
-        '*/10 * * * *',
-        'SELECT public.ejecutar_monitoreo_inspecciones();'
-    );
-EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'No se pudo configurar pg_cron automáticamente: %', SQLERRM;
-END $$;
+    -- Servicio por defecto si no viene indicado
+    IF v_effective_servicio_id IS NULL THEN
+        SELECT id INTO v_effective_servicio_id FROM public.servicios WHERE codigo_servicio = 'INSP_EXP' LIMIT 1;
+        IF v_effective_servicio_id IS NULL THEN
+            SELECT id INTO v_effective_servicio_id FROM public.servicios ORDER BY id LIMIT 1;
+        END IF;
+    END IF;
+
+    IF v_effective_servicio_id IS NOT NULL THEN
+        SELECT COALESCE(requiere_pedido_ac, true) INTO v_requiere_pedido FROM public.servicios WHERE id = v_effective_servicio_id;
+    END IF;
+
+    IF v_requiere_pedido AND (p_pedido_instance_ids IS NULL OR array_length(p_pedido_instance_ids, 1) IS NULL OR array_length(p_pedido_instance_ids, 1) = 0) THEN
+        RAISE EXCEPTION 'El servicio seleccionado requiere asociar al menos un pedido de AC.';
+    END IF;
+
+    IF p_referencia_cliente IS NOT NULL AND TRIM(p_referencia_cliente) != '' THEN
+        v_current_data := jsonb_build_object('referencia_cliente', TRIM(p_referencia_cliente));
+    END IF;
+
+    SELECT id INTO v_state_id_d0 FROM public.state_definitions WHERE state_code = '3.D0';
+
+    INSERT INTO public.inspecciones (
+        inspector_id, 
+        operador_id,
+        template_id, 
+        tipo_carga, 
+        fecha_hora_carga_pactada, 
+        lugar_carga_id, 
+        current_state_id,
+        servicio_id,
+        current_data,
+        cantidad_plantillas_requeridas
+    ) VALUES (
+        p_inspector_id, 
+        p_operador_id,
+        p_template_id, 
+        p_tipo_carga, 
+        p_fecha_pactada, 
+        p_lugar_id, 
+        v_state_id_d0,
+        v_effective_servicio_id,
+        v_current_data,
+        v_cant_req
+    ) RETURNING id INTO v_inspeccion_id;
+
+    IF p_pedido_instance_ids IS NOT NULL AND array_length(p_pedido_instance_ids, 1) > 0 THEN
+        FOREACH v_pid IN ARRAY p_pedido_instance_ids LOOP
+            INSERT INTO public.inspeccion_items_pedido (inspeccion_id, pedido_instance_id)
+            VALUES (v_inspeccion_id, v_pid);
+
+            INSERT INTO public.historial_eventos (
+                pedido_instance_id, event_type, description, user_actor, details
+            ) VALUES (
+                v_pid, 'STATE_TRANSITION', 'Inspección Iniciada con plantilla ID: ' || p_template_id, 
+                p_usuario_actor, jsonb_build_object('inspeccion_id', v_inspeccion_id, 'servicio_id', v_effective_servicio_id, 'operador_id', p_operador_id)
+            );
+        END LOOP;
+    ELSE
+        INSERT INTO public.historial_eventos (
+            inspeccion_id, event_type, description, user_actor, details
+        ) VALUES (
+            v_inspeccion_id, 'STATE_TRANSITION', 'Inspección Externa Iniciada con plantilla ID: ' || p_template_id, 
+            p_usuario_actor, jsonb_build_object('inspeccion_id', v_inspeccion_id, 'servicio_id', v_effective_servicio_id, 'referencia_cliente', p_referencia_cliente, 'operador_id', p_operador_id)
+        );
+    END IF;
+
+    -- Si la fecha pactada ya está dentro de las próximas 24 horas y tiene inspector asignado, disparar alerta inmediata
+    IF p_fecha_pactada IS NOT NULL AND p_fecha_pactada > NOW() AND p_fecha_pactada <= (NOW() + INTERVAL '24 hours') AND p_inspector_id IS NOT NULL THEN
+        PERFORM public.enviar_alerta_inspector(v_inspeccion_id, 'RECORDATORIO_PREVIO_24H', p_usuario_actor);
+    END IF;
+
+    RETURN v_inspeccion_id;
+END;
+$$;
+
+GRANT ALL ON FUNCTION public.crear_nueva_inspeccion_v2(bigint[], integer, integer, text, timestamp with time zone, integer, text, integer, text, integer, integer) TO anon, authenticated, service_role;
