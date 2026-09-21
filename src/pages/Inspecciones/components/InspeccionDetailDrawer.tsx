@@ -221,10 +221,9 @@ export function InspeccionDetailDrawer({
   const handleDownloadMaestra = async () => {
     if (!inspeccion || !dbData?.template_url) return;
     
-    await supabase.rpc('log_inspeccion_evento', {
+    await supabase.rpc('registrar_descarga_planilla_inspeccion', {
       p_inspeccion_id: inspeccion.id,
-      p_accion: 'PLANTILLA_MAESTRA_DESCARGADA',
-      p_usuario_actor: usuarioActor
+      p_usuario_actor: usuarioActor || 'OPERADOR'
     });
     
     window.open(dbData.template_url, '_blank');

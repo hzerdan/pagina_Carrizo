@@ -93,7 +93,7 @@ Deno.serve(async (req: Request) => {
           <p style="font-size: 16px; color: #374151; margin-bottom: 24px;">Por favor, haz clic en el siguiente enlace para descargar la planilla de trabajo y subir los resultados una vez finalizada la inspección.</p>
           
           <div style="text-align: center; margin: 32px 0;">
-            <a href="${portalUrl}" style="background-color: #2563eb; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; display: inline-block;">Acceder al Portal de Inspección</a>
+            <a href="${portalUrl}" target="_blank" rel="noopener noreferrer" style="background-color: #2563eb; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; display: inline-block;">Acceder al Portal de Inspección</a>
           </div>
 
           <p style="font-size: 13px; color: #6b7280; text-align: center; margin-top: 32px; margin-bottom: 0;">

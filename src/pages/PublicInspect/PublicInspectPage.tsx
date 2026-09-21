@@ -11,6 +11,7 @@ interface PublicInspeccionData {
   tipo_carga: string;
   inspector_nombre: string;
   planilla_personalizada_url: string | null;
+  planilla_descargada?: boolean;
 }
 
 const STORAGE_BUCKET = 'inspecciones_adjuntos';
@@ -21,6 +22,7 @@ export function PublicInspectPage() {
   const [loading, setLoading] = useState(true);
   const [errorStr, setErrorStr] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [planillaDescargada, setPlanillaDescargada] = useState(false);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -29,9 +31,9 @@ export function PublicInspectPage() {
 
   useEffect(() => {
     if (!token) {
-        setErrorStr('Token no proporcionado.');
-        setLoading(false);
-        return;
+      setErrorStr('Token no proporcionado.');
+      setLoading(false);
+      return;
     }
 
     const fetchInspeccion = async () => {
@@ -42,7 +44,11 @@ export function PublicInspectPage() {
 
         if (rpcError) throw rpcError;
         
-        setData(result as PublicInspeccionData);
+        const fetchedData = result as PublicInspeccionData;
+        setData(fetchedData);
+        if (fetchedData?.planilla_descargada) {
+          setPlanillaDescargada(true);
+        }
       } catch (err) {
         console.error('Error fetching inspection:', err);
         const errMsg = err instanceof Error ? err.message : 'Error desconocido';
@@ -54,6 +60,18 @@ export function PublicInspectPage() {
 
     fetchInspeccion();
   }, [token]);
+
+  const handleDownloadPlanilla = async () => {
+    if (!token) return;
+    try {
+      await supabase.rpc('registrar_descarga_planilla_inspeccion', {
+        p_token: token
+      });
+      setPlanillaDescargada(true);
+    } catch (err) {
+      console.warn('Error al registrar descarga de planilla:', err);
+    }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSelectedFile(e.target.files?.[0] ?? null);
@@ -216,10 +234,18 @@ export function PublicInspectPage() {
                     target="_blank" 
                     rel="noopener noreferrer"
                     className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold transition flex-shrink-0 ${data.planilla_personalizada_url ? 'bg-white border border-blue-200 text-blue-700 shadow-sm hover:bg-blue-50 hover:shadow' : 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200'}`}
-                    onClick={(e) => { if(!data.planilla_personalizada_url) e.preventDefault(); }}
+                    onClick={(e) => { 
+                      if (!data.planilla_personalizada_url) {
+                        e.preventDefault(); 
+                      } else {
+                        handleDownloadPlanilla();
+                      }
+                    }}
                   >
                     <Download className="w-4 h-4" /> 
-                    {data.planilla_personalizada_url ? 'Descargar Planilla' : 'No disponible'}
+                    {data.planilla_personalizada_url 
+                      ? (planillaDescargada ? 'Planilla Descargada (Bajar de nuevo)' : 'Descargar Planilla') 
+                      : 'No disponible'}
                   </a>
                </div>
 

@@ -1,0 +1,3 @@
+-- Migración: alertas_telegram_supervisores_y_escalonadas (Versión 1)
+-- Implementación base de alertas escalonadas a inspectores y supervisores vía Telegram y Email.
+-- La versión 2 (20260916163410) consolida y reemplaza canónicamente las funciones y disparadores de este ciclo.
