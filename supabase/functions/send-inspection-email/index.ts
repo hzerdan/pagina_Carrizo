@@ -28,7 +28,7 @@ Deno.serve(async (req: Request) => {
     // 1. Get Inspección data
     const { data: inspeccion, error: insError } = await supabase
       .from('inspecciones')
-      .select('*, inspector:personal_ac(nombre_completo, email), lugar:depositos(nombre)')
+      .select('*, inspector:personal_ac!inspecciones_inspector_id_fkey(nombre_completo, email), lugar:depositos(nombre)')
       .eq('id', inspeccionId)
       .single();
 
@@ -96,7 +96,12 @@ Deno.serve(async (req: Request) => {
             <a href="${portalUrl}" target="_blank" rel="noopener noreferrer" style="background-color: #2563eb; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; display: inline-block;">Acceder al Portal de Inspección</a>
           </div>
 
-          <p style="font-size: 13px; color: #6b7280; text-align: center; margin-top: 32px; margin-bottom: 0;">
+          <p style="font-size: 13px; color: #6b7280; text-align: center; margin-top: 16px; margin-bottom: 0;">
+            Si el botón no responde, puedes copiar y pegar el siguiente enlace en tu navegador:<br/>
+            <a href="${portalUrl}" target="_blank" rel="noopener noreferrer" style="color: #2563eb; word-break: break-all; text-decoration: underline;">${portalUrl}</a>
+          </p>
+
+          <p style="font-size: 13px; color: #6b7280; text-align: center; margin-top: 24px; margin-bottom: 0;">
             Este enlace es único y seguro, expirará automáticamente en 48 horas tras la fecha de carga pactada.
           </p>
         </div>

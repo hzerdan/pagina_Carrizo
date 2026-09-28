@@ -3,8 +3,12 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 
-// Polyfill para compatibilidad móvil (WebView WhatsApp, Safari iOS < 17.4, Android WebView)
+// Polyfill para compatibilidad móvil y navegadores legacy (Chrome 109 en Win7, WebView WhatsApp, Safari iOS < 17.4)
 /* eslint-disable @typescript-eslint/no-explicit-any */
+if (typeof (globalThis as any).Iterator === 'undefined') {
+  (globalThis as any).Iterator = class Iterator {};
+}
+
 if (typeof (Promise as any).withResolvers === 'undefined') {
   (Promise as any).withResolvers = function <T>() {
     let resolve!: (value: T | PromiseLike<T>) => void;

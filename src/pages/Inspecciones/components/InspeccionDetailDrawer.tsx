@@ -265,7 +265,14 @@ export function InspeccionDetailDrawer({
 
       if (error) {
         console.error("Error retornado por Edge Function:", error);
-        throw error;
+        let errorMsg = error.message;
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const errBody = await error.context.json();
+            if (errBody?.error) errorMsg = errBody.error;
+          }
+        } catch (_) {}
+        throw new Error(errorMsg);
       }
 
       console.log("Respuesta exitosa de Edge Function:", data);
