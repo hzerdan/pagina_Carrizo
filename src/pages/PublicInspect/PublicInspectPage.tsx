@@ -35,8 +35,9 @@ export function PublicInspectPage() {
   const [success, setSuccess] = useState(false);
   const [planillaDescargada, setPlanillaDescargada] = useState(false);
 
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -85,60 +86,81 @@ export function PublicInspectPage() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedFile(e.target.files?.[0] ?? null);
+    if (e.target.files) {
+      const incoming = Array.from(e.target.files);
+      setSelectedFiles(prev => [...prev, ...incoming]);
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleUploadResultados = async () => {
-    if (!selectedFile || !data || !token) return;
+    if (selectedFiles.length === 0 || !data || !token) return;
 
     try {
       setUploading(true);
       setUploadError(null);
 
-      const ext = selectedFile.name.split('.').pop()?.toLowerCase() || 'bin';
-      const timestamp = Date.now();
-      const storagePath = `resultados/resultado_ins_${data.id}_${timestamp}.${ext}`;
+      let cantRec = data.cantidad_plantillas_recibidas || 0;
+      const nuevasPlanillas: PlanillaRecibidaItem[] = [];
+      let finalizado = false;
 
-      const { error: storageError } = await supabase.storage
-        .from(STORAGE_BUCKET)
-        .upload(storagePath, selectedFile, { upsert: false });
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const file = selectedFiles[i];
+        const numActual = cantRec + 1;
+        setUploadProgress(`Subiendo (${i + 1}/${selectedFiles.length}): ${file.name}...`);
 
-      if (storageError) throw storageError;
+        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+        const timestamp = Date.now();
+        const storagePath = `resultados/resultado_ins_${data.id}_${timestamp}_${i}.${ext}`;
 
-      const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
-      const publicUrl = urlData.publicUrl;
+        const { error: storageError } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(storagePath, file, { upsert: false });
 
-      const numSig = (data.cantidad_plantillas_recibidas || 0) + 1;
-      const { data: rpcResult, error: rpcError } = await supabase.rpc('inspeccion_subir_planilla_inspector', {
-        p_token: token,
-        p_archivo_url: publicUrl,
-        p_nombre_archivo: selectedFile.name,
-        p_etiqueta: `Planilla #${numSig}`
-      });
+        if (storageError) throw storageError;
 
-      if (rpcError) throw rpcError;
+        const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
+        const publicUrl = urlData.publicUrl;
 
-      if (rpcResult?.completado) {
+        const { data: rpcResult, error: rpcError } = await supabase.rpc('inspeccion_subir_planilla_inspector', {
+          p_token: token,
+          p_archivo_url: publicUrl,
+          p_nombre_archivo: file.name,
+          p_etiqueta: `Planilla #${numActual}`
+        });
+
+        if (rpcError) throw rpcError;
+
+        cantRec = rpcResult?.cant_recibidas ?? numActual;
+        nuevasPlanillas.push({
+          id: rpcResult?.planilla_id || Date.now() + i,
+          archivo_url: publicUrl,
+          nombre_archivo: file.name,
+          etiqueta_identificador: `Planilla #${cantRec}`,
+          created_at: new Date().toISOString()
+        });
+
+        if (rpcResult?.completado) {
+          finalizado = true;
+          break;
+        }
+      }
+
+      if (finalizado) {
         setSuccess(true);
       } else {
-        // Actualizar datos reactivos para continuar subiendo
         setData(prev => {
           if (!prev) return null;
-          const nuevaPlanilla: PlanillaRecibidaItem = {
-            id: rpcResult?.planilla_id || Date.now(),
-            archivo_url: publicUrl,
-            nombre_archivo: selectedFile.name,
-            etiqueta_identificador: `Planilla #${rpcResult?.cant_recibidas || numSig}`,
-            created_at: new Date().toISOString()
-          };
           return {
             ...prev,
-            cantidad_plantillas_recibidas: rpcResult?.cant_recibidas ?? numSig,
-            cantidad_plantillas_requeridas: rpcResult?.cant_requeridas ?? prev.cantidad_plantillas_requeridas,
-            planillas_recibidas: [...(prev.planillas_recibidas || []), nuevaPlanilla]
+            cantidad_plantillas_recibidas: cantRec,
+            planillas_recibidas: [...(prev.planillas_recibidas || []), ...nuevasPlanillas]
           };
         });
-        setSelectedFile(null);
+        setSelectedFiles([]);
         if (fileInputRef.current) fileInputRef.current.value = '';
       }
     } catch (err) {
@@ -147,6 +169,7 @@ export function PublicInspectPage() {
       setUploadError(errMsg || 'Error desconocido al procesar la solicitud.');
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -326,22 +349,47 @@ export function PublicInspectPage() {
                     </div>
                  )}
 
-                 {selectedFile && (
-                    <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
-                      <FileCheck2 className="w-6 h-6 text-emerald-500 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate">{selectedFile.name}</p>
-                        <p className="text-xs text-gray-400">{(selectedFile.size / 1024).toFixed(0)} KB</p>
+                 {/* Archivos seleccionados listos para subir */}
+                 {selectedFiles.length > 0 && (
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
+                        <span>Archivos listos para enviar ({selectedFiles.length}):</span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedFiles([])}
+                          disabled={uploading}
+                          className="text-gray-400 hover:text-red-500 font-normal"
+                        >
+                          Limpiar lista
+                        </button>
                       </div>
-                      <button type="button" onClick={() => setSelectedFile(null)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors">
-                        Reemplazar
-                      </button>
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                        {selectedFiles.map((file, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 bg-gray-50 border border-gray-200 rounded text-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <FileCheck2 className="w-4 h-4 text-brand-500 flex-shrink-0" />
+                              <span className="truncate font-medium text-gray-800">{file.name}</span>
+                              <span className="text-gray-400 flex-shrink-0">({(file.size / 1024).toFixed(0)} KB)</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFile(idx)}
+                              disabled={uploading}
+                              className="text-gray-400 hover:text-red-500 ml-2 px-1 rounded transition-colors font-bold"
+                              title="Quitar este archivo"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                  )}
 
                  <input
                     ref={fileInputRef}
                     type="file"
+                    multiple
                     accept=".pdf,.xlsx,.xls"
                     className="hidden"
                     onChange={handleFileChange}
@@ -354,22 +402,24 @@ export function PublicInspectPage() {
                       disabled={uploading}
                       className="flex-1 flex justify-center items-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg font-medium text-gray-600 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50/50 transition duration-200 disabled:opacity-50 text-sm"
                     >
-                      {selectedFile ? 'Seleccionar otro archivo...' : 'Explorar archivos'}
+                      {selectedFiles.length > 0 ? '+ Agregar más archivos...' : 'Explorar archivos (uno o varios)'}
                     </button>
                     
                     <button
                       type="button"
                       onClick={handleUploadResultados}
-                      disabled={uploading || !selectedFile}
+                      disabled={uploading || selectedFiles.length === 0}
                       className="flex-1 flex justify-center items-center gap-2 px-4 py-3 bg-brand-600 text-white rounded-lg font-semibold hover:bg-brand-700 hover:shadow-md transition duration-200 disabled:opacity-50 disabled:bg-gray-300 disabled:shadow-none text-sm"
                     >
                       {uploading ? (
-                         <><Loader2 className="w-5 h-5 animate-spin" /> Procesando...</>
+                         <><Loader2 className="w-5 h-5 animate-spin" /> {uploadProgress || 'Procesando...'}</>
                       ) : (
                          <>
-                           {(data.cantidad_plantillas_requeridas || 1) > 1 
-                             ? `Enviar Planilla (${(data.cantidad_plantillas_recibidas || 0) + 1} de ${data.cantidad_plantillas_requeridas})`
-                             : 'Enviar Resultados'
+                           {selectedFiles.length > 1
+                             ? `Enviar ${selectedFiles.length} Planillas en lote`
+                             : (data.cantidad_plantillas_requeridas || 1) > 1 
+                               ? `Enviar Planilla (${(data.cantidad_plantillas_recibidas || 0) + 1} de ${data.cantidad_plantillas_requeridas})`
+                               : 'Enviar Resultados'
                            } <ChevronRight className="w-5 h-5 -mx-1" />
                          </>
                       )}
