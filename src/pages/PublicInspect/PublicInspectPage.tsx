@@ -5,6 +5,14 @@ import { FileCheck2, Download, Upload, CheckCircle2, AlertCircle, Loader2, FileT
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 
+interface PlanillaRecibidaItem {
+  id: number;
+  archivo_url: string;
+  nombre_archivo: string;
+  etiqueta_identificador?: string;
+  created_at?: string;
+}
+
 interface PublicInspeccionData {
   id: number;
   fecha_pactada: string;
@@ -12,6 +20,9 @@ interface PublicInspeccionData {
   inspector_nombre: string;
   planilla_personalizada_url: string | null;
   planilla_descargada?: boolean;
+  cantidad_plantillas_requeridas?: number;
+  cantidad_plantillas_recibidas?: number;
+  planillas_recibidas?: PlanillaRecibidaItem[];
 }
 
 const STORAGE_BUCKET = 'inspecciones_adjuntos';
@@ -82,6 +93,7 @@ export function PublicInspectPage() {
 
     try {
       setUploading(true);
+      setUploadError(null);
 
       const ext = selectedFile.name.split('.').pop()?.toLowerCase() || 'bin';
       const timestamp = Date.now();
@@ -96,15 +108,39 @@ export function PublicInspectPage() {
       const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
       const publicUrl = urlData.publicUrl;
 
-      // Complete via RPC
-      const { error: rpcError } = await supabase.rpc('inspeccion_completar_resultados', {
+      const numSig = (data.cantidad_plantillas_recibidas || 0) + 1;
+      const { data: rpcResult, error: rpcError } = await supabase.rpc('inspeccion_subir_planilla_inspector', {
         p_token: token,
-        p_archivo_url: publicUrl
+        p_archivo_url: publicUrl,
+        p_nombre_archivo: selectedFile.name,
+        p_etiqueta: `Planilla #${numSig}`
       });
 
       if (rpcError) throw rpcError;
 
-      setSuccess(true);
+      if (rpcResult?.completado) {
+        setSuccess(true);
+      } else {
+        // Actualizar datos reactivos para continuar subiendo
+        setData(prev => {
+          if (!prev) return null;
+          const nuevaPlanilla: PlanillaRecibidaItem = {
+            id: rpcResult?.planilla_id || Date.now(),
+            archivo_url: publicUrl,
+            nombre_archivo: selectedFile.name,
+            etiqueta_identificador: `Planilla #${rpcResult?.cant_recibidas || numSig}`,
+            created_at: new Date().toISOString()
+          };
+          return {
+            ...prev,
+            cantidad_plantillas_recibidas: rpcResult?.cant_recibidas ?? numSig,
+            cantidad_plantillas_requeridas: rpcResult?.cant_requeridas ?? prev.cantidad_plantillas_requeridas,
+            planillas_recibidas: [...(prev.planillas_recibidas || []), nuevaPlanilla]
+          };
+        });
+        setSelectedFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
     } catch (err) {
       console.error('Upload Error:', err);
       const errMsg = err instanceof Error ? err.message : 'Error desconocido';
@@ -251,12 +287,44 @@ export function PublicInspectPage() {
 
                {/* Sección Subir */}
                <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 space-y-4">
-                 <div>
-                    <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                       <Upload className="w-5 h-5 text-gray-600" /> 2. Subir Resultados
-                    </h3>
-                    <p className="text-sm text-gray-500 mt-1">Una vez finalizada la carga, sube la planilla o reporte completado en este apartado para finalizar tu tarea.</p>
+                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                         <Upload className="w-5 h-5 text-gray-600" /> 2. Subir Resultados
+                      </h3>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {(data.cantidad_plantillas_requeridas || 1) > 1 
+                          ? `Esta inspección requiere un total de ${data.cantidad_plantillas_requeridas} planillas.` 
+                          : 'Sube la planilla o reporte completado para finalizar tu tarea.'}
+                      </p>
+                    </div>
+
+                    {(data.cantidad_plantillas_requeridas || 1) > 1 && (
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-brand-50 border border-brand-200 text-brand-700 rounded-lg text-xs font-bold self-start sm:self-auto">
+                        <span>Progreso:</span>
+                        <span>{data.cantidad_plantillas_recibidas || 0} de {data.cantidad_plantillas_requeridas}</span>
+                      </div>
+                    )}
                  </div>
+
+                 {/* Lista de planillas ya recibidas si hay más de 1 requerida */}
+                 {data.planillas_recibidas && data.planillas_recibidas.length > 0 && (
+                    <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Planillas ya cargadas:</p>
+                      <div className="space-y-1.5">
+                        {data.planillas_recibidas.map((item, idx) => (
+                          <div key={item.id || idx} className="flex items-center justify-between p-2 bg-emerald-50/60 border border-emerald-100 rounded text-xs">
+                            <div className="flex items-center gap-2 text-emerald-900 font-medium truncate">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                              <span className="font-semibold">{item.etiqueta_identificador || `Planilla #${idx + 1}`}:</span>
+                              <span className="truncate">{item.nombre_archivo}</span>
+                            </div>
+                            <span className="text-[11px] font-semibold text-emerald-600 ml-2 flex-shrink-0">✓ Registrada</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                 )}
 
                  {selectedFile && (
                     <div className="flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg shadow-sm">
@@ -298,7 +366,12 @@ export function PublicInspectPage() {
                       {uploading ? (
                          <><Loader2 className="w-5 h-5 animate-spin" /> Procesando...</>
                       ) : (
-                         <>Enviar Resultados <ChevronRight className="w-5 h-5 -mx-1" /></>
+                         <>
+                           {(data.cantidad_plantillas_requeridas || 1) > 1 
+                             ? `Enviar Planilla (${(data.cantidad_plantillas_recibidas || 0) + 1} de ${data.cantidad_plantillas_requeridas})`
+                             : 'Enviar Resultados'
+                           } <ChevronRight className="w-5 h-5 -mx-1" />
+                         </>
                       )}
                     </button>
                  </div>
