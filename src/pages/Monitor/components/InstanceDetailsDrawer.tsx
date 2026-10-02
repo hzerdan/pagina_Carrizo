@@ -1,11 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback } from 'react';
-import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert, Edit } from 'lucide-react';
+import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert, Edit, Unlink } from 'lucide-react';
 import type { InstanceData } from '../types';
 import { cn } from '../../../lib/utils';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { EditorItemsPedidoModal } from './EditorItemsPedidoModal';
+import { DescalzarVinculacionModal, type VinculacionInfo } from './DescalzarVinculacionModal';
 
 interface InstanceDetailsDrawerProps {
   instance: InstanceData | null;
@@ -72,6 +73,35 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
       setIsLoadingDbData(false);
     }
   };
+
+  const [isDescalzarOpen, setIsDescalzarOpen] = useState(false);
+  const [vinculacionInfo, setVinculacionInfo] = useState<VinculacionInfo | null>(null);
+  const [isLoadingVinculacion, setIsLoadingVinculacion] = useState(false);
+
+  const loadVinculacionInfo = useCallback(async () => {
+    if (!instance) {
+      setVinculacionInfo(null);
+      return;
+    }
+    try {
+      setIsLoadingVinculacion(true);
+      const { data, error } = await supabase.rpc('get_vinculacion_info_para_descalce', {
+        p_instancia_id: instance.instancia_id,
+        p_tipo: entityType
+      });
+      if (error) throw error;
+      if (data && data.tiene_vinculacion) {
+        setVinculacionInfo(data as VinculacionInfo);
+      } else {
+        setVinculacionInfo(null);
+      }
+    } catch (err) {
+      console.error('Error al cargar info de vinculación:', err);
+      setVinculacionInfo(null);
+    } finally {
+      setIsLoadingVinculacion(false);
+    }
+  }, [instance, entityType]);
 
   // Determinar si estamos en un estado transicionable
   const stateCode = instance?.estado_actual.split(':')[0].trim() || '';
@@ -245,9 +275,10 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
 
     setChecklist([]);
     loadChecklist();
+    loadVinculacionInfo();
     checkSupervisorRole();
     setTransitionError(null);
-  }, [instance, isOpen, loadChecklist, personalAcId]);
+  }, [instance, isOpen, loadChecklist, loadVinculacionInfo, personalAcId]);
 
   if (!instance) return null;
 
@@ -465,6 +496,72 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
               </div>
             </div>
           </div>
+
+          {/* Card de Vinculación Pedido-OC (si existe vinculación activa) */}
+          {isLoadingVinculacion ? (
+            <div className="flex items-center justify-center p-3 text-gray-400 gap-2 text-xs">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+              <span>Verificando vinculación con {entityType === 'PEDIDO' ? 'OC' : 'Pedido'}...</span>
+            </div>
+          ) : vinculacionInfo && vinculacionInfo.tiene_vinculacion && (
+            <div className="bg-amber-50/50 border border-amber-200/90 rounded-2xl p-4.5 space-y-3.5 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Unlink className="w-4 h-4 text-amber-600" />
+                  <h3 className="text-xs font-bold text-amber-950 uppercase tracking-wider">
+                    Vinculación {entityType === 'PEDIDO' ? 'con Orden de Compra' : 'con Pedido de Venta'}
+                  </h3>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                  #{vinculacionInfo.vinculacion_id} - {vinculacionInfo.estado_vinculacion || 'APROBADA'}
+                </span>
+              </div>
+
+              {/* Grid de contrapartida */}
+              <div className="grid grid-cols-2 gap-3 text-xs bg-white/90 p-3 rounded-xl border border-amber-100">
+                <div>
+                  <p className="text-gray-400 font-normal">{entityType === 'PEDIDO' ? 'Orden de Compra' : 'Pedido de Venta'}</p>
+                  <p className="font-bold text-gray-900 font-mono text-xs">
+                    {entityType === 'PEDIDO' ? vinculacionInfo.oc_ref : vinculacionInfo.pedido_ref}
+                  </p>
+                  <p className="text-gray-500 text-[11px] truncate" title={entityType === 'PEDIDO' ? vinculacionInfo.proveedor : vinculacionInfo.cliente}>
+                    {entityType === 'PEDIDO' ? vinculacionInfo.proveedor : vinculacionInfo.cliente}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-gray-400 font-normal">Avance de Remitos</p>
+                  <p className="font-bold text-gray-800 text-xs">
+                    {vinculacionInfo.toneladas_remitidas} Tn <span className="font-normal text-gray-400">/ {vinculacionInfo.cantidad_vinculada} Tn</span>
+                  </p>
+                  <p className="text-emerald-700 font-semibold text-[11px]">
+                    {Math.round(((Number(vinculacionInfo.toneladas_remitidas) || 0) / (Number(vinculacionInfo.cantidad_vinculada) || 1)) * 100)}% despachado
+                  </p>
+                </div>
+              </div>
+
+              {/* Saldo descalzable & acción */}
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div>
+                  <p className="text-[11px] text-gray-500">Saldo pendiente no remitido:</p>
+                  <p className="text-sm font-bold text-amber-900 font-mono">
+                    {vinculacionInfo.saldo_descalzable} <span className="text-xs font-normal text-gray-500">Toneladas</span>
+                  </p>
+                </div>
+
+                {vinculacionInfo.puede_descalzar && (
+                  <button
+                    type="button"
+                    onClick={() => setIsDescalzarOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs hover:shadow-md cursor-pointer"
+                    title="Descalzar toneladas pendientes para liberar cupo"
+                  >
+                    <Unlink className="w-3.5 h-3.5" />
+                    <span>Descalzar...</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Checklist Inteligente de Controles: Realizados vs Pendientes */}
           <div className="space-y-6">
@@ -727,6 +824,18 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
         }}
         instance={instance}
         dbData={pedidoDbData}
+      />
+
+      {/* Modal para Descalzar Vinculación Pedido-OC */}
+      <DescalzarVinculacionModal
+        isOpen={isDescalzarOpen}
+        onClose={() => setIsDescalzarOpen(false)}
+        onSuccess={() => {
+          loadVinculacionInfo();
+          onTransitionSuccess?.();
+        }}
+        vinculacionInfo={vinculacionInfo}
+        entityType={entityType}
       />
     </>
   );

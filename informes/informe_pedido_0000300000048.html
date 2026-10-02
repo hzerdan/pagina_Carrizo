@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Informe de Trazabilidad - Pedido 0000300000048</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-main: #f8fafc;
+      --bg-card: #ffffff;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      
+      --blue-50: #eff6ff;
+      --blue-100: #dbeafe;
+      --blue-600: #2563eb;
+      --blue-700: #1d4ed8;
+      --blue-900: #1e3a8a;
+      
+      --purple-50: #faf5ff;
+      --purple-100: #f3e8ff;
+      --purple-700: #7e22ce;
+      
+      --emerald-50: #ecfdf5;
+      --emerald-100: #d1fae5;
+      --emerald-600: #059669;
+      --emerald-700: #047857;
+      
+      --amber-50: #fffbeb;
+      --amber-100: #fef3c7;
+      --amber-700: #b45309;
+      
+      --rose-50: #fff1f2;
+      --rose-100: #ffe4e6;
+      --rose-600: #e11d48;
+      --rose-700: #be123c;
+      
+      --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+      --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+      --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-main);
+      color: var(--text-primary);
+      line-height: 1.5;
+      padding: 2.5rem 1.5rem;
+    }
+
+    .container {
+      max-width: 1080px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+      color: #ffffff;
+      border-radius: 1rem;
+      padding: 2rem 2.5rem;
+      margin-bottom: 2rem;
+      box-shadow: var(--shadow-lg);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header::after {
+      content: "";
+      position: absolute;
+      top: -50px;
+      right: -50px;
+      width: 200px;
+      height: 200px;
+      background: radial-gradient(circle, rgba(37,99,235,0.2) 0%, rgba(37,99,235,0) 70%);
+      border-radius: 50%;
+    }
+
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .badge-report {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      padding: 0.35rem 0.85rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #93c5fd;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .header h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.25rem;
+    }
+
+    .header p {
+      color: #94a3b8;
+      font-size: 0.925rem;
+    }
+
+    .header-meta {
+      display: flex;
+      gap: 2rem;
+      margin-top: 1.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      flex-wrap: wrap;
+    }
+
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .meta-label {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 500;
+    }
+
+    .meta-value {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: #f8fafc;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* KPI Cards */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 0.75rem;
+      padding: 1.25rem 1.5rem;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .kpi-title {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.025em;
+      margin-bottom: 0.35rem;
+    }
+
+    .kpi-value {
+      font-size: 1.65rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-primary);
+    }
+
+    .kpi-footer {
+      font-size: 0.8rem;
+      margin-top: 0.35rem;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    /* Section Wrapper */
+    .section-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 1rem;
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      margin-bottom: 2rem;
+    }
+
+    .section-header {
+      padding: 1.25rem 1.75rem;
+      background: #fafafa;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Hierarchy Tree Structure */
+    .tree-container {
+      padding: 1.75rem;
+    }
+
+    /* Root Level: Pedido */
+    .tree-node-root {
+      background: #f8fafc;
+      border: 2px solid #cbd5e1;
+      border-radius: 0.75rem;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .node-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .node-tag {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.25rem 0.6rem;
+      border-radius: 0.375rem;
+    }
+
+    .tag-pedido {
+      background: #1e293b;
+      color: #ffffff;
+    }
+
+    .tag-oc {
+      background: #2563eb;
+      color: #ffffff;
+    }
+
+    .tag-remito {
+      background: #475569;
+      color: #ffffff;
+    }
+
+    .node-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-primary);
+    }
+
+    .node-qty {
+      font-size: 1.15rem;
+      font-weight: 700;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .node-subtext {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-top: 0.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+    }
+
+    .node-subtext span strong {
+      color: var(--text-primary);
+    }
+
+    /* Level 1: Indent OC */
+    .branch-oc {
+      margin-left: 2rem;
+      padding-left: 1.5rem;
+      border-left: 3px solid #93c5fd;
+      margin-bottom: 2rem;
+      position: relative;
+    }
+
+    .branch-oc::before {
+      content: "";
+      position: absolute;
+      top: 1.5rem;
+      left: 0;
+      width: 1rem;
+      height: 2px;
+      background: #93c5fd;
+    }
+
+    .tree-node-oc {
+      background: var(--blue-50);
+      border: 1px solid #bfdbfe;
+      border-radius: 0.75rem;
+      padding: 1.1rem 1.35rem;
+      margin-bottom: 1rem;
+    }
+
+    /* Level 2: Indent Remitos */
+    .branch-remitos {
+      margin-left: 2rem;
+      padding-left: 1.5rem;
+      border-left: 3px dashed #cbd5e1;
+      margin-bottom: 1rem;
+      position: relative;
+    }
+
+    .tree-node-remito {
+      background: #ffffff;
+      border: 1px solid var(--border-color);
+      border-radius: 0.5rem;
+      padding: 0.85rem 1.15rem;
+      margin-bottom: 0.75rem;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s ease;
+    }
+
+    .tree-node-remito:hover {
+      border-color: #94a3b8;
+      box-shadow: var(--shadow-md);
+    }
+
+    .node-remito-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .empty-state-remito {
+      background: #f1f5f9;
+      border: 1px dashed #94a3b8;
+      color: var(--text-muted);
+      border-radius: 0.5rem;
+      padding: 1rem 1.25rem;
+      font-size: 0.9rem;
+      font-style: italic;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Subtotal Bars */
+    .subtotal-bar {
+      border-radius: 0.5rem;
+      padding: 0.85rem 1.25rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-top: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .subtotal-remitos {
+      background: #f8fafc;
+      border: 1.5px solid #e2e8f0;
+      margin-left: 2rem;
+    }
+
+    .subtotal-oc-global {
+      background: #f0fdf4;
+      border: 2px solid #86efac;
+      padding: 1.15rem 1.5rem;
+      border-radius: 0.75rem;
+      margin-top: 2rem;
+    }
+
+    /* Status Indicators */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.825rem;
+      font-weight: 600;
+    }
+
+    .status-match {
+      background: var(--emerald-100);
+      color: var(--emerald-700);
+      border: 1px solid #a7f3d0;
+    }
+
+    .status-mismatch {
+      background: var(--rose-100);
+      color: var(--rose-700);
+      border: 1px solid #fecdd3;
+    }
+
+    .pill-info {
+      font-size: 0.725rem;
+      padding: 0.2rem 0.5rem;
+      background: #f1f5f9;
+      border-radius: 0.25rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .pill-success {
+      font-size: 0.725rem;
+      padding: 0.2rem 0.5rem;
+      background: #dcfce7;
+      color: #166534;
+      border-radius: 0.25rem;
+      font-weight: 600;
+    }
+
+    .pill-warning {
+      font-size: 0.725rem;
+      padding: 0.2rem 0.5rem;
+      background: #fef3c7;
+      color: #92400e;
+      border-radius: 0.25rem;
+      font-weight: 600;
+    }
+
+    /* Footer Note */
+    .footer-note {
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 2.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border-color);
+    }
+
+    /* Print styles */
+    @media print {
+      body {
+        background: #ffffff;
+        padding: 0;
+      }
+      .container {
+        max-width: 100%;
+      }
+      .header {
+        box-shadow: none;
+        border: 1px solid #000;
+      }
+      .section-card {
+        box-shadow: none;
+        border: 1px solid #ccc;
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    
+    <!-- Executive Header -->
+    <header class="header">
+      <div class="header-top">
+        <div>
+          <span class="badge-report">Reporte de Auditoría y Trazabilidad</span>
+          <h1 style="margin-top: 0.5rem;">Auditoría de Pedido: 0000300000048</h1>
+          <p>Trazabilidad integral de compras, asignaciones de órdenes y despachos en remitos.</p>
+        </div>
+        <div style="text-align: right;">
+          <span class="pill-info" style="background: rgba(255,255,255,0.2); color: #fff;">Generado: 01/10/2026</span>
+        </div>
+      </div>
+
+      <div class="header-meta">
+        <div class="meta-item">
+          <span class="meta-label">Cliente</span>
+          <span class="meta-value">AVA S.A.</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Fecha Pedido</span>
+          <span class="meta-value">05/08/2026</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Mercadería Solicitada</span>
+          <span class="meta-value">Azúcar Bella Vista (Bolsas 50kg)</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Cantidad Pedido Original</span>
+          <span class="meta-value" style="color: #60a5fa;">280.000 Ton</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Key Performance Indicators -->
+    <section class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-title">Pedido Original</div>
+        <div class="kpi-value">280.000 <span style="font-size: 1rem; color: var(--text-muted);">Ton</span></div>
+        <div class="kpi-footer" style="color: var(--blue-600);">
+          <span>● Compromiso con Cliente AVA S.A.</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-title">Total OCs Vinculadas</div>
+        <div class="kpi-value" style="color: var(--emerald-600);">280.000 <span style="font-size: 1rem; color: var(--text-muted);">Ton</span></div>
+        <div class="kpi-footer" style="color: var(--emerald-700);">
+          <span>✔️ 100% Cobertura de Compra (2 OCs)</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-title">Total Remitos Despachados</div>
+        <div class="kpi-value" style="color: var(--text-primary);">112.000 <span style="font-size: 1rem; color: var(--text-muted);">Ton</span></div>
+        <div class="kpi-footer" style="color: var(--amber-700);">
+          <span>⏳ 4 Remitos (40.0% Cumplido)</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-title">Saldo Pendiente Remitir</div>
+        <div class="kpi-value" style="color: var(--rose-600);">168.000 <span style="font-size: 1rem; color: var(--text-muted);">Ton</span></div>
+        <div class="kpi-footer" style="color: var(--rose-700);">
+          <span>❌ 60.0% Por Entregar (6 viajes aprox)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Detailed Hierarchical Tree Report -->
+    <main class="section-card">
+      <div class="section-header">
+        <div class="section-title">
+          <span>🌳</span> Estructura Jerárquica y Conciliación de Cantidades
+        </div>
+        <span class="pill-info">Jerarquía: Pedido ➔ OC Vinculada ➔ Remitos</span>
+      </div>
+
+      <div class="tree-container">
+        
+        <!-- ================= ROOT: PEDIDO ORIGINAL ================= -->
+        <div class="tree-node-root">
+          <div class="node-header">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <span class="node-tag tag-pedido">Pedido Original</span>
+              <span class="node-title">0000300000048</span>
+              <span class="pill-info">Fecha: 05/08/2026</span>
+            </div>
+            <div>
+              <span class="node-qty" style="color: var(--blue-700);">280.000 Ton</span>
+            </div>
+          </div>
+          <div class="node-subtext">
+            <span>Cliente: <strong>AVA S.A. (CUIT 30-70915104-1)</strong></span>
+            <span>Tipo Mercado: <strong>Mercado Interno (MI)</strong></span>
+            <span>Destino: <strong>Ruta Prov. 86 - SN - Ugarteche, Mendoza</strong></span>
+            <span>Precio Neto: <strong>$689.85 / kg</strong></span>
+          </div>
+        </div>
+
+        <!-- ================= RAMA 1: OC 00003-00000059 ================= -->
+        <div class="branch-oc">
+          
+          <div class="tree-node-oc">
+            <div class="node-header">
+              <div style="display: flex; align-items: center; gap: 0.65rem;">
+                <span class="node-tag tag-oc">Vinculado a OC</span>
+                <span class="node-title" style="color: var(--blue-900);">00003-00000059</span>
+                <span class="pill-info">Emisión: 05/08/2026</span>
+                <span class="pill-success">Aprobada</span>
+              </div>
+              <div>
+                <span class="node-qty" style="color: var(--blue-900);">140.000 Ton</span>
+              </div>
+            </div>
+            <div class="node-subtext">
+              <span>Proveedor: <strong>EL ALGARROBAL SRL</strong></span>
+              <span>Total Orden de Compra: <strong>140.000 Ton</strong></span>
+              <span>Cantidad Asignada a este Pedido: <strong>140.000 Ton</strong></span>
+            </div>
+          </div>
+
+          <!-- Remitos vinculados a OC 1 -->
+          <div class="branch-remitos">
+            
+            <!-- Remito 1 -->
+            <div class="tree-node-remito">
+              <div class="node-header">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span class="node-tag tag-remito">Remito</span>
+                  <span class="node-remito-title">0000100005298</span>
+                  <span class="pill-info">Fecha: 21/09/2026</span>
+                  <span class="pill-success">Misión Completada</span>
+                </div>
+                <div>
+                  <span class="node-qty">28.000 Ton</span>
+                </div>
+              </div>
+              <div class="node-subtext" style="font-size: 0.8rem; margin-top: 0.35rem;">
+                <span>Chofer: <strong>SANABRIA YERSON</strong></span>
+                <span>Chasis: <strong>PIF938</strong></span>
+                <span>Acoplado: <strong>AA297LN</strong></span>
+                <span>Carga: <strong>560 bolsas x 50 kg (Azúcar Bella Vista)</strong></span>
+              </div>
+            </div>
+
+            <!-- Remito 2 -->
+            <div class="tree-node-remito">
+              <div class="node-header">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span class="node-tag tag-remito">Remito</span>
+                  <span class="node-remito-title">0000100005299</span>
+                  <span class="pill-info">Fecha: 25/09/2026</span>
+                  <span class="pill-success">Misión Completada</span>
+                </div>
+                <div>
+                  <span class="node-qty">28.000 Ton</span>
+                </div>
+              </div>
+              <div class="node-subtext" style="font-size: 0.8rem; margin-top: 0.35rem;">
+                <span>Chofer: <strong>SANABRIA YERSON</strong></span>
+                <span>Chasis: <strong>AF470TW</strong></span>
+                <span>Acoplado: <strong>AF682AC</strong></span>
+                <span>Carga: <strong>560 bolsas x 50 kg (Azúcar Bella Vista)</strong></span>
+              </div>
+            </div>
+
+            <!-- Remito 3 -->
+            <div class="tree-node-remito">
+              <div class="node-header">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span class="node-tag tag-remito">Remito</span>
+                  <span class="node-remito-title">0000100005301</span>
+                  <span class="pill-info">Fecha: 28/09/2026</span>
+                  <span class="pill-success">Misión Completada</span>
+                </div>
+                <div>
+                  <span class="node-qty">28.000 Ton</span>
+                </div>
+              </div>
+              <div class="node-subtext" style="font-size: 0.8rem; margin-top: 0.35rem;">
+                <span>Chofer: <strong>WALTER DAVID ALBERTO</strong></span>
+                <span>Chasis: <strong>AE767BF</strong></span>
+                <span>Acoplado: <strong>AF256XL</strong></span>
+                <span>Carga: <strong>560 bolsas x 50 kg (Azúcar Bella Vista)</strong></span>
+              </div>
+            </div>
+
+            <!-- Remito 4 -->
+            <div class="tree-node-remito">
+              <div class="node-header">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span class="node-tag tag-remito">Remito</span>
+                  <span class="node-remito-title">0000100005302</span>
+                  <span class="pill-info">Fecha: 29/09/2026</span>
+                  <span class="pill-warning">Esperando Papeles / En Curso</span>
+                </div>
+                <div>
+                  <span class="node-qty">28.000 Ton</span>
+                </div>
+              </div>
+              <div class="node-subtext" style="font-size: 0.8rem; margin-top: 0.35rem;">
+                <span>Chofer: <strong>SANABRIA YERSON</strong></span>
+                <span>Chasis: <strong>PIF938</strong></span>
+                <span>Acoplado: <strong>AA604JE</strong></span>
+                <span>Carga: <strong>560 bolsas x 50 kg (Azúcar Bella Vista)</strong></span>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Subtotal Remitos OC 1 -->
+          <div class="subtotal-bar subtotal-remitos">
+            <div>
+              <span>Subtotal remitos (OC 00003-00000059):</span>
+              <span style="font-family: 'JetBrains Mono'; margin-left: 0.5rem; font-weight: 700;">112.000 Ton</span>
+            </div>
+            <div>
+              <span class="status-badge status-mismatch">
+                ❌ Cruz (No coincide: Vinculación 140.000 Ton vs Remitido 112.000 Ton | Saldo: 28.000 Ton)
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ================= RAMA 2: OC 00003-00000067 ================= -->
+        <div class="branch-oc">
+          
+          <div class="tree-node-oc">
+            <div class="node-header">
+              <div style="display: flex; align-items: center; gap: 0.65rem;">
+                <span class="node-tag tag-oc">Vinculado a OC</span>
+                <span class="node-title" style="color: var(--blue-900);">00003-00000067</span>
+                <span class="pill-info">Emisión: 20/08/2026</span>
+                <span class="pill-success">Aprobada</span>
+              </div>
+              <div>
+                <span class="node-qty" style="color: var(--blue-900);">140.000 Ton</span>
+              </div>
+            </div>
+            <div class="node-subtext">
+              <span>Proveedor: <strong>EL ALGARROBAL SRL</strong></span>
+              <span>Total OC Original: <strong>280.000 Ton</strong> (Asignadas a este pedido: <strong>140.000 Ton</strong>)</span>
+              <span>Estado: <strong>Pendiente de Remisión</strong></span>
+            </div>
+          </div>
+
+          <!-- Remitos vinculados a OC 2 -->
+          <div class="branch-remitos">
+            <div class="empty-state-remito">
+              <span>⚠️</span> No se registran remitos emitidos ni asignados aún a esta orden de compra para este pedido.
+            </div>
+          </div>
+
+          <!-- Subtotal Remitos OC 2 -->
+          <div class="subtotal-bar subtotal-remitos">
+            <div>
+              <span>Subtotal remitos (OC 00003-00000067):</span>
+              <span style="font-family: 'JetBrains Mono'; margin-left: 0.5rem; font-weight: 700;">0.000 Ton</span>
+            </div>
+            <div>
+              <span class="status-badge status-mismatch">
+                ❌ Cruz (No coincide: Vinculación 140.000 Ton vs Remitido 0.000 Ton | Saldo: 140.000 Ton)
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ================= TOTAL GENERAL OC ================= -->
+        <div class="subtotal-bar subtotal-oc-global">
+          <div>
+            <span style="font-size: 1.05rem; color: #14532d;">Subtotal Órdenes de Compra (OC Vinculadas):</span>
+            <span style="font-family: 'JetBrains Mono'; margin-left: 0.75rem; font-size: 1.25rem; font-weight: 800; color: #166534;">280.000 Ton</span>
+          </div>
+          <div>
+            <span class="status-badge status-match" style="font-size: 0.9rem; padding: 0.4rem 0.9rem;">
+              ✔️ Check (Coincide exactamente con el total del pedido: 280.000 Ton)
+            </span>
+          </div>
+        </div>
+
+      </div>
+    </main>
+
+    <!-- Resumen Operativo / Conclusiones -->
+    <section class="section-card">
+      <div class="section-header">
+        <div class="section-title">
+          <span>📋</span> Resumen Ejecutivo y Estado de Despacho
+        </div>
+      </div>
+      <div style="padding: 1.5rem 1.75rem;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.925rem;">
+          <thead>
+            <tr style="border-bottom: 2px solid var(--border-color); text-align: left; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase;">
+              <th style="padding: 0.75rem 0.5rem;">Concepto</th>
+              <th style="padding: 0.75rem 0.5rem; text-align: center;">Documentos</th>
+              <th style="padding: 0.75rem 0.5rem; text-align: right;">Cantidad Requerida / Vinculada</th>
+              <th style="padding: 0.75rem 0.5rem; text-align: right;">Cantidad Remitida</th>
+              <th style="padding: 0.75rem 0.5rem; text-align: right;">Saldo Pendiente</th>
+              <th style="padding: 0.75rem 0.5rem; text-align: center;">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="border-bottom: 1px solid var(--border-color);">
+              <td style="padding: 0.85rem 0.5rem; font-weight: 600;">Tramo 1 (OC 00003-00000059)</td>
+              <td style="padding: 0.85rem 0.5rem; text-align: center;">4 Remitos</td>
+              <td style="padding: 0.85rem 0.5rem; text-align: right; font-family: 'JetBrains Mono';">140.000 Ton</td>
+              <td style="padding: 0.85rem 0.5rem; text-align: right; font-family: 'JetBrains Mono'; font-weight: 600; color: var(--emerald-700);">112.000 Ton</td>
+              <td style="padding: 0.85rem 0.5rem; text-align: right; font-family: 'JetBrains Mono'; color: var(--rose-600); font-weight: 600;">28.000 Ton</td>
+              <td style="padding: 0.85rem 0.5rem; text-align: center;"><span class="pill-warning">80% Remitido</span></td>
+            </tr>
+            <tr style="border-bottom: 1px solid var(--border-color);">
+              <td style="padding: 0.85rem 0.5rem; font-weight: 600;">Tramo 2 (OC 00003-00000067)</td>
+              <td style="padding: 0.85rem 0.5rem; text-align: center;">0 Remitos</td>
+              <td style="padding: 0.85rem 0.5rem; text-align: right; font-family: 'JetBrains Mono';">140.000 Ton</td>
+              <td style="padding: 0.85rem 0.5rem; text-align: right; font-family: 'JetBrains Mono'; font-weight: 600; color: var(--text-muted);">0.000 Ton</td>
+              <td style="padding: 0.85rem 0.5rem; text-align: right; font-family: 'JetBrains Mono'; color: var(--rose-600); font-weight: 600;">140.000 Ton</td>
+              <td style="padding: 0.85rem 0.5rem; text-align: center;"><span class="pill-info">Sin Iniciar</span></td>
+            </tr>
+            <tr style="background: #f8fafc; font-weight: 700;">
+              <td style="padding: 1rem 0.5rem; font-size: 1rem;">TOTAL CONSOLIDADO PEDIDO</td>
+              <td style="padding: 1rem 0.5rem; text-align: center;">4 Remitos</td>
+              <td style="padding: 1rem 0.5rem; text-align: right; font-family: 'JetBrains Mono'; font-size: 1.05rem;">280.000 Ton</td>
+              <td style="padding: 1rem 0.5rem; text-align: right; font-family: 'JetBrains Mono'; font-size: 1.05rem; color: var(--emerald-700);">112.000 Ton</td>
+              <td style="padding: 1rem 0.5rem; text-align: right; font-family: 'JetBrains Mono'; font-size: 1.05rem; color: var(--rose-600);">168.000 Ton</td>
+              <td style="padding: 1rem 0.5rem; text-align: center;"><span class="pill-warning">40% Total</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer-note">
+      Sistema de Gestión y Trazabilidad Logística - Página Arquímedes &copy; 2026. Documento generado automáticamente.
+    </footer>
+
+  </div>
+
+</body>
+</html>

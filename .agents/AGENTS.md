@@ -23,6 +23,14 @@ Antes de realizar cualquier cambio en un nodo de n8n, se debe seguir estrictamen
 ### 4. Advertencia de Pestaña Abierta en n8n al Modificar Vía MCP
 * Antes de aplicar mutaciones o cambios de publicación (`update_workflow`, `publish_workflow`, `unpublish_workflow`), el agente **debe recordar y advertir al usuario que salga del canvas del workflow o cierre esa pestaña** (o vuelva a la lista general de flujos). Esto previene conflictos de concurrencia entre la sesión en memoria del navegador y la API, que bloquean el estado de publicación en un loop infinito de *"Publishing..."*.
 
+### 5. Parámetro `forceReconnect` en `Email Trigger (IMAP)` (Hostinger)
+No repetir valores descartados empíricamente para el intervalo de reconexión IMAP (`options.forceReconnect`):
+* ❌ **3 minutos** (Probado Ago y Sep 2026): **Descartado**. Provoca bloqueos temporales por parte de Hostinger (*rate limiting / fail2ban / exceso de autenticaciones* por 20 logins/hora).
+* ❌ **15 minutos** (Probado Sep 2026): **Descartado**. Provoca que el socket TCP quede colgado tras ~10 min de inactividad, perdiendo la recepción de correos entrantes en tiempo real.
+* ❌ **20 minutos** (Probado Sep 2026): **Descartado**. Idem al caso de 15 min, el servidor corta la conexión por inactividad y los sockets mueren en silencio.
+* ⏳ **7 minutos** (Configurado Sep 2026): **En evaluación**. Representa el equilibrio óptimo (~8.5 logins/hora para no saturar Hostinger y por debajo de la ventana de caída de 10 min de socket inactivo).
+
+
 
 ## ⚠️ Reglas Críticas para Funciones y RPCs en PostgreSQL (Supabase)
 
