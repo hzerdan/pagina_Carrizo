@@ -41,7 +41,7 @@ export function KanbanColumn({ stateDef, instances, onCardClick, onOpenTraceabil
       <div 
         ref={setNodeRef}
         className={cn(
-          "flex-1 overflow-y-auto min-h-0 p-3 space-y-3 transition-colors",
+          "flex-1 overflow-y-auto min-h-0 p-3 space-y-3 transition-colors [scrollbar-width:thin]",
           isOver ? "bg-brand-50/50" : ""
         )}
       >
