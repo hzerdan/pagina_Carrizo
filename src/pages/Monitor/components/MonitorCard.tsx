@@ -2,11 +2,12 @@ import type { InstanceData } from '../types';
 import { cn } from '../../../lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Truck, User, Building2, Clock } from 'lucide-react';
+import { GripVertical, Truck, User, Building2, Clock, FileText } from 'lucide-react';
 
 interface MonitorCardProps {
   instance: InstanceData;
   onClick: (instance: InstanceData) => void;
+  onOpenTraceabilityReport?: (instance: InstanceData) => void;
 }
 
 function parseReferenciaHumana(ref: string, instanceId: number) {
@@ -48,7 +49,7 @@ function parseReferenciaHumana(ref: string, instanceId: number) {
   return { pedido, oc, remito, idInstancia };
 }
 
-export function MonitorCard({ instance, onClick }: MonitorCardProps) {
+export function MonitorCard({ instance, onClick, onOpenTraceabilityReport }: MonitorCardProps) {
   // Alert color logic for the left border/indicator
   const getAlertColor = (color: string) => {
     switch (color) {
@@ -149,14 +150,29 @@ export function MonitorCard({ instance, onClick }: MonitorCardProps) {
               </div>
             </div>
             
-            <div className={cn(
-               "flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md flex-shrink-0",
-               instance.color_alerta === 'ROJO' ? 'bg-red-50 text-red-700' :
-               instance.color_alerta === 'AMARILLO' ? 'bg-yellow-50 text-yellow-700' :
-               'bg-green-50 text-green-700'
-            )}>
-              <Clock className="w-3.5 h-3.5" />
-              <span>{instance.horas_transcurridas}h</span>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {onOpenTraceabilityReport && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenTraceabilityReport(instance);
+                  }}
+                  className="p-1 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded transition-colors"
+                  title="Ver Informe de Trazabilidad e Historial"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <div className={cn(
+                 "flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md",
+                 instance.color_alerta === 'ROJO' ? 'bg-red-50 text-red-700' :
+                 instance.color_alerta === 'AMARILLO' ? 'bg-yellow-50 text-yellow-700' :
+                 'bg-green-50 text-green-700'
+              )}>
+                <Clock className="w-3.5 h-3.5" />
+                <span>{instance.horas_transcurridas}h</span>
+              </div>
             </div>
           </div>
 

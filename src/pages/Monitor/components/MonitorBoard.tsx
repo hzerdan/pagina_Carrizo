@@ -11,6 +11,7 @@ interface MonitorBoardProps {
   stateDefs: StateDefinition[];
   visibleStateDefs: StateDefinition[];
   onCardClick: (instance: InstanceData) => void;
+  onOpenTraceabilityReport?: (instance: InstanceData) => void;
   onDragEnd: (event: DragEndEvent) => void;
   isLoading?: boolean;
 }
@@ -20,6 +21,7 @@ export function MonitorBoard({
   stateDefs, 
   visibleStateDefs, 
   onCardClick, 
+  onOpenTraceabilityReport,
   onDragEnd, 
   isLoading 
 }: MonitorBoardProps) {
@@ -100,6 +102,7 @@ export function MonitorBoard({
                stateDef={stateDef}
                instances={getInstancesForColumn(stateDef.state_code)}
                onCardClick={onCardClick}
+               onOpenTraceabilityReport={onOpenTraceabilityReport}
                isLoading={isLoading}
              />
           ))}

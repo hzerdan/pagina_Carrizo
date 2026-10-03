@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback } from 'react';
-import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert, Edit, Unlink } from 'lucide-react';
+import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert, Edit, Unlink, FileText } from 'lucide-react';
 import type { InstanceData } from '../types';
 import { cn } from '../../../lib/utils';
 import { supabase } from '../../../lib/supabase';
@@ -15,6 +15,7 @@ interface InstanceDetailsDrawerProps {
   onTransitionSuccess?: () => void;
   entityType?: 'PEDIDO' | 'OC';
   onOpenTraceability?: (instance: InstanceData) => void;
+  onOpenTraceabilityReport?: (instance: InstanceData) => void;
 }
 
 interface ChecklistItem {
@@ -25,7 +26,7 @@ interface ChecklistItem {
   mensaje: string;
 }
 
-export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionSuccess, entityType = 'PEDIDO', onOpenTraceability }: InstanceDetailsDrawerProps) {
+export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionSuccess, entityType = 'PEDIDO', onOpenTraceability, onOpenTraceabilityReport }: InstanceDetailsDrawerProps) {
   const { user, personalAcId } = useAuth();
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
@@ -428,6 +429,15 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
               >
                 <Clock className="w-3.5 h-3.5 text-gray-500" />
                 <span>Historial & Auditoría</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenTraceabilityReport?.(instance)}
+                className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200 rounded-full transition-colors cursor-pointer shadow-2xs"
+                title="Ver informe consolidado de trazabilidad y conciliación"
+              >
+                <FileText className="w-3.5 h-3.5 text-brand-600" />
+                <span>Informe de Trazabilidad</span>
               </button>
             </div>
           </div>

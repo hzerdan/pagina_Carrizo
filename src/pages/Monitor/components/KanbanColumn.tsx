@@ -9,10 +9,11 @@ interface KanbanColumnProps {
   stateDef: StateDefinition;
   instances: InstanceData[];
   onCardClick: (instance: InstanceData) => void;
+  onOpenTraceabilityReport?: (instance: InstanceData) => void;
   isLoading?: boolean;
 }
 
-export function KanbanColumn({ stateDef, instances, onCardClick, isLoading }: KanbanColumnProps) {
+export function KanbanColumn({ stateDef, instances, onCardClick, onOpenTraceabilityReport, isLoading }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: stateDef.state_code,
     data: {
@@ -56,6 +57,7 @@ export function KanbanColumn({ stateDef, instances, onCardClick, isLoading }: Ka
                 key={instance.instancia_id} 
                 instance={instance} 
                 onClick={onCardClick} 
+                onOpenTraceabilityReport={onOpenTraceabilityReport}
               />
             ))
           )}

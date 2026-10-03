@@ -4,6 +4,7 @@ import { MonitorBoard } from './components/MonitorBoard';
 import { TransitionModal } from './components/TransitionModal';
 import { InstanceDetailsDrawer } from './components/InstanceDetailsDrawer';
 import { TraceabilityModal } from './components/TraceabilityModal';
+import { InformeTrazabilidadModal } from './components/InformeTrazabilidadModal';
 import type { InstanceData, StateDefinition, EntityType, FilterState } from './types';
 import { DEFAULT_FILTERS } from './types';
 import { supabase } from '../../lib/supabase';
@@ -26,6 +27,7 @@ export function MonitorPage() {
   const [filtersOC, setFiltersOC] = useState<FilterState>(DEFAULT_FILTERS);
   const [selectedInstance, setSelectedInstance] = useState<InstanceData | null>(null);
   const [traceabilityInstance, setTraceabilityInstance] = useState<InstanceData | null>(null);
+  const [reportInstance, setReportInstance] = useState<InstanceData | null>(null);
 
   // Filtros activos según la pestaña seleccionada
   const activeFilters = activeTab === 'PEDIDO' ? filtersPedido : filtersOC;
@@ -338,6 +340,7 @@ export function MonitorPage() {
             stateDefs={stateDefs}
             visibleStateDefs={filteredStateDefs}
             onCardClick={setSelectedInstance} 
+            onOpenTraceabilityReport={setReportInstance}
             onDragEnd={handleDragEnd}
             isLoading={isLoading}
           />
@@ -353,6 +356,7 @@ export function MonitorPage() {
         onTransitionSuccess={fetchData}
         entityType={activeTab}
         onOpenTraceability={(inst) => setTraceabilityInstance(inst)}
+        onOpenTraceabilityReport={(inst) => setReportInstance(inst)}
       />
 
       {/* Modal de Transición Manual */}
@@ -371,6 +375,14 @@ export function MonitorPage() {
         isOpen={!!traceabilityInstance}
         onClose={() => setTraceabilityInstance(null)}
         instance={traceabilityInstance}
+        entityType={activeTab}
+      />
+
+      {/* Modal de Informe de Trazabilidad y Conciliación (Fase 2) */}
+      <InformeTrazabilidadModal
+        isOpen={!!reportInstance}
+        onClose={() => setReportInstance(null)}
+        instance={reportInstance}
         entityType={activeTab}
       />
     </div>
