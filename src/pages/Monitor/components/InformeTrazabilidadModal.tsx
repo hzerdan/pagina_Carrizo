@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   X, 
   Download, 
@@ -14,8 +14,7 @@ import {
   Package, 
   Loader2, 
   RefreshCw,
-  AlertTriangle,
-  ArrowRight
+  AlertTriangle
 } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import type { InstanceData, EntityType } from '../types';
