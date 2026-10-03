@@ -150,7 +150,17 @@ export function MonitorCard({ instance, onClick, onOpenTraceabilityReport }: Mon
               </div>
             </div>
             
-            <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+              <div className={cn(
+                 "flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
+                 instance.color_alerta === 'ROJO' ? 'bg-red-50 text-red-700' :
+                 instance.color_alerta === 'AMARILLO' ? 'bg-yellow-50 text-yellow-700' :
+                 'bg-green-50 text-green-700'
+              )}>
+                <Clock className="w-3.5 h-3.5" />
+                <span>{instance.horas_transcurridas}h</span>
+              </div>
+
               {onOpenTraceabilityReport && (
                 <button
                   type="button"
@@ -161,18 +171,9 @@ export function MonitorCard({ instance, onClick, onOpenTraceabilityReport }: Mon
                   className="p-1 text-gray-400 hover:text-brand-600 hover:bg-brand-50 rounded transition-colors"
                   title="Ver Informe de Trazabilidad e Historial"
                 >
-                  <FileText className="w-3.5 h-3.5" />
+                  <FileText className="w-4 h-4" />
                 </button>
               )}
-              <div className={cn(
-                 "flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-md",
-                 instance.color_alerta === 'ROJO' ? 'bg-red-50 text-red-700' :
-                 instance.color_alerta === 'AMARILLO' ? 'bg-yellow-50 text-yellow-700' :
-                 'bg-green-50 text-green-700'
-              )}>
-                <Clock className="w-3.5 h-3.5" />
-                <span>{instance.horas_transcurridas}h</span>
-              </div>
             </div>
           </div>
 
