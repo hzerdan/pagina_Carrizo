@@ -192,7 +192,7 @@ export function InspeccionDetailDrawer({
           // Fetch supervisor templates
           const { data: supTpls } = await supabase
             .from('inspeccion_templates')
-            .select('id, codigo, nombre')
+            .select('id, codigo, nombre, archivo_url')
             .eq('rol_responsable', 'Supervisor')
             .eq('activo', true)
             .order('nombre');
@@ -288,6 +288,37 @@ export function InspeccionDetailDrawer({
     });
     
     window.open(dbData.template_supervisor_url, '_blank');
+  };
+
+  const handleAsignarPlantillaSupervisor = async (newTemplateId: number | null) => {
+    if (!inspeccion) return;
+    try {
+      const selectedTpl = supervisorTemplates.find(t => t.id === newTemplateId);
+      const newUrl = selectedTpl?.archivo_url || null;
+
+      const { error: updErr } = await supabase
+        .from('inspecciones')
+        .update({ template_supervisor_id: newTemplateId })
+        .eq('id', inspeccion.id);
+
+      if (updErr) throw updErr;
+
+      setDbData((prev: any) => ({
+        ...prev,
+        template_supervisor_id: newTemplateId,
+        template_supervisor_url: newUrl
+      }));
+      setEditForm((prev) => ({
+        ...prev,
+        template_supervisor_id: newTemplateId || ''
+      }));
+
+      showToast('success', newTemplateId ? 'Plantilla de supervisor asignada exitosamente.' : 'Plantilla de supervisor desvinculada.');
+      onDataChanged();
+    } catch (err: any) {
+      console.error('Error al asignar plantilla de supervisor:', err);
+      showToast('error', `Error al asignar plantilla: ${err.message || 'Error desconocido'}`);
+    }
   };
 
   const handleEdgeFunctionEmail = async () => {
@@ -1756,25 +1787,57 @@ Por favor, ingresa al enlace para descargar tu planilla de supervisión y subirl
 
                   <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4 shadow-xs">
                     {/* Descargar Plantilla Maestra */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="text-sm font-semibold text-gray-800">Descargar Plantilla Maestra</h4>
-                        <p className="text-xs text-gray-500">Plantilla asignada para el control de supervisión.</p>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h4 className="text-sm font-semibold text-gray-800">Plantilla Maestra Asignada</h4>
+                          <p className="text-xs text-gray-500">Selecciona y descarga la plantilla base para el supervisor.</p>
+                        </div>
+                        <button 
+                          onClick={handleDownloadMaestraSupervisor}
+                          disabled={!dbData?.template_supervisor_url}
+                          className="px-3 py-1.5 bg-white border border-gray-300 rounded shadow-sm text-sm font-medium hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2 flex-shrink-0"
+                          title={!dbData?.template_supervisor_url ? "Asigna una plantilla para poder descargarla" : "Descargar plantilla maestra"}
+                        >
+                          <Download className="w-4 h-4" /> Bajar
+                        </button>
                       </div>
-                      <button 
-                        onClick={handleDownloadMaestraSupervisor}
-                        disabled={!dbData?.template_supervisor_url}
-                        className="px-3 py-1.5 bg-white border border-gray-300 rounded shadow-sm text-sm font-medium hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
-                      >
-                        <Download className="w-4 h-4" /> Bajar
-                      </button>
-                    </div>
 
-                    {!dbData?.template_supervisor_id && (
-                      <p className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-200 font-medium">
-                        ℹ️ No se seleccionó plantilla documental de supervisor para esta inspección.
-                      </p>
-                    )}
+                      {/* Selector de plantilla de supervisor directo */}
+                      <div className="space-y-1.5 pt-1">
+                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                          Plantilla de Supervisor:
+                        </label>
+                        <select
+                          value={dbData?.template_supervisor_id || ''}
+                          onChange={async (e) => {
+                            const newId = e.target.value ? Number(e.target.value) : null;
+                            await handleAsignarPlantillaSupervisor(newId);
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 outline-none bg-white font-medium text-gray-800"
+                        >
+                          <option value="">Seleccionar plantilla para supervisor...</option>
+                          {supervisorTemplates.map(t => (
+                            <option key={t.id} value={t.id}>
+                              {t.nombre} ({t.codigo})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {!dbData?.template_supervisor_id ? (
+                        <p className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200 font-medium">
+                          ⚠️ No hay una plantilla asignada a esta inspección. Selecciona una en el desplegable superior para habilitar el botón de descarga.
+                        </p>
+                      ) : (
+                        <div className="flex items-center gap-2 p-2 bg-purple-50 border border-purple-200 rounded-lg text-xs text-purple-900">
+                          <CheckCircle2 className="w-4 h-4 text-purple-600 flex-shrink-0" />
+                          <span className="font-medium truncate flex-1">
+                            Plantilla activa: {supervisorTemplates.find(t => t.id === dbData.template_supervisor_id)?.nombre || `ID #${dbData.template_supervisor_id}`}
+                          </span>
+                        </div>
+                      )}
+                    </div>
 
                     <div className="border-t border-gray-100"></div>
 
