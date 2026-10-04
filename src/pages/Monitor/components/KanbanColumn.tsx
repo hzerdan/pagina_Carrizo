@@ -1,7 +1,7 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { MonitorCard } from './MonitorCard';
-import type { InstanceData, StateDefinition } from '../types';
+import type { InstanceData, StateDefinition, EntityType } from '../types';
 import { cn } from '../../../lib/utils';
 import { useMemo } from 'react';
 
@@ -11,9 +11,19 @@ interface KanbanColumnProps {
   onCardClick: (instance: InstanceData) => void;
   onOpenTraceabilityReport?: (instance: InstanceData) => void;
   isLoading?: boolean;
+  activeTab?: EntityType;
+  onShowToast?: (type: 'info' | 'error', message: string) => void;
 }
 
-export function KanbanColumn({ stateDef, instances, onCardClick, onOpenTraceabilityReport, isLoading }: KanbanColumnProps) {
+export function KanbanColumn({ 
+  stateDef, 
+  instances, 
+  onCardClick, 
+  onOpenTraceabilityReport, 
+  isLoading,
+  activeTab = 'PEDIDO',
+  onShowToast
+}: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: stateDef.state_code,
     data: {
@@ -58,6 +68,8 @@ export function KanbanColumn({ stateDef, instances, onCardClick, onOpenTraceabil
                 instance={instance} 
                 onClick={onCardClick} 
                 onOpenTraceabilityReport={onOpenTraceabilityReport}
+                activeTab={activeTab}
+                onShowToast={onShowToast}
               />
             ))
           )}

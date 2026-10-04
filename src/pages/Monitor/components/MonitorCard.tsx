@@ -1,16 +1,20 @@
-import type { InstanceData } from '../types';
+import { useState } from 'react';
+import type { InstanceData, EntityType } from '../types';
 import { cn } from '../../../lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Truck, User, Building2, Clock, FileText } from 'lucide-react';
+import { GripVertical, Truck, User, Building2, Clock, FileText, ExternalLink, Loader2 } from 'lucide-react';
+import { openOriginalDocument } from '../../../services/documentService';
 
 interface MonitorCardProps {
   instance: InstanceData;
   onClick: (instance: InstanceData) => void;
   onOpenTraceabilityReport?: (instance: InstanceData) => void;
+  activeTab?: EntityType;
+  onShowToast?: (type: 'info' | 'error', message: string) => void;
 }
 
-function parseReferenciaHumana(ref: string, instanceId: number) {
+export function parseReferenciaHumana(ref: string, instanceId: number) {
   let pedido = '';
   let oc = '';
   let remito = '';
@@ -49,7 +53,13 @@ function parseReferenciaHumana(ref: string, instanceId: number) {
   return { pedido, oc, remito, idInstancia };
 }
 
-export function MonitorCard({ instance, onClick, onOpenTraceabilityReport }: MonitorCardProps) {
+export function MonitorCard({ 
+  instance, 
+  onClick, 
+  onOpenTraceabilityReport, 
+  activeTab = 'PEDIDO', 
+  onShowToast 
+}: MonitorCardProps) {
   // Alert color logic for the left border/indicator
   const getAlertColor = (color: string) => {
     switch (color) {
@@ -87,6 +97,29 @@ export function MonitorCard({ instance, onClick, onOpenTraceabilityReport }: Mon
   };
 
   const parsed = parseReferenciaHumana(instance.referencia_humana, instance.instancia_id);
+  const pedidoRef = activeTab === 'PEDIDO' ? (parsed.pedido || instance.nro_pedido) : parsed.pedido;
+  const ocRef = activeTab === 'OC' ? (parsed.oc || instance.nro_pedido) : parsed.oc;
+  const hasPedido = Boolean(pedidoRef);
+  const hasOc = Boolean(ocRef);
+
+  const [loadingDocType, setLoadingDocType] = useState<'PEDIDO' | 'OC' | null>(null);
+
+  const handleOpenDoc = async (e: React.MouseEvent, type: 'PEDIDO' | 'OC', ref?: string) => {
+    e.stopPropagation();
+    try {
+      setLoadingDocType(type);
+      await openOriginalDocument(
+        type,
+        {
+          instanceId: activeTab === type ? instance.instancia_id : undefined,
+          ref
+        },
+        onShowToast
+      );
+    } finally {
+      setLoadingDocType(null);
+    }
+  };
 
   return (
     <div
@@ -184,28 +217,67 @@ export function MonitorCard({ instance, onClick, onOpenTraceabilityReport }: Mon
              </span>
           </div>
 
-          {/* Entities and Logistics Info */}
-          <div className="mt-auto space-y-2">
-             {instance.cliente && (
-               <div className="flex items-center text-xs text-gray-600">
-                 <Building2 className="w-3.5 h-3.5 mr-2 text-gray-400 flex-shrink-0" />
-                 <span className="truncate" title={instance.cliente}>{instance.cliente}</span>
-               </div>
-             )}
-             
-             {instance.proveedor && (
-               <div className="flex items-center text-xs text-gray-600">
-                 <User className="w-3.5 h-3.5 mr-2 text-gray-400 flex-shrink-0" />
-                 <span className="truncate" title={instance.proveedor}>{instance.proveedor}</span>
-               </div>
-             )}
+          {/* Entities, Logistics Info & Document Actions (Bottom Bar) */}
+          <div className="mt-auto pt-1 flex items-end justify-between gap-1.5">
+             <div className="min-w-0 flex-1 space-y-1">
+               {instance.cliente && (
+                 <div className="flex items-center text-xs text-gray-600">
+                   <Building2 className="w-3.5 h-3.5 mr-2 text-gray-400 flex-shrink-0" />
+                   <span className="truncate" title={instance.cliente}>{instance.cliente}</span>
+                 </div>
+               )}
+               
+               {instance.proveedor && (
+                 <div className="flex items-center text-xs text-gray-600">
+                   <User className="w-3.5 h-3.5 mr-2 text-gray-400 flex-shrink-0" />
+                   <span className="truncate" title={instance.proveedor}>{instance.proveedor}</span>
+                 </div>
+               )}
 
-             {instance.nro_remito && (
-               <div className="flex items-center text-xs text-brand-700 pt-1 font-medium bg-brand-50 w-fit px-2 py-0.5 rounded">
-                 <Truck className="w-3 h-3 mr-1.5 flex-shrink-0" />
-                 <span className="truncate max-w-[150px]" title={instance.nro_remito}>Rep: {instance.nro_remito}</span>
-               </div>
-             )}
+               {instance.nro_remito && (
+                 <div className="flex items-center text-xs text-brand-700 pt-0.5 font-medium bg-brand-50 w-fit px-2 py-0.5 rounded">
+                   <Truck className="w-3 h-3 mr-1.5 flex-shrink-0" />
+                   <span className="truncate max-w-[120px]" title={instance.nro_remito}>Rep: {instance.nro_remito}</span>
+                 </div>
+               )}
+             </div>
+
+             {/* Document Buttons (Esquina inferior derecha) */}
+             <div className="flex items-center gap-1 shrink-0">
+               {hasPedido && (
+                 <button
+                   type="button"
+                   onClick={(e) => handleOpenDoc(e, 'PEDIDO', pedidoRef)}
+                   disabled={loadingDocType === 'PEDIDO'}
+                   className="flex items-center gap-1 px-1.5 py-1 text-[10px] font-semibold text-blue-700 bg-blue-50/80 hover:bg-blue-100 hover:text-blue-900 border border-blue-200/80 rounded-md transition-all shadow-2xs cursor-pointer disabled:cursor-wait disabled:opacity-50"
+                   title={pedidoRef ? `Ver documento original del pedido (${pedidoRef})` : "Ver documento original del pedido"}
+                 >
+                   {loadingDocType === 'PEDIDO' ? (
+                     <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+                   ) : (
+                     <ExternalLink className="w-3 h-3 text-blue-600" />
+                   )}
+                   <span>Doc Pedido</span>
+                 </button>
+               )}
+
+               {hasOc && (
+                 <button
+                   type="button"
+                   onClick={(e) => handleOpenDoc(e, 'OC', ocRef)}
+                   disabled={loadingDocType === 'OC'}
+                   className="flex items-center gap-1 px-1.5 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50/80 hover:bg-emerald-100 hover:text-emerald-900 border border-emerald-200/80 rounded-md transition-all shadow-2xs cursor-pointer disabled:cursor-wait disabled:opacity-50"
+                   title={ocRef ? `Ver documento original de la OC (${ocRef})` : "Ver documento original de la OC"}
+                 >
+                   {loadingDocType === 'OC' ? (
+                     <Loader2 className="w-3 h-3 animate-spin text-emerald-600" />
+                   ) : (
+                     <ExternalLink className="w-3 h-3 text-emerald-600" />
+                   )}
+                   <span>Doc OC</span>
+                 </button>
+               )}
+             </div>
           </div>
         </div>
       </div>

@@ -9,7 +9,7 @@ import type { InstanceData, StateDefinition, EntityType, FilterState } from './t
 import { DEFAULT_FILTERS } from './types';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { RefreshCw, AlertCircle } from 'lucide-react';
+import { RefreshCw, AlertCircle, FileText } from 'lucide-react';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { cn } from '../../lib/utils';
 
@@ -28,6 +28,18 @@ export function MonitorPage() {
   const [selectedInstance, setSelectedInstance] = useState<InstanceData | null>(null);
   const [traceabilityInstance, setTraceabilityInstance] = useState<InstanceData | null>(null);
   const [reportInstance, setReportInstance] = useState<InstanceData | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ type: 'info' | 'error'; text: string } | null>(null);
+
+  const showToast = useCallback((type: 'info' | 'error', text: string) => {
+    setToastMessage({ type, text });
+  }, []);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => setToastMessage(null), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
 
   // Filtros activos según la pestaña seleccionada
   const activeFilters = activeTab === 'PEDIDO' ? filtersPedido : filtersOC;
@@ -343,6 +355,8 @@ export function MonitorPage() {
             onOpenTraceabilityReport={setReportInstance}
             onDragEnd={handleDragEnd}
             isLoading={isLoading}
+            activeTab={activeTab}
+            onShowToast={showToast}
           />
         </div>
         
@@ -357,6 +371,7 @@ export function MonitorPage() {
         entityType={activeTab}
         onOpenTraceability={(inst) => setTraceabilityInstance(inst)}
         onOpenTraceabilityReport={(inst) => setReportInstance(inst)}
+        onShowToast={showToast}
       />
 
       {/* Modal de Transición Manual */}
@@ -385,6 +400,22 @@ export function MonitorPage() {
         instance={reportInstance}
         entityType={activeTab}
       />
+
+      {/* Toast Notification Flotante */}
+      {toastMessage && (
+        <div
+          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-white text-sm font-medium flex items-center gap-2 animate-fade-in ${
+            toastMessage.type === 'error' ? 'bg-red-600' : 'bg-gray-800'
+          }`}
+        >
+          {toastMessage.type === 'error' ? (
+            <AlertCircle className="w-4 h-4 shrink-0" />
+          ) : (
+            <FileText className="w-4 h-4 shrink-0" />
+          )}
+          <span>{toastMessage.text}</span>
+        </div>
+      )}
     </div>
   );
 }

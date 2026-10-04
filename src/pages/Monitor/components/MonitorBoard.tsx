@@ -3,7 +3,7 @@ import { DndContext, closestCorners, KeyboardSensor, PointerSensor, useSensor, u
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { KanbanColumn } from './KanbanColumn';
 import { MonitorCard } from './MonitorCard';
-import type { InstanceData, StateDefinition } from '../types';
+import type { InstanceData, StateDefinition, EntityType } from '../types';
 import { LayoutDashboard } from 'lucide-react';
 
 interface MonitorBoardProps {
@@ -14,6 +14,8 @@ interface MonitorBoardProps {
   onOpenTraceabilityReport?: (instance: InstanceData) => void;
   onDragEnd: (event: DragEndEvent) => void;
   isLoading?: boolean;
+  activeTab?: EntityType;
+  onShowToast?: (type: 'info' | 'error', message: string) => void;
 }
 
 export function MonitorBoard({ 
@@ -23,7 +25,9 @@ export function MonitorBoard({
   onCardClick, 
   onOpenTraceabilityReport,
   onDragEnd, 
-  isLoading 
+  isLoading,
+  activeTab = 'PEDIDO',
+  onShowToast
 }: MonitorBoardProps) {
   const [activeInstance, setActiveInstance] = useState<InstanceData | null>(null);
 
@@ -104,6 +108,8 @@ export function MonitorBoard({
                onCardClick={onCardClick}
                onOpenTraceabilityReport={onOpenTraceabilityReport}
                isLoading={isLoading}
+               activeTab={activeTab}
+               onShowToast={onShowToast}
              />
           ))}
         </div>
@@ -112,7 +118,7 @@ export function MonitorBoard({
       <DragOverlay>
         {activeInstance ? (
           <div className="w-80 shadow-2xl opacity-100 rotate-2 scale-105 cursor-grabbing">
-            <MonitorCard instance={activeInstance} onClick={() => {}} />
+            <MonitorCard instance={activeInstance} onClick={() => {}} activeTab={activeTab} />
           </div>
         ) : null}
       </DragOverlay>

@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback } from 'react';
-import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert, Edit, Unlink, FileText } from 'lucide-react';
+import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert, Edit, Unlink, FileText, ExternalLink } from 'lucide-react';
 import type { InstanceData } from '../types';
 import { cn } from '../../../lib/utils';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { EditorItemsPedidoModal } from './EditorItemsPedidoModal';
 import { DescalzarVinculacionModal, type VinculacionInfo } from './DescalzarVinculacionModal';
+import { parseReferenciaHumana } from './MonitorCard';
+import { openOriginalDocument } from '../../../services/documentService';
 
 interface InstanceDetailsDrawerProps {
   instance: InstanceData | null;
@@ -16,6 +18,7 @@ interface InstanceDetailsDrawerProps {
   entityType?: 'PEDIDO' | 'OC';
   onOpenTraceability?: (instance: InstanceData) => void;
   onOpenTraceabilityReport?: (instance: InstanceData) => void;
+  onShowToast?: (type: 'info' | 'error', message: string) => void;
 }
 
 interface ChecklistItem {
@@ -26,7 +29,16 @@ interface ChecklistItem {
   mensaje: string;
 }
 
-export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionSuccess, entityType = 'PEDIDO', onOpenTraceability, onOpenTraceabilityReport }: InstanceDetailsDrawerProps) {
+export function InstanceDetailsDrawer({ 
+  instance, 
+  isOpen, 
+  onClose, 
+  onTransitionSuccess, 
+  entityType = 'PEDIDO', 
+  onOpenTraceability, 
+  onOpenTraceabilityReport,
+  onShowToast
+}: InstanceDetailsDrawerProps) {
   const { user, personalAcId } = useAuth();
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
   const [isLoadingChecklist, setIsLoadingChecklist] = useState(false);
@@ -103,6 +115,32 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
       setIsLoadingVinculacion(false);
     }
   }, [instance, entityType]);
+
+  // Documentos originales de Pedido y OC
+  const parsed = parseReferenciaHumana(instance?.referencia_humana || '', instance?.instancia_id || 0);
+  const pedidoRef = entityType === 'PEDIDO' ? (parsed.pedido || instance?.nro_pedido) : (parsed.pedido || vinculacionInfo?.pedido_ref);
+  const ocRef = entityType === 'OC' ? (parsed.oc || instance?.nro_pedido) : (parsed.oc || vinculacionInfo?.oc_ref);
+  const hasPedido = Boolean(pedidoRef);
+  const hasOc = Boolean(ocRef);
+
+  const [loadingDocType, setLoadingDocType] = useState<'PEDIDO' | 'OC' | null>(null);
+
+  const handleOpenDoc = async (type: 'PEDIDO' | 'OC', ref?: string) => {
+    if (!instance) return;
+    try {
+      setLoadingDocType(type);
+      await openOriginalDocument(
+        type,
+        {
+          instanceId: entityType === type ? instance.instancia_id : undefined,
+          ref
+        },
+        onShowToast
+      );
+    } finally {
+      setLoadingDocType(null);
+    }
+  };
 
   // Determinar si estamos en un estado transicionable
   const stateCode = instance?.estado_actual.split(':')[0].trim() || '';
@@ -439,6 +477,38 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
                 <FileText className="w-3.5 h-3.5 text-brand-600" />
                 <span>Informe de Trazabilidad</span>
               </button>
+              {hasPedido && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenDoc('PEDIDO', pedidoRef)}
+                  disabled={loadingDocType === 'PEDIDO'}
+                  className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full transition-colors cursor-pointer shadow-2xs disabled:cursor-wait disabled:opacity-50"
+                  title={pedidoRef ? `Ver documento original del pedido (${pedidoRef})` : "Ver documento original del pedido"}
+                >
+                  {loadingDocType === 'PEDIDO' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                  ) : (
+                    <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
+                  )}
+                  <span>Doc Pedido</span>
+                </button>
+              )}
+              {hasOc && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenDoc('OC', ocRef)}
+                  disabled={loadingDocType === 'OC'}
+                  className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full transition-colors cursor-pointer shadow-2xs disabled:cursor-wait disabled:opacity-50"
+                  title={ocRef ? `Ver documento original de la OC (${ocRef})` : "Ver documento original de la OC"}
+                >
+                  {loadingDocType === 'OC' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                  ) : (
+                    <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+                  )}
+                  <span>Doc OC</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -531,9 +601,24 @@ export function InstanceDetailsDrawer({ instance, isOpen, onClose, onTransitionS
               <div className="grid grid-cols-2 gap-3 text-xs bg-white/90 p-3 rounded-xl border border-amber-100">
                 <div>
                   <p className="text-gray-400 font-normal">{entityType === 'PEDIDO' ? 'Orden de Compra' : 'Pedido de Venta'}</p>
-                  <p className="font-bold text-gray-900 font-mono text-xs">
-                    {entityType === 'PEDIDO' ? vinculacionInfo.oc_ref : vinculacionInfo.pedido_ref}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-bold text-gray-900 font-mono text-xs">
+                      {entityType === 'PEDIDO' ? vinculacionInfo.oc_ref : vinculacionInfo.pedido_ref}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDoc(entityType === 'PEDIDO' ? 'OC' : 'PEDIDO', entityType === 'PEDIDO' ? vinculacionInfo.oc_ref : vinculacionInfo.pedido_ref)}
+                      disabled={loadingDocType !== null}
+                      className="text-gray-400 hover:text-brand-600 transition-colors p-0.5 cursor-pointer disabled:opacity-50"
+                      title={entityType === 'PEDIDO' ? `Ver documento original de la OC (${vinculacionInfo.oc_ref})` : `Ver documento original del pedido (${vinculacionInfo.pedido_ref})`}
+                    >
+                      {loadingDocType === (entityType === 'PEDIDO' ? 'OC' : 'PEDIDO') ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-600" />
+                      ) : (
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
                   <p className="text-gray-500 text-[11px] truncate" title={entityType === 'PEDIDO' ? vinculacionInfo.proveedor : vinculacionInfo.cliente}>
                     {entityType === 'PEDIDO' ? vinculacionInfo.proveedor : vinculacionInfo.cliente}
                   </p>
