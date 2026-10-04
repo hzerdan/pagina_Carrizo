@@ -71,6 +71,7 @@ export interface InspeccionTemplate {
   codigo: string;
   nombre: string;
   rol_responsable?: string;
+  archivo_url?: string | null;
 }
 
 /** Inspector – personal_ac with role_id = 6 */
