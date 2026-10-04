@@ -17,6 +17,8 @@ export interface InstanceData {
   bolsas_50kg_originales: number;
   tareas_faltantes: string[] | null;
   proximos_estados: string[] | null;
+  forma_pago?: string | null;
+  gf_pago_aprobado?: boolean | null;
 }
 
 export interface StateDefinition {
@@ -31,6 +33,7 @@ export interface FilterState {
   stateFilterMode: 'TODOS' | 'CON_TARJETAS' | 'SELECCIONADOS';
   selectedStates: string[];
   finalizadasFilterMode: FinalizadasFilterMode;
+  soloPagoAnticipado: boolean;
 }
 
 export const DEFAULT_FILTERS: FilterState = {
@@ -40,6 +43,7 @@ export const DEFAULT_FILTERS: FilterState = {
   stateFilterMode: 'TODOS',
   selectedStates: [],
   finalizadasFilterMode: 'RECIENTES',
+  soloPagoAnticipado: false,
 };
 
 

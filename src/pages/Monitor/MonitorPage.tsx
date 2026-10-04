@@ -67,6 +67,7 @@ export function MonitorPage() {
       activeFilters.tipoMercado !== DEFAULT_FILTERS.tipoMercado ||
       activeFilters.colorAlerta !== DEFAULT_FILTERS.colorAlerta ||
       activeFilters.searchPedido !== DEFAULT_FILTERS.searchPedido ||
+      activeFilters.soloPagoAnticipado !== DEFAULT_FILTERS.soloPagoAnticipado ||
       activeFilters.stateFilterMode !== DEFAULT_FILTERS.stateFilterMode ||
       activeFilters.selectedStates.length > 0
     );
@@ -144,8 +145,13 @@ export function MonitorPage() {
           matchFinalizadas = horas > 72;
         }
       }
+
+      // Filtro de Pago Anticipado
+      const matchAnticipado = !activeFilters.soloPagoAnticipado || Boolean(
+        instance.forma_pago && instance.forma_pago.toUpperCase().includes('ANTICIPAD')
+      );
       
-      return matchMercado && matchAlerta && matchPedido && matchFinalizadas;
+      return matchMercado && matchAlerta && matchPedido && matchFinalizadas && matchAnticipado;
     });
   }, [data, activeFilters]);
 
@@ -331,6 +337,8 @@ export function MonitorPage() {
             setColorAlerta={(val) => setActiveFilterField('colorAlerta', val)}
             searchPedido={activeFilters.searchPedido}
             setSearchPedido={(val) => setActiveFilterField('searchPedido', val)}
+            soloPagoAnticipado={activeFilters.soloPagoAnticipado}
+            setSoloPagoAnticipado={(val) => setActiveFilterField('soloPagoAnticipado', val)}
             finalizadasFilterMode={activeFilters.finalizadasFilterMode}
             setFinalizadasFilterMode={(val) => setActiveFilterField('finalizadasFilterMode', val)}
             stateFilterMode={activeFilters.stateFilterMode}

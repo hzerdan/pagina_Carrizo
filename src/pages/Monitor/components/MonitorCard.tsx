@@ -3,7 +3,7 @@ import type { InstanceData, EntityType } from '../types';
 import { cn } from '../../../lib/utils';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Truck, User, Building2, Clock, FileText, ExternalLink, Loader2 } from 'lucide-react';
+import { GripVertical, Truck, User, Building2, Clock, FileText, ExternalLink, Loader2, DollarSign, CheckCircle2 } from 'lucide-react';
 import { openOriginalDocument } from '../../../services/documentService';
 
 interface MonitorCardProps {
@@ -121,12 +121,16 @@ export function MonitorCard({
     }
   };
 
+  const isAnticipado = Boolean(instance.forma_pago && instance.forma_pago.toUpperCase().includes('ANTICIPAD'));
+
   return (
     <div
       ref={setNodeRef}
       style={style}
       className={cn(
         "group relative bg-white rounded-xl shadow-sm border border-gray-100 transition-all overflow-hidden flex flex-col ring-1 ring-transparent",
+        isAnticipado && !instance.gf_pago_aprobado && "border-t-2 border-t-amber-400",
+        isAnticipado && instance.gf_pago_aprobado && "border-t-2 border-t-emerald-400",
         isDragging ? "opacity-40 ring-brand-500 shadow-xl scale-105 z-50 cursor-grabbing" : "hover:shadow-md"
       )}
     >
@@ -209,6 +213,31 @@ export function MonitorCard({
               )}
             </div>
           </div>
+
+          {/* Badge Destacado de Forma de Pago (Anticipado) */}
+          {isAnticipado && (
+            <div className="mb-2">
+              <span className={cn(
+                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10.5px] font-black uppercase tracking-wide border shadow-2xs",
+                instance.gf_pago_aprobado
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-300 ring-1 ring-emerald-200"
+                  : "bg-amber-100 text-amber-950 border-amber-300 ring-1 ring-amber-300"
+              )}>
+                {instance.gf_pago_aprobado ? (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                ) : (
+                  <DollarSign className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                )}
+                <span className="truncate">{instance.forma_pago}</span>
+                <span className={cn(
+                  "text-[9px] px-1 py-0.2 rounded font-bold ml-0.5",
+                  instance.gf_pago_aprobado ? "bg-emerald-200 text-emerald-900" : "bg-amber-200 text-amber-900"
+                )}>
+                  {instance.gf_pago_aprobado ? 'COBRADO' : 'PENDIENTE GF'}
+                </span>
+              </span>
+            </div>
+          )}
 
           {/* Status Badge */}
           <div className="mb-4">

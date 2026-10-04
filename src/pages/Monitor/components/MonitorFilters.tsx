@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Filter, Search, ChevronDown, RotateCcw } from 'lucide-react';
+import { Filter, Search, ChevronDown, RotateCcw, DollarSign } from 'lucide-react';
 import type { StateDefinition, FinalizadasFilterMode } from '../types';
 import { cn } from '../../../lib/utils';
 
@@ -19,6 +19,8 @@ interface MonitorFiltersProps {
   stateDefs: StateDefinition[];
   statesWithCards: Set<string>;
   activeTab?: 'PEDIDO' | 'OC';
+  soloPagoAnticipado?: boolean;
+  setSoloPagoAnticipado?: (value: boolean) => void;
   onResetFilters?: () => void;
   isFiltered?: boolean;
 }
@@ -39,6 +41,8 @@ export function MonitorFilters({
   stateDefs,
   statesWithCards,
   activeTab = 'PEDIDO',
+  soloPagoAnticipado = false,
+  setSoloPagoAnticipado,
   onResetFilters,
   isFiltered = false
 }: MonitorFiltersProps) {
@@ -92,6 +96,26 @@ export function MonitorFilters({
             <option value="ME">Mercado Externo (ME)</option>
           </select>
         </div>
+
+        {activeTab === 'PEDIDO' && setSoloPagoAnticipado && (
+          <button
+            type="button"
+            onClick={() => setSoloPagoAnticipado(!soloPagoAnticipado)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer shadow-2xs",
+              soloPagoAnticipado
+                ? "bg-amber-100 text-amber-950 border-amber-400 ring-2 ring-amber-300"
+                : "bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 hover:text-gray-900"
+            )}
+            title="Filtrar pedidos con condición de pago anticipado"
+          >
+            <DollarSign className="w-3.5 h-3.5 text-amber-700" />
+            <span>Pago Anticipado</span>
+            {soloPagoAnticipado && (
+              <span className="w-2 h-2 rounded-full bg-amber-600 animate-pulse ml-0.5" />
+            )}
+          </button>
+        )}
 
         <div className="flex items-center gap-2">
           <label className="text-sm text-gray-600 font-medium">Alerta:</label>
