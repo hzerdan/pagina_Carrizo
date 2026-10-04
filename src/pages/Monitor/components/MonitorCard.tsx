@@ -217,68 +217,68 @@ export function MonitorCard({
              </span>
           </div>
 
-          {/* Entities, Logistics Info & Document Actions (Bottom Bar) */}
-          <div className="mt-auto pt-1 flex items-end justify-between gap-1.5">
-             <div className="min-w-0 flex-1 space-y-1">
-               {instance.cliente && (
-                 <div className="flex items-center text-xs text-gray-600">
-                   <Building2 className="w-3.5 h-3.5 mr-2 text-gray-400 flex-shrink-0" />
-                   <span className="truncate" title={instance.cliente}>{instance.cliente}</span>
-                 </div>
-               )}
-               
-               {instance.proveedor && (
-                 <div className="flex items-center text-xs text-gray-600">
-                   <User className="w-3.5 h-3.5 mr-2 text-gray-400 flex-shrink-0" />
-                   <span className="truncate" title={instance.proveedor}>{instance.proveedor}</span>
-                 </div>
-               )}
+          {/* Entities and Logistics Info */}
+          <div className="mt-auto space-y-1.5 pt-1">
+             {instance.cliente && (
+               <div className="flex items-center text-xs text-gray-600">
+                 <Building2 className="w-3.5 h-3.5 mr-2 text-gray-400 flex-shrink-0" />
+                 <span className="truncate" title={instance.cliente}>{instance.cliente}</span>
+               </div>
+             )}
+             
+             {instance.proveedor && (
+               <div className="flex items-center text-xs text-gray-600">
+                 <User className="w-3.5 h-3.5 mr-2 text-gray-400 flex-shrink-0" />
+                 <span className="truncate" title={instance.proveedor}>{instance.proveedor}</span>
+               </div>
+             )}
 
-               {instance.nro_remito && (
-                 <div className="flex items-center text-xs text-brand-700 pt-0.5 font-medium bg-brand-50 w-fit px-2 py-0.5 rounded">
-                   <Truck className="w-3 h-3 mr-1.5 flex-shrink-0" />
-                   <span className="truncate max-w-[120px]" title={instance.nro_remito}>Rep: {instance.nro_remito}</span>
-                 </div>
-               )}
-             </div>
-
-             {/* Document Buttons (Esquina inferior derecha) */}
-             <div className="flex items-center gap-1 shrink-0">
-               {hasPedido && (
-                 <button
-                   type="button"
-                   onClick={(e) => handleOpenDoc(e, 'PEDIDO', pedidoRef)}
-                   disabled={loadingDocType === 'PEDIDO'}
-                   className="flex items-center gap-1 px-1.5 py-1 text-[10px] font-semibold text-blue-700 bg-blue-50/80 hover:bg-blue-100 hover:text-blue-900 border border-blue-200/80 rounded-md transition-all shadow-2xs cursor-pointer disabled:cursor-wait disabled:opacity-50"
-                   title={pedidoRef ? `Ver documento original del pedido (${pedidoRef})` : "Ver documento original del pedido"}
-                 >
-                   {loadingDocType === 'PEDIDO' ? (
-                     <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
-                   ) : (
-                     <ExternalLink className="w-3 h-3 text-blue-600" />
-                   )}
-                   <span>Doc Pedido</span>
-                 </button>
-               )}
-
-               {hasOc && (
-                 <button
-                   type="button"
-                   onClick={(e) => handleOpenDoc(e, 'OC', ocRef)}
-                   disabled={loadingDocType === 'OC'}
-                   className="flex items-center gap-1 px-1.5 py-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50/80 hover:bg-emerald-100 hover:text-emerald-900 border border-emerald-200/80 rounded-md transition-all shadow-2xs cursor-pointer disabled:cursor-wait disabled:opacity-50"
-                   title={ocRef ? `Ver documento original de la OC (${ocRef})` : "Ver documento original de la OC"}
-                 >
-                   {loadingDocType === 'OC' ? (
-                     <Loader2 className="w-3 h-3 animate-spin text-emerald-600" />
-                   ) : (
-                     <ExternalLink className="w-3 h-3 text-emerald-600" />
-                   )}
-                   <span>Doc OC</span>
-                 </button>
-               )}
-             </div>
+             {instance.nro_remito && (
+               <div className="flex items-center text-xs text-brand-700 pt-0.5 font-medium bg-brand-50 w-fit px-2 py-0.5 rounded">
+                 <Truck className="w-3 h-3 mr-1.5 flex-shrink-0" />
+                 <span className="truncate max-w-[200px]" title={instance.nro_remito}>Rep: {instance.nro_remito}</span>
+               </div>
+             )}
           </div>
+
+          {/* Dedicated Row for Original Document Badges (Centered) */}
+          {(hasPedido || hasOc) && (
+            <div className="pt-2 mt-2 border-t border-gray-100 flex items-center justify-center gap-2">
+              {hasPedido && (
+                <button
+                  type="button"
+                  onClick={(e) => handleOpenDoc(e, 'PEDIDO', pedidoRef)}
+                  disabled={loadingDocType === 'PEDIDO'}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-blue-700 bg-blue-50/90 hover:bg-blue-100 hover:text-blue-900 border border-blue-200/90 rounded-lg transition-all shadow-2xs cursor-pointer disabled:cursor-wait disabled:opacity-50"
+                  title={pedidoRef ? `Ver documento original del pedido (${pedidoRef})` : "Ver documento original del pedido"}
+                >
+                  {loadingDocType === 'PEDIDO' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
+                  ) : (
+                    <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
+                  )}
+                  <span>Doc Pedido</span>
+                </button>
+              )}
+
+              {hasOc && (
+                <button
+                  type="button"
+                  onClick={(e) => handleOpenDoc(e, 'OC', ocRef)}
+                  disabled={loadingDocType === 'OC'}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50/90 hover:bg-emerald-100 hover:text-emerald-900 border border-emerald-200/90 rounded-lg transition-all shadow-2xs cursor-pointer disabled:cursor-wait disabled:opacity-50"
+                  title={ocRef ? `Ver documento original de la OC (${ocRef})` : "Ver documento original de la OC"}
+                >
+                  {loadingDocType === 'OC' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                  ) : (
+                    <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+                  )}
+                  <span>Doc OC</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
