@@ -47,6 +47,7 @@ interface FormState {
   inspectorId: number | null;
   operadorId: number | null;
   templateId: number | null;
+  templateSupervisorId: number | null;
   tipoCarga: TipoCarga | '';
   fechaPactada: string;
   lugarId: number | null;
@@ -60,6 +61,7 @@ const initialFormState: FormState = {
   inspectorId: null,
   operadorId: null,
   templateId: null,
+  templateSupervisorId: null,
   tipoCarga: '',
   fechaPactada: '',
   lugarId: null,
@@ -115,7 +117,7 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
           .in('role_id', [3, 5, 7, 8]),
         supabase
           .from('inspeccion_templates')
-          .select('id, codigo, nombre')
+          .select('id, codigo, nombre, rol_responsable')
           .eq('activo', true)
           .order('nombre'),
         supabase.from('depositos').select('id, nombre').order('nombre', { ascending: true }),
@@ -202,6 +204,16 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Filter templates by responsible role
+  const templatesInspector = useMemo(
+    () => templates.filter(t => !t.rol_responsable || t.rol_responsable === 'Inspector'),
+    [templates]
+  );
+  const templatesSupervisor = useMemo(
+    () => templates.filter(t => t.rol_responsable === 'Supervisor'),
+    [templates]
+  );
 
   // ── Memoized filtering (client-side, instant) ─────────────────────
   const selectedIds = useMemo(
@@ -291,7 +303,7 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
 
     try {
       setSaving(true);
-      const { error } = await supabase.rpc('crear_nueva_inspeccion_v2', {
+      const { data: newInspId, error } = await supabase.rpc('crear_nueva_inspeccion_v2', {
         p_pedido_instance_ids: requierePedido ? form.selectedPedidos.map(p => p.id) : [],
         p_inspector_id: form.inspectorId,
         p_template_id: form.templateId,
@@ -306,6 +318,18 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
       });
 
       if (error) throw error;
+
+      // Si se seleccionó plantilla para supervisor, actualizar el registro recién creado
+      if (newInspId && form.templateSupervisorId) {
+        const { error: updErr } = await supabase
+          .from('inspecciones')
+          .update({ template_supervisor_id: form.templateSupervisorId })
+          .eq('id', newInspId);
+
+        if (updErr) {
+          console.error('Error updating template_supervisor_id:', updErr);
+        }
+      }
 
       setToast({ type: 'success', text: 'Inspección creada exitosamente.' });
       onCreated();
@@ -568,10 +592,10 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
                 </select>
               </div>
 
-              {/* ── Operador Responsable AC ────────────────────────────── */}
+              {/* ── Operador Responsable AC (Supervisor) ────────────────── */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Operador Responsable AC <span className="text-gray-400 font-normal">(Opcional)</span>
+                  Operador Responsable AC (Supervisor) <span className="text-gray-400 font-normal">(Opcional)</span>
                 </label>
                 <select
                   value={form.operadorId ?? ''}
@@ -587,10 +611,10 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
                 </select>
               </div>
 
-              {/* ── Plantilla Documental ───────────────────────────────── */}
+              {/* ── Plantilla Documental Inspector ─────────────────────── */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  Plantilla Documental <span className="text-red-500">*</span>
+                  Plantilla Documental (Inspector) <span className="text-red-500">*</span>
                 </label>
                 <select
                   required
@@ -598,8 +622,27 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
                   onChange={e => setForm({ ...form, templateId: e.target.value ? Number(e.target.value) : null })}
                   className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm bg-white"
                 >
-                  <option value="">Seleccionar plantilla...</option>
-                  {templates.map(t => (
+                  <option value="">Seleccionar plantilla del inspector...</option>
+                  {templatesInspector.map(t => (
+                    <option key={t.id} value={t.id}>
+                      {t.nombre} ({t.codigo})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* ── Plantilla Documental Supervisor ────────────────────── */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  Plantilla Documental (Supervisor) <span className="text-gray-400 font-normal">(Opcional)</span>
+                </label>
+                <select
+                  value={form.templateSupervisorId ?? ''}
+                  onChange={e => setForm({ ...form, templateSupervisorId: e.target.value ? Number(e.target.value) : null })}
+                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm bg-white"
+                >
+                  <option value="">Sin plantilla de supervisor (Opcional)...</option>
+                  {templatesSupervisor.map(t => (
                     <option key={t.id} value={t.id}>
                       {t.nombre} ({t.codigo})
                     </option>

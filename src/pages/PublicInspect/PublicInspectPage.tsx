@@ -15,10 +15,13 @@ interface PlanillaRecibidaItem {
 
 interface PublicInspeccionData {
   id: number;
+  rol_destinatario?: 'INSPECTOR' | 'SUPERVISOR';
   fecha_pactada: string;
   tipo_carga: string;
-  inspector_nombre: string;
+  inspector_nombre?: string;
+  supervisor_nombre?: string;
   planilla_personalizada_url: string | null;
+  planilla_completada_url?: string | null;
   planilla_descargada?: boolean;
   cantidad_plantillas_requeridas?: number;
   cantidad_plantillas_recibidas?: number;
@@ -102,6 +105,34 @@ export function PublicInspectPage() {
     try {
       setUploading(true);
       setUploadError(null);
+
+      // Si el rol es SUPERVISOR, subir archivo único completado
+      if (data.rol_destinatario === 'SUPERVISOR') {
+        const file = selectedFiles[0];
+        setUploadProgress(`Subiendo: ${file.name}...`);
+        const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+        const timestamp = Date.now();
+        const storagePath = `resultados/resultado_supervisor_ins_${data.id}_${timestamp}.${ext}`;
+
+        const { error: storageError } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .upload(storagePath, file, { upsert: false });
+
+        if (storageError) throw storageError;
+
+        const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
+        const publicUrl = urlData.publicUrl;
+
+        const { error: rpcError } = await supabase.rpc('subir_planilla_supervisor_completada', {
+          p_token: token,
+          p_archivo_url: publicUrl,
+          p_nombre_archivo: file.name
+        });
+
+        if (rpcError) throw rpcError;
+        setSuccess(true);
+        return;
+      }
 
       let cantRec = data.cantidad_plantillas_recibidas || 0;
       const nuevasPlanillas: PlanillaRecibidaItem[] = [];
@@ -235,7 +266,7 @@ export function PublicInspectPage() {
           <span className="text-lg font-bold text-gray-900 tracking-tight">Portal de Inspecciones</span>
         </div>
         <div className="text-sm font-medium text-gray-500 hidden sm:block">
-          Control Documental · ID #{data.id}
+          {data.rol_destinatario === 'SUPERVISOR' ? 'Control de Supervisión' : 'Control Documental'} · ID #{data.id}
         </div>
       </header>
 
@@ -249,13 +280,16 @@ export function PublicInspectPage() {
             </div>
             
             <span className="text-brand-100 font-semibold tracking-wider uppercase text-xs mb-2 block">
-              Recepción Documental
+              {data.rol_destinatario === 'SUPERVISOR' ? 'Control de Supervisión Responsable' : 'Recepción Documental'}
             </span>
             <h1 className="text-2xl sm:text-3xl font-bold mb-2 relative z-10">
-              Bienvenido, {data.inspector_nombre}
+              Bienvenido, {data.rol_destinatario === 'SUPERVISOR' ? (data.supervisor_nombre || 'Supervisor') : (data.inspector_nombre || 'Inspector')}
             </h1>
             <p className="text-brand-100 relative z-10 max-w-lg">
-              Por favor revisa la información de la inspección, descarga la plantilla si aún no lo hiciste y sube los resultados finales. Este enlace vencerá 48hs después de la fecha pactada.
+              {data.rol_destinatario === 'SUPERVISOR'
+                ? 'Por favor revisa la información de la inspección, descarga la plantilla de supervisión y sube el reporte completado una vez finalizada la tarea.'
+                : 'Por favor revisa la información de la inspección, descarga la plantilla si aún no lo hiciste y sube los resultados finales. Este enlace vencerá 48hs después de la fecha pactada.'
+              }
             </p>
           </div>
 
@@ -313,22 +347,42 @@ export function PublicInspectPage() {
                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                         <Upload className="w-5 h-5 text-gray-600" /> 2. Subir Resultados
+                         <Upload className="w-5 h-5 text-gray-600" /> {data.rol_destinatario === 'SUPERVISOR' ? '2. Subir Planilla de Supervisión' : '2. Subir Resultados'}
                       </h3>
                       <p className="text-sm text-gray-500 mt-1">
-                        {(data.cantidad_plantillas_requeridas || 1) > 1 
-                          ? `Esta inspección requiere un total de ${data.cantidad_plantillas_requeridas} planillas.` 
-                          : 'Sube la planilla o reporte completado para finalizar tu tarea.'}
+                        {data.rol_destinatario === 'SUPERVISOR'
+                          ? 'Sube la planilla de control de supervisión completada para registrarla en la inspección.'
+                          : (data.cantidad_plantillas_requeridas || 1) > 1 
+                            ? `Esta inspección requiere un total de ${data.cantidad_plantillas_requeridas} planillas.` 
+                            : 'Sube la planilla o reporte completado para finalizar tu tarea.'}
                       </p>
                     </div>
 
-                    {(data.cantidad_plantillas_requeridas || 1) > 1 && (
+                    {data.rol_destinatario !== 'SUPERVISOR' && (data.cantidad_plantillas_requeridas || 1) > 1 && (
                       <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-brand-50 border border-brand-200 text-brand-700 rounded-lg text-xs font-bold self-start sm:self-auto">
                         <span>Progreso:</span>
                         <span>{data.cantidad_plantillas_recibidas || 0} de {data.cantidad_plantillas_requeridas}</span>
                       </div>
                     )}
                  </div>
+
+                 {/* Planilla de supervisión ya registrada si existe */}
+                 {data.rol_destinatario === 'SUPERVISOR' && data.planilla_completada_url && (
+                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between">
+                     <div className="flex items-center gap-2 text-emerald-800 text-xs font-semibold">
+                       <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                       <span>Ya hay una planilla de supervisión registrada previamente.</span>
+                     </div>
+                     <a
+                       href={data.planilla_completada_url}
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       className="text-xs text-emerald-700 hover:text-emerald-900 font-bold underline"
+                     >
+                       Ver planilla
+                     </a>
+                   </div>
+                 )}
 
                  {/* Lista de planillas ya recibidas si hay más de 1 requerida */}
                  {data.planillas_recibidas && data.planillas_recibidas.length > 0 && (
@@ -389,7 +443,7 @@ export function PublicInspectPage() {
                  <input
                     ref={fileInputRef}
                     type="file"
-                    multiple
+                    multiple={data.rol_destinatario !== 'SUPERVISOR'}
                     accept=".pdf,.xlsx,.xls"
                     className="hidden"
                     onChange={handleFileChange}
@@ -402,7 +456,9 @@ export function PublicInspectPage() {
                       disabled={uploading}
                       className="flex-1 flex justify-center items-center gap-2 px-4 py-3 bg-white border-2 border-dashed border-gray-300 rounded-lg font-medium text-gray-600 hover:border-brand-400 hover:text-brand-600 hover:bg-brand-50/50 transition duration-200 disabled:opacity-50 text-sm"
                     >
-                      {selectedFiles.length > 0 ? '+ Agregar más archivos...' : 'Explorar archivos (uno o varios)'}
+                      {selectedFiles.length > 0 
+                        ? (data.rol_destinatario === 'SUPERVISOR' ? 'Cambiar archivo seleccionado' : '+ Agregar más archivos...') 
+                        : (data.rol_destinatario === 'SUPERVISOR' ? 'Seleccionar archivo de planilla...' : 'Explorar archivos (uno o varios)')}
                     </button>
                     
                     <button
@@ -415,11 +471,13 @@ export function PublicInspectPage() {
                          <><Loader2 className="w-5 h-5 animate-spin" /> {uploadProgress || 'Procesando...'}</>
                       ) : (
                          <>
-                           {selectedFiles.length > 1
-                             ? `Enviar ${selectedFiles.length} Planillas en lote`
-                             : (data.cantidad_plantillas_requeridas || 1) > 1 
-                               ? `Enviar Planilla (${(data.cantidad_plantillas_recibidas || 0) + 1} de ${data.cantidad_plantillas_requeridas})`
-                               : 'Enviar Resultados'
+                           {data.rol_destinatario === 'SUPERVISOR'
+                             ? 'Enviar Planilla de Supervisión'
+                             : selectedFiles.length > 1
+                               ? `Enviar ${selectedFiles.length} Planillas en lote`
+                               : (data.cantidad_plantillas_requeridas || 1) > 1 
+                                 ? `Enviar Planilla (${(data.cantidad_plantillas_recibidas || 0) + 1} de ${data.cantidad_plantillas_requeridas})`
+                                 : 'Enviar Resultados'
                            } <ChevronRight className="w-5 h-5 -mx-1" />
                          </>
                       )}

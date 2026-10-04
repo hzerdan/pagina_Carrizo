@@ -24,7 +24,12 @@ export interface InspeccionKanban {
   fecha_pactada: string;
   export_doc_status: string;
   state_code: string;
+  template_id?: number | null;
+  template_supervisor_id?: number | null;
+  planilla_personalizada_url?: string | null;
   planilla_completada_url: string | null;
+  planilla_supervisor_personalizada_url?: string | null;
+  planilla_supervisor_completada_url?: string | null;
   servicio_id: number | null;
   servicio_nombre: string | null;
   servicio_requiere_pedido: boolean;
