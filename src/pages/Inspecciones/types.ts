@@ -65,6 +65,7 @@ export interface InspeccionTemplate {
   id: number;
   codigo: string;
   nombre: string;
+  rol_responsable?: string;
 }
 
 /** Inspector – personal_ac with role_id = 6 */

@@ -9,6 +9,7 @@ interface InspeccionTemplate {
   codigo: string;
   nombre: string;
   tipo: string;
+  rol_responsable: string;
   archivo_url: string;
   activo: boolean;
   updated_at: string;
@@ -19,6 +20,7 @@ interface FormData {
   codigo: string;
   nombre: string;
   tipo: string;
+  rol_responsable: string;
   activo: boolean;
   archivo_url: string;
 }
@@ -27,11 +29,13 @@ const initialFormData: FormData = {
   codigo: '',
   nombre: '',
   tipo: 'Consolidación',
+  rol_responsable: 'Inspector',
   activo: true,
   archivo_url: '',
 };
 
 const TIPOS_PLANTILLA = ['Consolidación', 'Reembolse', 'Genérica'];
+const ROLES_RESPONSABLE = ['Inspector', 'Supervisor'];
 
 const STORAGE_BUCKET = 'templates';
 const ACCEPTED_FILE_TYPES = '.pdf,.xlsx,.xls,.txt';
@@ -108,6 +112,7 @@ export function PlantillasManager() {
         codigo: tpl.codigo,
         nombre: tpl.nombre,
         tipo: tpl.tipo || 'Consolidación',
+        rol_responsable: tpl.rol_responsable || 'Inspector',
         activo: tpl.activo,
         archivo_url: tpl.archivo_url,
       });
@@ -193,6 +198,7 @@ export function PlantillasManager() {
         codigo: formData.codigo.trim().toUpperCase(),
         nombre: formData.nombre.trim(),
         tipo: formData.tipo,
+        rol_responsable: formData.rol_responsable || 'Inspector',
         activo: formData.activo,
         archivo_url: archivoUrl,
       };
@@ -265,12 +271,29 @@ export function PlantillasManager() {
     }
   };
 
+  // ── Update rol_responsable inline ──────────────────────────────────
+  const handleUpdateRolResponsable = async (tpl: InspeccionTemplate, nuevoRol: string) => {
+    try {
+      const { error } = await supabase
+        .from('inspeccion_templates')
+        .update({ rol_responsable: nuevoRol })
+        .eq('id', tpl.id);
+      if (error) throw error;
+      showToast('success', 'Responsable de la plantilla actualizado.');
+      fetchData();
+    } catch (err) {
+      console.error('Error updating template rol_responsable:', err);
+      showToast('error', 'Error al actualizar el responsable de la plantilla.');
+    }
+  };
+
   // ── Filtered list ──────────────────────────────────────────────────
   const filteredTemplates = templates.filter(
     (t) =>
       t.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.tipo?.toLowerCase().includes(searchTerm.toLowerCase())
+      t.tipo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.rol_responsable?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // ── File icon helper ───────────────────────────────────────────────
@@ -344,6 +367,7 @@ export function PlantillasManager() {
                 <tr className="bg-gray-50 border-b">
                   <th className="p-4 font-semibold text-gray-600 text-sm">Código</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Tipo</th>
+                  <th className="p-4 font-semibold text-gray-600 text-sm">Responsable</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Nombre</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Estado</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Archivo</th>
@@ -363,6 +387,24 @@ export function PlantillasManager() {
                         {TIPOS_PLANTILLA.map((t) => (
                           <option key={t} value={t}>
                             {t}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td className="p-4">
+                      <select
+                        value={tpl.rol_responsable || 'Inspector'}
+                        onChange={(e) => handleUpdateRolResponsable(tpl, e.target.value)}
+                        className={`text-xs font-semibold rounded-lg px-2 py-1 border focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer ${
+                          tpl.rol_responsable === 'Supervisor'
+                            ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                            : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                        }`}
+                        title="Clic para cambiar el responsable"
+                      >
+                        {ROLES_RESPONSABLE.map((r) => (
+                          <option key={r} value={r}>
+                            {r}
                           </option>
                         ))}
                       </select>
@@ -417,7 +459,7 @@ export function PlantillasManager() {
                 ))}
                 {filteredTemplates.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-12 text-center text-gray-500">
+                    <td colSpan={7} className="p-12 text-center text-gray-500">
                       <FileText className="w-10 h-10 mx-auto mb-3 text-gray-300" />
                       <p className="font-medium">No se encontraron plantillas.</p>
                       <p className="text-sm mt-1">Haga clic en "Nueva Plantilla" para crear una.</p>
@@ -509,6 +551,29 @@ export function PlantillasManager() {
                       </option>
                     ))}
                   </select>
+                </div>
+
+                {/* Responsable */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Responsable *
+                  </label>
+                  <select
+                    id="input-rol-responsable"
+                    required
+                    className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-500 text-sm"
+                    value={formData.rol_responsable}
+                    onChange={(e) => setFormData({ ...formData, rol_responsable: e.target.value })}
+                  >
+                    {ROLES_RESPONSABLE.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Indica si la plantilla debe ser completada por el Inspector o por el Supervisor de la inspección.
+                  </p>
                 </div>
 
                 {/* Activo toggle */}
