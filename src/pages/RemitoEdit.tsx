@@ -36,6 +36,7 @@ import {
 import { cn } from '../lib/utils';
 import { WhatsAppModal } from '../components/WhatsAppModal';
 import { DateTimePicker } from '../components/DateTimePicker';
+import { SeccionPagoAnticipado } from '../components/SeccionPagoAnticipado';
 
 interface RemitoState {
   id: number | null;
@@ -60,6 +61,13 @@ interface RemitoState {
   me_planillas_t48_emitidas: boolean;
   me_checklist_enviado_operario: boolean;
   tipo_mercado: string | null;
+  requiere_pago_anticipado?: boolean;
+  gf_pago_aprobado?: boolean;
+  gf_pago_aprobado_at?: string | null;
+  gf_pago_aprobado_por?: string | null;
+  gf_pago_comprobante_ref?: string | null;
+  gf_pago_solicitado_at?: string | null;
+  forma_pago?: string | null;
   mision_estado?: string | null;
   tiene_incidencias_carga?: boolean;
   ultimo_mensaje_chofer_at?: string | null;
@@ -161,6 +169,7 @@ export function RemitoEdit() {
     camiones: [] as any[],
     choferes: [] as any[],
     personal: [] as any[],
+    gf: null as any,
   });
 
   const [inspectors, setInspectors] = useState<any[]>([]);
@@ -259,6 +268,7 @@ export function RemitoEdit() {
         camiones: ctx.catalogos?.camiones || [],
         choferes: ctx.catalogos?.choferes || [],
         personal: ctx.catalogos?.personal || [],
+        gf: ctx.catalogos?.gf || null,
       });
       
       setRemito({
@@ -286,6 +296,13 @@ export function RemitoEdit() {
         me_planillas_t48_emitidas: ctx.remito?.me_planillas_t48_emitidas || false,
         me_checklist_enviado_operario: ctx.remito?.me_checklist_enviado_operario || false,
         tipo_mercado: ctx.pedidos && ctx.pedidos.length > 0 ? ctx.pedidos[0].tipo_mercado : null,
+        requiere_pago_anticipado: !!ctx.remito?.requiere_pago_anticipado,
+        gf_pago_aprobado: !!ctx.remito?.gf_pago_aprobado,
+        gf_pago_aprobado_at: ctx.remito?.gf_pago_aprobado_at || null,
+        gf_pago_aprobado_por: ctx.remito?.gf_pago_aprobado_por || null,
+        gf_pago_comprobante_ref: ctx.remito?.gf_pago_comprobante_ref || null,
+        gf_pago_solicitado_at: ctx.remito?.gf_pago_solicitado_at || null,
+        forma_pago: ctx.pedidos && ctx.pedidos.length > 0 ? ctx.pedidos[0].forma_pago : null,
         mision_estado: ctx.remito?.mision_estado || 'OPERACION_PENDIENTE',
         tiene_incidencias_carga: !!ctx.remito?.tiene_incidencias_carga,
         ultimo_mensaje_chofer_at: ctx.remito?.ultimo_mensaje_chofer_at || null,
@@ -1318,7 +1335,8 @@ export function RemitoEdit() {
     );
   }
 
-  const isReadOnly = remito.estado === 'FINALIZADO' || remito.mision_estado === 'MISION_COMPLETADA';
+  const isBlockedByPagoAnticipado = !!remito.requiere_pago_anticipado && !remito.gf_pago_aprobado;
+  const isReadOnly = remito.estado === 'FINALIZADO' || remito.mision_estado === 'MISION_COMPLETADA' || isBlockedByPagoAnticipado;
 
   return (
     <div className="h-full overflow-y-auto w-full relative" onClick={() => {
@@ -1345,14 +1363,27 @@ export function RemitoEdit() {
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-              isReadOnly
-                ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1'
-                : remito.estado === 'Datos Faltantes' 
-                  ? 'bg-amber-100 text-amber-700' 
-                  : 'bg-emerald-100 text-emerald-700'
+              isBlockedByPagoAnticipado
+                ? 'bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1'
+                : isReadOnly
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1'
+                  : remito.estado === 'Datos Faltantes' 
+                    ? 'bg-amber-100 text-amber-700' 
+                    : 'bg-emerald-100 text-emerald-700'
             }`}>
-              {isReadOnly && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
-              {remito.estado}
+              {isBlockedByPagoAnticipado ? (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-amber-700" />
+                  Pago Anticipado Pendiente
+                </>
+              ) : isReadOnly ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  {remito.estado}
+                </>
+              ) : (
+                remito.estado
+              )}
             </span>
             {remito.cantidad_total !== null && remito.cantidad_total !== undefined && (
               <span className="text-[11px] font-semibold text-gray-500 bg-gray-50 border border-gray-200/80 px-2 py-0.5 rounded-md flex items-center gap-1 mt-1 shadow-sm">
@@ -1363,7 +1394,17 @@ export function RemitoEdit() {
           </div>
         </div>
 
-        {isReadOnly ? (
+        {isBlockedByPagoAnticipado ? (
+          <div className="mt-4 text-xs bg-amber-50 text-amber-950 border border-amber-300 p-3 rounded-lg flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2 font-medium">
+              <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+              <span>Remito Bloqueado por Pago Anticipado - Edición de datos logísticos deshabilitada hasta que Gerencia Financiera apruebe la cobranza.</span>
+            </div>
+            <span className="px-2 py-0.5 bg-amber-200 text-amber-900 font-bold rounded text-[10px] uppercase tracking-wider shrink-0">
+              Bloqueado por GF
+            </span>
+          </div>
+        ) : isReadOnly ? (
           <div className="mt-4 text-xs bg-emerald-50 text-emerald-900 border border-emerald-200 p-3 rounded-lg flex items-center justify-between shadow-xs">
             <div className="flex items-center gap-2 font-medium">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -1382,6 +1423,26 @@ export function RemitoEdit() {
       </header>
 
       <main className="px-4 space-y-8">
+        {/* Nueva sección: Pedido con Pago Anticipado */}
+        <SeccionPagoAnticipado
+          remitoId={Number(id)}
+          remitoRef={remito.ref}
+          pedidoRef={remito.pedido}
+          cliente={remito.cliente}
+          cantidadTotal={remito.cantidad_total}
+          formaPago={remito.forma_pago}
+          requierePagoAnticipado={!!remito.requiere_pago_anticipado}
+          pagoAprobado={!!remito.gf_pago_aprobado}
+          pagoAprobadoAt={remito.gf_pago_aprobado_at || null}
+          pagoAprobadoPor={remito.gf_pago_aprobado_por || null}
+          pagoComprobanteRef={remito.gf_pago_comprobante_ref || null}
+          pagoSolicitadoAt={remito.gf_pago_solicitado_at || null}
+          gfContact={catalogs.gf}
+          onSolicitudEnviada={() => {
+            fetchContext();
+          }}
+        />
+
         {/* FSM Máquina de Estados de la Misión de Transporte */}
         <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-gray-100 pb-4">
@@ -2892,7 +2953,12 @@ export function RemitoEdit() {
                   : "bg-gray-900 text-white hover:bg-black active:scale-[0.98]"
               )}
             >
-              {isReadOnly ? (
+              {isBlockedByPagoAnticipado ? (
+                <span className="flex items-center gap-2 text-amber-900 font-bold">
+                  <Lock className="w-4 h-4 text-amber-700" />
+                  Bloqueado por Pago Anticipado
+                </span>
+              ) : isReadOnly ? (
                 <span className="flex items-center gap-2">
                   <Lock className="w-4 h-4 text-gray-500" />
                   Remito Finalizado

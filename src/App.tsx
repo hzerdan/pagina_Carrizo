@@ -25,6 +25,7 @@ import { MisionEstadosManager } from './pages/MisionEstadosManager';
 import { MisionTiposManager } from './pages/MisionTiposManager';
 
 const PublicInspectPage = lazy(() => import('./pages/PublicInspect/PublicInspectPage'));
+const PublicValidarPagoPage = lazy(() => import('./pages/PublicValidarPago/PublicValidarPagoPage'));
 
 function App() {
   return (
@@ -43,6 +44,19 @@ function App() {
                   </div>
                 }>
                   <PublicInspectPage />
+                </Suspense>
+              } 
+            />
+            <Route 
+              path="/validar-pago/:token" 
+              element={
+                <Suspense fallback={
+                  <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+                    <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4" />
+                    <p className="text-gray-500 font-medium">Cargando verificación de pago...</p>
+                  </div>
+                }>
+                  <PublicValidarPagoPage />
                 </Suspense>
               } 
             />
