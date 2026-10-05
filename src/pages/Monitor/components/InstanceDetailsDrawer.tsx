@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect, useCallback } from 'react';
-import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert, Edit, Unlink, FileText, ExternalLink } from 'lucide-react';
+import { X, Clock, CheckCircle2, Circle, ArrowRight, Weight, Package, AlertCircle, Loader2, ShieldAlert, Edit, Unlink, FileText, ExternalLink, Ban } from 'lucide-react';
 import type { InstanceData } from '../types';
 import { cn } from '../../../lib/utils';
 import { supabase } from '../../../lib/supabase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { EditorItemsPedidoModal } from './EditorItemsPedidoModal';
 import { DescalzarVinculacionModal, type VinculacionInfo } from './DescalzarVinculacionModal';
+import { AnularParaCorreccionModal } from './AnularParaCorreccionModal';
 import { parseReferenciaHumana } from './MonitorCard';
 import { openOriginalDocument } from '../../../services/documentService';
 
@@ -48,6 +49,7 @@ export function InstanceDetailsDrawer({
   const [savingTaskCode, setSavingTaskCode] = useState<string | null>(null);
 
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isAnularOpen, setIsAnularOpen] = useState(false);
   const [pedidoDbData, setPedidoDbData] = useState<any>(null);
   const [isLoadingDbData, setIsLoadingDbData] = useState(false);
 
@@ -166,6 +168,17 @@ export function InstanceDetailsDrawer({
     if (isState57 || isState6) return '7';
     return '';
   })();
+
+  const isUnlinkedInitialState = 
+    entityType === 'PEDIDO' 
+      ? (stateCode === '1.1' || stateCode === '1.2')
+      : (stateCode === '1' || stateCode === '2');
+
+  const canAnularParaCorreccion = 
+    isUnlinkedInitialState && 
+    !vinculacionInfo?.tiene_vinculacion && 
+    stateCode !== '99' &&
+    instance?.estado_actual.split(':')[0].trim() !== '99';
 
   // Función para cargar el checklist dinámico
   const loadChecklist = useCallback(async () => {
@@ -509,6 +522,17 @@ export function InstanceDetailsDrawer({
                   <span>Doc OC</span>
                 </button>
               )}
+              {canAnularParaCorreccion && (
+                <button
+                  type="button"
+                  onClick={() => setIsAnularOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-full transition-colors cursor-pointer shadow-2xs"
+                  title="Anular para corrección y liberar el número oficial"
+                >
+                  <Ban className="w-3.5 h-3.5 text-red-600" />
+                  <span>Anular para Corrección</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -576,6 +600,34 @@ export function InstanceDetailsDrawer({
               </div>
             </div>
           </div>
+
+          {/* Card de Anulación para Corrección (si la instancia no está vinculada y es editable) */}
+          {canAnularParaCorreccion && (
+            <div className="bg-red-50/60 border border-red-200/90 rounded-2xl p-4.5 space-y-3 shadow-2xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Ban className="w-4 h-4 text-red-600" />
+                  <h3 className="text-xs font-bold text-red-950 uppercase tracking-wider">
+                    Corrección de {entityType === 'PEDIDO' ? 'Pedido' : 'Orden de Compra'}
+                  </h3>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-800 border border-red-200">
+                  Sin vincular
+                </span>
+              </div>
+              <p className="text-xs text-red-800 leading-relaxed">
+                Si hubo un error en la carga de este {entityType === 'PEDIDO' ? 'pedido' : 'OC'}, puede anularlo para liberar el número oficial y permitir ingresar una versión corregida.
+              </p>
+              <button
+                type="button"
+                onClick={() => setIsAnularOpen(true)}
+                className="w-full py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <Ban className="w-3.5 h-3.5" />
+                <span>Anular para recibir versión corregida</span>
+              </button>
+            </div>
+          )}
 
           {/* Card de Vinculación Pedido-OC (si existe vinculación activa) */}
           {isLoadingVinculacion ? (
@@ -930,6 +982,19 @@ export function InstanceDetailsDrawer({
           onTransitionSuccess?.();
         }}
         vinculacionInfo={vinculacionInfo}
+        entityType={entityType}
+      />
+
+      {/* Modal para Anular Instancia para Corrección */}
+      <AnularParaCorreccionModal
+        isOpen={isAnularOpen}
+        onClose={() => setIsAnularOpen(false)}
+        onSuccess={(msg) => {
+          onShowToast?.('info', msg);
+          onTransitionSuccess?.();
+          onClose();
+        }}
+        instance={instance}
         entityType={entityType}
       />
     </>
