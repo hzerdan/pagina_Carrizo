@@ -185,9 +185,9 @@ Muchas gracias.`
         expires_at: linkRes.expires_at
       });
 
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error('Error al solicitar aprobación:', err);
-      const msg = err instanceof Error ? err.message : 'Error al procesar la solicitud.';
+      const msg = err?.message || err?.error_description || (typeof err === 'string' ? err : 'Error al procesar la solicitud.');
       setErrorStr(msg);
     } finally {
       setIsSending(false);
