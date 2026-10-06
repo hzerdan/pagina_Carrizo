@@ -38,7 +38,7 @@ No repetir valores descartados empíricamente para el intervalo de reconexión I
 * En PostgreSQL, el comando `CREATE OR REPLACE FUNCTION` **no reemplaza** funciones si cambian los tipos o el orden de sus parámetros, generando versiones sobrecargadas duplicadas en el esquema `public` que provocan errores de ambigüedad (`Could not choose the best candidate function`).
 * Antes de definir cualquier `CREATE OR REPLACE FUNCTION`, se deben incluir explícitamente las sentencias `DROP FUNCTION IF EXISTS public.<nombre_funcion>(...);` contemplando las firmas de tipos previas para asegurar un reemplazo canónico limpio sin ambigüedades.
 
-## ⚠️ Permisos y Operaciones en Base de Datos (Supabase MCP)
+## ⚠️ Permisos y Operaciones en Base de Datos (Supabase MCP y Supabase CLI)
 
 ### 1. Consultas de Solo Lectura Automáticas (Sin Confirmación Previa)
 * El agente tiene autorización permanente para ejecutar consultas de solo lectura (`SELECT`, inspección de esquemas de tablas, `list_tables`, `list_migrations`, etc.) a través del MCP de Supabase directamente y de forma proactiva, sin necesidad de solicitar confirmación previa al usuario en el chat.
@@ -46,15 +46,20 @@ No repetir valores descartados empíricamente para el intervalo de reconexión I
 ### 2. Confirmación Obligatoria para Escrituras y Mutaciones
 * Para cualquier sentencia que implique inserción, actualización, eliminación o alteración estructural (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`, `TRUNCATE`, o aplicación de migraciones DDL), el agente **debe** presentar la consulta o acción y solicitar confirmación explícita del usuario antes de ejecutarla.
 
-## ⚠️ Eficiencia y Uso de Herramientas Nativas (Evitar Terminal para Lecturas)
+### 3. Uso Exclusivo de Supabase CLI de Scoop (Prohibido npx)
+* Para cualquier operación de base de datos o migraciones que requiera el CLI de Supabase (`supabase db push`, `supabase migration new`, `supabase db pull`, etc.), el agente **debe invocar directamente el comando `supabase`** instalado en el sistema operativo mediante **Scoop** (`supabase <subcomando>`).
+* **Queda terminantemente prohibido** ejecutar `npx supabase ...`. Debe utilizarse siempre el binario global de Scoop.
 
-### 1. Priorizar Herramientas Nativas de Lectura
-* Para cualquier tarea de inspección, listado o búsqueda de archivos (ej. consultar migraciones de Supabase, explorar directorios, buscar texto en el código o inspeccionar archivos descargados), el agente **debe utilizar exclusivamente las herramientas nativas del entorno** (`find_by_name`, `list_dir`, `view_file`, `grep_search`).
-* **Queda prohibido** ejecutar comandos de terminal (`python -c ...`, `dir`, `ls`, `cat`, etc.) para tareas de lectura o listado que puedan resolverse con las herramientas nativas, evitando interrupciones innecesarias con solicitudes de permisos al usuario.
+## ⚠️ Eficiencia y Uso Estricto de Herramientas Nativas (Prohibición de Terminal/Python Innecesarios)
 
-### 2. Uso Justificado de Python (Reducción Masiva de Datos y Ahorro de Tokens)
-* Se autoriza y recomienda el uso de scripts de Python cuando se deba procesar, filtrar o agregar información de archivos JSON, volcados o logs muy voluminosos (evitando volcar miles de líneas al contexto de la conversación con `view_file`).
-* En tales casos, el script de Python debe procesar los datos en disco/memoria e imprimir **únicamente el resultado o resumen final**, minimizando el consumo de tokens.
+### 1. Prioridad Absoluta de Herramientas Nativas
+* Para cualquier tarea de inspección, lectura, edición o búsqueda de archivos (consultar migraciones, explorar directorios, buscar texto en el código, editar archivos o inspeccionar esquemas), el agente **debe utilizar exclusivamente las herramientas nativas del entorno** (`view_file`, `write_to_file`, `replace_file_content`).
+* **Queda terminantemente prohibido** ejecutar comandos de terminal (`dir`, `ls`, `cat`, `python -c ...`, etc.) para lecturas, inspecciones o ediciones que las herramientas nativas resuelvan de forma directa, evitando interrupciones innecesarias con solicitudes de permisos al usuario.
+
+### 2. Restricción Estricta de Scripts de Python
+* **No usar Python** si la tarea puede resolverse con herramientas nativas de lectura, edición o consultas MCP de solo lectura.
+* El uso de scripts de Python queda restringido de forma exclusiva a situaciones excepcionales de **reducción masiva de datos**: cuando sea estrictamente indispensable procesar o agregar volcados JSON o logs de varios megabytes en disco para no saturar el contexto de la conversación. En esos casos puntuales, el script procesará la información e imprimirá únicamente el resumen final.
+
 
 
 
