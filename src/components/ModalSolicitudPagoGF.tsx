@@ -49,7 +49,8 @@ export function ModalSolicitudPagoGF({
     token: string;
     magicLink: string;
     emailSent: boolean;
-    wpPrepared: boolean;
+    wpSent: boolean;
+    wpSendMode: string | null;
   } | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -98,7 +99,8 @@ Muchas gracias.`
       const plainMessage = buildMessageText(portalUrl);
 
       let emailSentSuccess = false;
-      let wpPreparedSuccess = false;
+      let wpSentSuccess = false;
+      let wpSendModeDesc: string | null = null;
 
       // 2. Envío por Email (mediante n8n webhook envia-email-desde-frontend)
       if (canalEmail) {
@@ -165,19 +167,56 @@ Muchas gracias.`
         }
       }
 
-      // 3. Envío por WhatsApp
+      // 3. Envío por WhatsApp (mediante n8n webhook whatsapp-salida-web)
       if (canalWhatsApp) {
-        wpPreparedSuccess = true;
-        const encoded = encodeURIComponent(plainMessage);
-        const waUrl = `https://wa.me/${gfCelular}?text=${encoded}`;
-        window.open(waUrl, '_blank');
+        try {
+          // Buscar id de conversación previa si existe para determinar la ventana 24h
+          const { data: convData } = await supabase
+            .from('conversations')
+            .select('id')
+            .eq('conversation_key', gfCelular)
+            .maybeSingle();
+
+          const conversationId = convData?.id || null;
+
+          const wpRes = await fetch('https://hzerdan.app.n8n.cloud/webhook/whatsapp-salida-web', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              conversation_key: gfCelular,
+              conversation_id: conversationId,
+              message: plainMessage,
+              nombre_inspector: gfNombre,
+              metadata: {
+                remito_id: remitoData.id,
+                destinatario_tipo: 'GF',
+                origen: 'VALIDACION_PAGO_ANTICIPADO'
+              }
+            })
+          });
+
+          if (wpRes.ok) {
+            const wpData = await wpRes.json().catch(() => ({}));
+            if (wpData.success !== false) {
+              wpSentSuccess = true;
+              wpSendModeDesc = wpData.send_mode === 'freeform' ? 'Directo (24h activa)' : 'Plantilla Oficial Twilio';
+            }
+          } else {
+            console.warn('Webhook de WhatsApp devolvió código no-200');
+          }
+        } catch (e) {
+          console.error('Error al enviar WhatsApp vía n8n:', e);
+        }
       }
 
       setSuccessInfo({
         token,
         magicLink: portalUrl,
         emailSent: emailSentSuccess,
-        wpPrepared: wpPreparedSuccess,
+        wpSent: wpSentSuccess,
+        wpSendMode: wpSendModeDesc,
       });
 
       onSuccess({
@@ -274,12 +313,34 @@ Muchas gracias.`
                   </span>
                 </div>
                 <div className="p-3 bg-slate-50 border border-slate-100 rounded-lg">
-                  <span className="text-gray-400 block text-[10px] uppercase font-bold">WhatsApp:</span>
+                  <span className="text-gray-400 block text-[10px] uppercase font-bold">WhatsApp a GF:</span>
                   <span className="font-semibold text-gray-700">
-                    {successInfo.wpPrepared ? '✓ Pestaña abierta / Listo' : 'No seleccionado'}
+                    {successInfo.wpSent ? (
+                      <span className="text-emerald-700">
+                        ✓ Enviado al bot ({successInfo.wpSendMode || 'OK'})
+                      </span>
+                    ) : canalWhatsApp ? (
+                      <span className="text-amber-600">⚠️ En espera o falló automático</span>
+                    ) : (
+                      'No seleccionado'
+                    )}
                   </span>
                 </div>
               </div>
+
+              {canalWhatsApp && (
+                <div className="text-center pt-1">
+                  <a
+                    href={`https://wa.me/${gfCelular}?text=${encodeURIComponent(buildMessageText(successInfo.magicLink))}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-gray-500 hover:text-emerald-700 underline inline-flex items-center gap-1 transition-colors"
+                  >
+                    <MessageSquare className="w-3 h-3" />
+                    Abrir también en WhatsApp Web (opcional / respaldo)
+                  </a>
+                </div>
+              )}
 
               <div className="pt-2">
                 <button
