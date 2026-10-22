@@ -363,7 +363,7 @@ export function OperacionesDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/60 p-4 lg:p-8 space-y-6">
+    <div className="flex-1 overflow-auto bg-slate-50/60 p-4 lg:p-8 space-y-6">
       {/* Cabecera Principal */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 rounded-2xl border border-gray-200/80 shadow-sm">
         <div>

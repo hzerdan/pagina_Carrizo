@@ -164,7 +164,8 @@ export function LugaresPesajeManager() {
   );
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="flex-1 overflow-y-auto w-full">
+      <div className="p-6 max-w-7xl mx-auto">
       {toastMessage && (
         <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded shadow-lg text-white ${toastMessage.type === 'success' ? 'bg-green-600' : 'bg-red-600'}`}>
           {toastMessage.text}
@@ -357,6 +358,7 @@ export function LugaresPesajeManager() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

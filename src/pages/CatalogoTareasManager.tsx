@@ -232,7 +232,8 @@ export function CatalogoTareasManager() {
   });
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="flex-1 overflow-y-auto w-full">
+      <div className="p-6 max-w-7xl mx-auto">
       {toastMessage && (
         <div className={cn(
           "fixed top-4 right-4 z-50 px-4 py-2 rounded shadow-lg text-white font-semibold transition-all duration-300 transform translate-y-0",
@@ -658,6 +659,7 @@ export function CatalogoTareasManager() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

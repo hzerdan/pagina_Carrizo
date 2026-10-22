@@ -308,7 +308,8 @@ export function PlantillasManager() {
 
   // ── Render ─────────────────────────────────────────────────────────
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="flex-1 overflow-y-auto w-full">
+      <div className="p-6 max-w-7xl mx-auto">
       {/* Toast */}
       {toastMessage && (
         <div
@@ -701,6 +702,7 @@ export function PlantillasManager() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
