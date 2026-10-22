@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auditoría y Desglose de Calificación - Remito #79</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --brand: #2563eb;
+      --brand-light: #eff6ff;
+      --amber: #f59e0b;
+      --amber-light: #fef3c7;
+      --emerald: #10b981;
+      --emerald-light: #ecfdf5;
+      --rose: #ef4444;
+      --rose-light: #fef2f2;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--bg); color: var(--text-main); padding: 32px 16px; line-height: 1.5; }
+    .container { max-width: 960px; margin: 0 auto; }
+    
+    /* Header Card */
+    .header-card {
+      background: var(--card-bg);
+      border-radius: 20px;
+      padding: 28px 32px;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+      margin-bottom: 24px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+    .badge-remito {
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: inline-block;
+      margin-bottom: 6px;
+    }
+    .title { font-size: 24px; font-weight: 800; color: var(--text-main); }
+    .subtitle { font-size: 13px; color: var(--text-muted); }
+    
+    .rating-box {
+      text-align: right;
+      background: #fafaf9;
+      padding: 12px 20px;
+      border-radius: 16px;
+      border: 1px solid #f5f5f4;
+    }
+    .rating-stars { font-size: 28px; font-weight: 900; color: #1c1917; display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+    .star-icon { color: var(--amber); }
+    .rating-sub { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    
+    /* Grid de Dimensiones */
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .card-dimension {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+      position: relative;
+      overflow: hidden;
+    }
+    .card-dimension::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+    }
+    .card-dim-1::before { background: var(--brand); }
+    .card-dim-2::before { background: var(--emerald); }
+    .card-dim-3::before { background: var(--rose); }
+
+    .dim-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+    .dim-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+    .dim-pts { font-size: 20px; font-weight: 800; color: var(--text-main); }
+    .dim-desc { font-size: 13px; color: #475569; margin-bottom: 12px; }
+    .dim-stat { font-size: 12px; background: #f8fafc; padding: 6px 10px; border-radius: 8px; border: 1px solid #edf2f7; display: flex; justify-content: space-between; }
+    
+    /* Secciones Explicativas */
+    .section-card {
+      background: var(--card-bg);
+      border-radius: 18px;
+      padding: 28px 32px;
+      border: 1px solid var(--border);
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
+      margin-bottom: 24px;
+    }
+    .section-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title span.badge-num {
+      background: var(--brand-light);
+      color: var(--brand);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    
+    /* Formulas y Cajas de Cálculo */
+    .formula-box {
+      background: #f8fafc;
+      border-left: 4px solid var(--brand);
+      border-radius: 0 12px 12px 0;
+      padding: 16px 20px;
+      margin: 16px 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      color: #1e293b;
+    }
+    .formula-box strong { color: var(--brand); }
+
+    /* Comparativa de Porcentajes */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin: 20px 0;
+    }
+    @media (max-width: 640px) {
+      .comparison-grid { grid-template-columns: 1fr; }
+    }
+    .compare-box {
+      padding: 16px 18px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    .compare-box.simple { background: #fafaf9; }
+    .compare-box.weighted { background: var(--brand-light); border-color: #bfdbfe; }
+    .compare-title { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+    .compare-result { font-size: 26px; font-weight: 900; margin: 4px 0; }
+    .compare-explain { font-size: 12px; color: var(--text-muted); }
+
+    /* Tabla de Tareas */
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 14px; }
+    th { background: #f8fafc; text-align: left; padding: 10px 12px; font-weight: 700; color: #475569; border-bottom: 2px solid var(--border); }
+    td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:hover td { background: #f8fafc; }
+    .badge-critical { background: var(--amber-light); color: #92400e; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; gap: 3px; }
+    .badge-normal { background: #f1f5f9; color: #475569; padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600; }
+    .status-done { color: #047857; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+    .status-omitted { color: #b91c1c; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+    
+    /* Footer */
+    .footer { text-align: center; font-size: 11px; color: var(--text-muted); margin-top: 32px; padding-bottom: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- HEADER CARD -->
+    <div class="header-card">
+      <div>
+        <span class="badge-remito">Remito #79 • Ref: 0000100005318</span>
+        <h1 class="title">Auditoría de Calificación & Desempeño</h1>
+        <p class="subtitle">Chofer: <strong>PABLO DIAZ</strong> • Fecha de viaje: 8/10/2026 • Estado: MISIÓN COMPLETADA</p>
+      </div>
+
+      <div class="rating-box">
+        <div class="rating-stars">
+          <span class="star-icon">★</span> 2.53 <span style="font-size: 14px; color: #a8a29e; font-weight: normal;">/ 5.0</span>
+        </div>
+        <div class="rating-sub">50.63 puntos obtenidos (de 100)</div>
+      </div>
+    </div>
+
+    <!-- LAS 3 DIMENSIONES DEL MODELO DE CALIFICACIÓN -->
+    <div class="grid-3">
+      <!-- Dimensión 1 -->
+      <div class="card-dimension card-dim-1">
+        <div class="dim-header">
+          <span class="dim-title">1. Cumplimiento</span>
+          <span class="dim-pts">20.63 <span style="font-size: 12px; color: #94a3b8;">/ 55 pts</span></span>
+        </div>
+        <p class="dim-desc">Evaluación del protocolo de tareas en origen, carga, pesajes y entrega con ponderación crítica.</p>
+        <div class="dim-stat">
+          <span>Efectividad Ponderada:</span>
+          <strong>37.5% (7 de 15 tareas)</strong>
+        </div>
+      </div>
+
+      <!-- Dimensión 2 -->
+      <div class="card-dimension card-dim-2">
+        <div class="dim-header">
+          <span class="dim-title">2. Autonomía Digital</span>
+          <span class="dim-pts" style="color: #047857;">30.00 <span style="font-size: 12px; color: #94a3b8;">/ 30 pts</span></span>
+        </div>
+        <p class="dim-desc">El bot no tuvo que enviar recordatorios adicionales ni agotar intentos de inactividad.</p>
+        <div class="dim-stat">
+          <span>Avisos / Reintentos:</span>
+          <strong style="color: #047857;">0 (100% de Autonomía)</strong>
+        </div>
+      </div>
+
+      <!-- Dimensión 3 -->
+      <div class="card-dimension card-dim-3">
+        <div class="dim-header">
+          <span class="dim-title">3. Escalamiento / Incidencias</span>
+          <span class="dim-pts" style="color: #b91c1c;">0.00 <span style="font-size: 12px; color: #94a3b8;">/ 15 pts</span></span>
+        </div>
+        <p class="dim-desc">Se requirió asistencia de operadores humanos por incidencias y desvíos reportados en ruta.</p>
+        <div class="dim-stat">
+          <span>Intervención Humana:</span>
+          <strong style="color: #b91c1c;">Sí (6 alertas generadas)</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 1: ¿CÓMO SE LLEGA A 2.53 ESTRELLAS? -->
+    <div class="section-card">
+      <h2 class="section-title">
+        <span class="badge-num">1</span>
+        ¿Cómo se calcula la puntuación final de 2.53 ⭐?
+      </h2>
+      <p style="font-size: 13.5px; color: #334155;">
+        El sistema evalúa el viaje sobre un puntaje total de <strong>100 puntos</strong> distribuidos en 3 dimensiones auditadas objetivamente. La suma de las 3 dimensiones da el <strong>Score Final</strong>, el cual luego se divide por 20 para normalizarlo a la escala estándar de <strong>1 a 5 estrellas</strong>:
+      </p>
+
+      <div class="formula-box">
+        <strong>Puntos Cumplimiento (55%):</strong> 20.63 pts<br>
+        <strong>Puntos Autonomía (30%):</strong>    30.00 pts<br>
+        <strong>Puntos Escalamiento (15%):</strong>   0.00 pts<br>
+        ─────────────────────────────────────────────<br>
+        <strong>SCORE TOTAL:</strong>               <strong>50.63 puntos</strong> (sobre 100)
+      </div>
+
+      <div class="formula-box" style="border-left-color: var(--amber);">
+        <strong>Fórmula de Estrellas:</strong><br>
+        Estrellas = Score Final ÷ 20 = 50.63 ÷ 20 = <strong>2.5315</strong> ➜ <strong>2.53 ⭐</strong>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 2: ¿POR QUÉ 7/15 DA 37.5% EN LUGAR DE 46%? -->
+    <div class="section-card">
+      <h2 class="section-title">
+        <span class="badge-num">2</span>
+        ¿Por qué 7/15 tareas cumplidas da 37.5% y no 46.7%?
+      </h2>
+      <p style="font-size: 13.5px; color: #334155;">
+        La diferencia radica en que el sistema <strong>no realiza un conteo plano ni lineal</strong>, sino una <strong>ponderación de riesgo operativo</strong>. Las tareas críticas (fotografías de control de calidad, fotos de carga, pesaje de tara y remito firmado) tienen el <strong>doble de peso</strong> (Factor 2.0x) que una tarea administrativa de solo check (Factor 1.0x).
+      </p>
+
+      <div class="comparison-grid">
+        <div class="compare-box simple">
+          <div class="compare-title" style="color: #78716c;">Cálculo Lineal Simple (No Ponderado)</div>
+          <div class="compare-result" style="color: #44403c;">46.7%</div>
+          <div class="compare-explain">
+            Trata a una tarea de "Avisar recepción de papeles" con el mismo valor que "Foto de Calidad de la Azúcar" o "Pesaje de Tara".<br>
+            <code>7 ÷ 15 = 46.67%</code>
+          </div>
+        </div>
+
+        <div class="compare-box weighted">
+          <div class="compare-title" style="color: #1d4ed8;">Cálculo Ponderado Real (Auditado)</div>
+          <div class="compare-result" style="color: #1e40af;">37.5%</div>
+          <div class="compare-explain">
+            El chofer cumplió 5 tareas comunes pero <strong>omitió 7 de las 9 tareas críticas</strong>. Al fallar en las tareas de mayor relevancia, su rendimiento real cae al 37.5%.<br>
+            <code>9 pts obtenidos ÷ 24 pts posibles = 37.5%</code>
+          </div>
+        </div>
+      </div>
+
+      <h3 style="font-size: 14px; font-weight: 700; margin-top: 20px; color: #1e293b;">Desglose de Puntos Ponderados del Protocolo:</h3>
+      
+      <table>
+        <thead>
+          <tr>
+            <th>Tipo de Tarea</th>
+            <th style="text-align: center;">Cantidad</th>
+            <th style="text-align: center;">Peso Unitario</th>
+            <th style="text-align: center;">Puntos Posibles</th>
+            <th style="text-align: center;">Cumplidas Chofer</th>
+            <th style="text-align: right;">Puntos Obtenidos</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Tareas Críticas ⚡</strong> (Fotos, Pesajes, Remito)</td>
+            <td style="text-align: center;">9</td>
+            <td style="text-align: center;"><span class="badge-critical">2.0 pts</span></td>
+            <td style="text-align: center;"><strong>18.0 pts</strong></td>
+            <td style="text-align: center; color: #b91c1c; font-weight: bold;">2 de 9</td>
+            <td style="text-align: right; font-weight: bold;">4.0 pts</td>
+          </tr>
+          <tr>
+            <td><strong>Tareas Estándar</strong> (Checks de avance y aviso)</td>
+            <td style="text-align: center;">6</td>
+            <td style="text-align: center;"><span class="badge-normal">1.0 pt</span></td>
+            <td style="text-align: center;"><strong>6.0 pts</strong></td>
+            <td style="text-align: center; color: #047857; font-weight: bold;">5 de 6</td>
+            <td style="text-align: right; font-weight: bold;">5.0 pts</td>
+          </tr>
+          <tr style="background: #f1f5f9; font-weight: bold;">
+            <td>TOTALES</td>
+            <td style="text-align: center;">15</td>
+            <td style="text-align: center;">-</td>
+            <td style="text-align: center;">24.0 pts</td>
+            <td style="text-align: center;">7 de 15</td>
+            <td style="text-align: right; color: var(--brand);">9.0 pts (37.5%)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="formula-box" style="margin-top: 14px;">
+        <strong>Cálculo final del porcentaje de cumplimiento:</strong><br>
+        % Cumplimiento = (9.0 pts cumplidos ÷ 24.0 pts totales) × 100 = <strong>37.5%</strong><br>
+        Puntos otorgados = (37.5% × 55 pts máximos) = <strong>20.63 puntos</strong>
+      </div>
+    </div>
+
+    <!-- SECCIÓN 3: AUDITORÍA TAREA POR TAREA -->
+    <div class="section-card">
+      <h2 class="section-title">
+        <span class="badge-num">3</span>
+        Detalle de las 15 Tareas del Remito #79
+      </h2>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Tarea del Protocolo</th>
+            <th style="text-align: center;">Criticidad</th>
+            <th style="text-align: center;">Peso</th>
+            <th>Estado Reportado</th>
+            <th style="text-align: right;">Aporte</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>Confirmar recepción de papeles</td>
+            <td style="text-align: center;"><span class="badge-normal">Estándar</span></td>
+            <td style="text-align: center;">1.0</td>
+            <td><span class="status-done">✔ Cumplida</span></td>
+            <td style="text-align: right; font-weight: bold; color: #047857;">+1.0</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>Confirmar la fecha y hora de carga</td>
+            <td style="text-align: center;"><span class="badge-normal">Estándar</span></td>
+            <td style="text-align: center;">1.0</td>
+            <td><span class="status-done">✔ Cumplida</span></td>
+            <td style="text-align: right; font-weight: bold; color: #047857;">+1.0</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>Hacer Tara en ING. BELLA VISTA</td>
+            <td style="text-align: center;"><span class="badge-critical">⚡ Crítica</span></td>
+            <td style="text-align: center;">2.0</td>
+            <td><span class="status-omitted">✖ Omitida (Inactividad)</span></td>
+            <td style="text-align: right; color: #94a3b8;">0.0</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>Dirigirse al lugar de carga</td>
+            <td style="text-align: center;"><span class="badge-normal">Estándar</span></td>
+            <td style="text-align: center;">1.0</td>
+            <td><span class="status-omitted">✖ Omitida (Avance)</span></td>
+            <td style="text-align: right; color: #94a3b8;">0.0</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>Verificar estado de bolsas (rotas/húmedas)</td>
+            <td style="text-align: center;"><span class="badge-critical">⚡ Crítica</span></td>
+            <td style="text-align: center;">2.0</td>
+            <td><span class="status-omitted">✖ Omitida (Avance)</span></td>
+            <td style="text-align: right; color: #94a3b8;">0.0</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>Control calidad: foto sobre papel blanco</td>
+            <td style="text-align: center;"><span class="badge-critical">⚡ Crítica</span></td>
+            <td style="text-align: center;">2.0</td>
+            <td><span class="status-omitted">✖ Omitida (Avance)</span></td>
+            <td style="text-align: right; color: #94a3b8;">0.0</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>Enviar foto al inicio de la carga</td>
+            <td style="text-align: center;"><span class="badge-critical">⚡ Crítica</span></td>
+            <td style="text-align: center;">2.0</td>
+            <td><span class="status-omitted">✖ Omitida (Avance)</span></td>
+            <td style="text-align: right; color: #94a3b8;">0.0</td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>Enviar foto a la mitad de la carga</td>
+            <td style="text-align: center;"><span class="badge-critical">⚡ Crítica</span></td>
+            <td style="text-align: center;">2.0</td>
+            <td><span class="status-omitted">✖ Omitida (Avance)</span></td>
+            <td style="text-align: right; color: #94a3b8;">0.0</td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>Enviar foto al final de la carga</td>
+            <td style="text-align: center;"><span class="badge-critical">⚡ Crítica</span></td>
+            <td style="text-align: center;">2.0</td>
+            <td><span class="status-omitted">✖ Omitida (Avance)</span></td>
+            <td style="text-align: right; color: #94a3b8;">0.0</td>
+          </tr>
+          <tr>
+            <td>10</td>
+            <td>Asegurar que fotos muestren patente</td>
+            <td style="text-align: center;"><span class="badge-critical">⚡ Crítica</span></td>
+            <td style="text-align: center;">2.0</td>
+            <td><span class="status-omitted">✖ Omitida (Avance)</span></td>
+            <td style="text-align: right; color: #94a3b8;">0.0</td>
+          </tr>
+          <tr>
+            <td>11</td>
+            <td>Avisar cuando termine carga y esté por salir</td>
+            <td style="text-align: center;"><span class="badge-normal">Estándar</span></td>
+            <td style="text-align: center;">1.0</td>
+            <td><span class="status-done">✔ Cumplida</span></td>
+            <td style="text-align: right; font-weight: bold; color: #047857;">+1.0</td>
+          </tr>
+          <tr>
+            <td>12</td>
+            <td>Volver a pesar camión lleno (Bruto)</td>
+            <td style="text-align: center;"><span class="badge-critical">⚡ Crítica</span></td>
+            <td style="text-align: center;">2.0</td>
+            <td><span class="status-done">✔ Cumplida (5000 kg)</span></td>
+            <td style="text-align: right; font-weight: bold; color: #047857;">+2.0</td>
+          </tr>
+          <tr>
+            <td>13</td>
+            <td>Reportar inicio de viaje en tránsito</td>
+            <td style="text-align: center;"><span class="badge-normal">Estándar</span></td>
+            <td style="text-align: center;">1.0</td>
+            <td><span class="status-done">✔ Cumplida</span></td>
+            <td style="text-align: right; font-weight: bold; color: #047857;">+1.0</td>
+          </tr>
+          <tr>
+            <td>14</td>
+            <td>Reportar hora probable de llegada</td>
+            <td style="text-align: center;"><span class="badge-normal">Estándar</span></td>
+            <td style="text-align: center;">1.0</td>
+            <td><span class="status-done">✔ Cumplida</span></td>
+            <td style="text-align: right; font-weight: bold; color: #047857;">+1.0</td>
+          </tr>
+          <tr>
+            <td>15</td>
+            <td>Enviar foto del remito firmado (entregado)</td>
+            <td style="text-align: center;"><span class="badge-critical">⚡ Crítica</span></td>
+            <td style="text-align: center;">2.0</td>
+            <td><span class="status-done">✔ Cumplida</span></td>
+            <td style="text-align: right; font-weight: bold; color: #047857;">+2.0</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- SECCIÓN 4: ¿QUÉ SON LOS AVISOS = 0? -->
+    <div class="section-card">
+      <h2 class="section-title">
+        <span class="badge-num">4</span>
+        ¿Qué significa "Avisos: 0"? (Autonomía Digital)
+      </h2>
+      <p style="font-size: 13.5px; color: #334155; margin-bottom: 12px;">
+        Los <strong>Avisos</strong> representan la cantidad de veces que el bot inteligente de WhatsApp tuvo que insistirle al chofer mediante <em>recordatorios automáticos</em> o <em>reintentos de inactividad</em>.
+      </p>
+      <ul style="font-size: 13px; color: #475569; margin-left: 20px; space-y: 6px;">
+        <li><strong>Avisos = 0:</strong> El chofer respondió de manera fluida en cada paso sin que el bot tuviera que enviarle recordatorios por demora.</li>
+        <li><strong>Impacto en la puntuación:</strong> Al tener 0 avisos, obtuvo el <strong>100% de la dimensión Autonomía</strong>, acreditando los <strong>30.00 puntos netos</strong>.</li>
+        <li><em>(Si un chofer tiene 1 o 2 avisos, se descuentan 15 pts por aviso; si tiene 3 o más, se le resta una penalidad adicional de 40 pts por agotamiento de reintentos)</em>.</li>
+      </ul>
+    </div>
+
+    <!-- SECCIÓN 5: ¿QUÉ SIGNIFICA ESCALADO: SÍ? -->
+    <div class="section-card">
+      <h2 class="section-title">
+        <span class="badge-num">5</span>
+        ¿Qué significa "Escalado: Sí (Intervención humana)"?
+      </h2>
+      <p style="font-size: 13.5px; color: #334155; margin-bottom: 12px;">
+        La dimensión de <strong>Sin Escalamiento (15 puntos)</strong> premia los viajes que transcurren de manera 100% autónoma y automatizada entre el chofer y el bot, sin requerir la intervención de operadores humanos de la empresa ni reportar incidencias.
+      </p>
+      <div style="background: var(--rose-light); border: 1px solid #fecaca; border-radius: 12px; padding: 16px; margin: 12px 0;">
+        <strong style="color: #991b1b; font-size: 13px;">En el Remito #79 se detectó:</strong>
+        <ul style="font-size: 12.5px; color: #7f1d1d; margin-left: 18px; margin-top: 6px;">
+          <li><code>tiene_incidencias_carga = true</code>: Se registró una incidencia durante el proceso de carga.</li>
+          <li><code>alertas_escalamiento</code>: Se generaron 6 alertas automáticas al personal con rol <strong>operador</strong> (IDs 19332 a 19337) debido a la omisión de pesaje previo y saltos de protocolo.</li>
+        </ul>
+      </div>
+      <p style="font-size: 13px; color: #475569;">
+        Dado que el viaje no fue 100% autónomo y demandó atención humana por parte del equipo, esta dimensión obtuvo <strong>0 de 15 puntos</strong>.
+      </p>
+    </div>
+
+    <!-- RESUMEN FINAL -->
+    <div class="section-card" style="background: linear-gradient(135deg, #1e293b, #0f172a); color: white;">
+      <h2 style="font-size: 16px; font-weight: 700; margin-bottom: 10px; color: #38bdf8;">Resumen Ejecutivo</h2>
+      <p style="font-size: 13px; color: #cbd5e1; line-height: 1.6;">
+        El chofer <strong>PABLO DIAZ</strong> obtuvo una calificación de <strong>2.53 ⭐ (50.63 / 100 pts)</strong> porque:
+        <br>1. Respondió al bot sin demoras en los momentos en que interactuó (<strong>+30 pts en Autonomía</strong>).
+        <br>2. Sin embargo, omitió 7 de las 9 fotos y pesajes críticos de carga, reduciendo su efectividad de protocolo al 37.5% (<strong>+20.63 pts en Cumplimiento</strong>).
+        <br>3. Y el viaje requirió asistencia humana de los operadores ante las incidencias (<strong>0 pts en Sin Escalamiento</strong>).
+      </p>
+    </div>
+
+    <div class="footer">
+      Sistema Arquímedes • Módulo de Auditoría de Desempeño Logístico • Generado el 10/10/2026
+    </div>
+
+  </div>
+</body>
+</html>

@@ -31,12 +31,15 @@ import {
   Search,
   Check,
   CheckCircle2,
-  Lock
+  Lock,
+  Star,
+  Link2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { WhatsAppModal } from '../components/WhatsAppModal';
 import { DateTimePicker } from '../components/DateTimePicker';
 import { SeccionPagoAnticipado } from '../components/SeccionPagoAnticipado';
+import { ModalAsignacionRemito } from '../components/ModalAsignacionRemito';
 
 interface RemitoState {
   id: number | null;
@@ -77,6 +80,11 @@ interface RemitoState {
   retry_count?: number;
   tipo_mision_id?: number | null;
   mision_estados_secuencia?: any[] | null;
+  calificacion_score?: number | null;
+  calificacion_estrellas?: number | null;
+  calificacion_desglose?: any | null;
+  calificacion_updated_at?: string | null;
+  tiene_asignacion?: boolean;
 }
 
 export interface LogisticaPolitica {
@@ -218,6 +226,8 @@ export function RemitoEdit() {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [overrideHistory, setOverrideHistory] = useState<LogisticaOverride[]>([]);
   const [isSavingOverride, setIsSavingOverride] = useState(false);
+  const [showCalificacionModal, setShowCalificacionModal] = useState(false);
+  const [showAsignarModal, setShowAsignarModal] = useState(false);
 
   const [overrideForm, setOverrideForm] = useState({
     espera_respuesta_minutos: '' as string | number,
@@ -312,6 +322,11 @@ export function RemitoEdit() {
         retry_count: ctx.remito?.retry_count || 0,
         tipo_mision_id: ctx.remito?.tipo_mision_id || null,
         mision_estados_secuencia: ctx.remito?.mision_estados_secuencia || [],
+        calificacion_score: ctx.remito?.calificacion_score || null,
+        calificacion_estrellas: ctx.remito?.calificacion_estrellas || null,
+        calificacion_desglose: ctx.remito?.calificacion_desglose || null,
+        calificacion_updated_at: ctx.remito?.calificacion_updated_at || null,
+        tiene_asignacion: (ctx.pedidos && ctx.pedidos.length > 0) || ctx.remito?.estado_asignacion === 'ASIGNADO',
       });
 
       const { data: mtData } = await supabase.from('mision_tipos').select('*').eq('estado', 'ACTIVO');
@@ -1358,8 +1373,36 @@ export function RemitoEdit() {
                 <X className="w-5 h-5" />
               </button>
               <h1 className="text-2xl font-bold text-gray-800">Remito #{remito.ref}</h1>
+              {remito.calificacion_estrellas && (
+                <button 
+                  type="button"
+                  onClick={() => setShowCalificacionModal(true)}
+                  className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-full text-xs shadow-xs cursor-pointer transition"
+                  title="Clic para ver auditoría de tareas y calificación de este viaje"
+                >
+                  <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
+                  <span className="font-black text-amber-950 text-sm">{remito.calificacion_estrellas}</span>
+                  <span className="text-[10px] text-amber-700 font-medium">({remito.calificacion_score} pts)</span>
+                  <span className="text-[10px] text-brand-600 font-semibold underline ml-1">Ver Auditoría</span>
+                </button>
+              )}
             </div>
-            <p className="text-sm text-gray-500 mt-1 ml-9">Pedido: {remito.pedido}</p>
+            <div className="flex items-center gap-2 mt-1 ml-9 flex-wrap">
+              <p className="text-sm text-gray-500">
+                Pedido: <strong className={remito.tiene_asignacion ? "text-gray-800" : "text-amber-700 italic"}>{remito.pedido}</strong>
+              </p>
+              {!remito.tiene_asignacion && !isReadOnly && (
+                <button
+                  type="button"
+                  onClick={() => setShowAsignarModal(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+                  title="Asignar pedido vinculado u orden de compra"
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  <span>Asignar Pedido / OC</span>
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
@@ -1423,6 +1466,36 @@ export function RemitoEdit() {
       </header>
 
       <main className="px-4 space-y-8">
+        {/* Banner de Asignación Manual si no tiene asignación */}
+        {!remito.tiene_asignacion && !isReadOnly && (
+          <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                <Link2 className="w-5 h-5 text-amber-700" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-amber-950 flex items-center gap-2">
+                  <span>Remito sin asignación de Pedido u OC</span>
+                  <span className="px-2 py-0.5 text-[10px] font-bold bg-amber-200 text-amber-900 rounded-full">
+                    Acción Requerida
+                  </span>
+                </h4>
+                <p className="text-xs text-amber-800 mt-1">
+                  Este remito quedó cargado sin pedido u orden de compra vinculado. Puede abrir el panel de asignación para vincular las instancias disponibles.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowAsignarModal(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs sm:text-sm rounded-xl shadow-sm transition-all cursor-pointer shrink-0"
+            >
+              <Link2 className="w-4 h-4" />
+              <span>Asignar Pedido / OC</span>
+            </button>
+          </div>
+        )}
+
         {/* Nueva sección: Pedido con Pago Anticipado */}
         <SeccionPagoAnticipado
           remitoId={Number(id)}
@@ -1734,7 +1807,36 @@ export function RemitoEdit() {
 
           {/* Chofer Select */}
           <div className="relative">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Chofer</label>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-sm font-medium text-gray-700">Chofer</label>
+              {(() => {
+                const sel = catalogs.choferes.find((c: any) => c.id === remito.chofer_id);
+                if (sel && sel.calificacion_promedio_estrellas) {
+                  return (
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-400" />
+                      <span className="font-bold text-gray-900">
+                        {sel.calificacion_promedio_estrellas}
+                      </span>
+                      <span className={cn(
+                        "text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase",
+                        sel.calificacion_nivel === 'EXCELENTE' && "bg-emerald-100 text-emerald-800",
+                        sel.calificacion_nivel === 'BUENO' && "bg-blue-100 text-blue-800",
+                        sel.calificacion_nivel === 'REGULAR' && "bg-amber-100 text-amber-800",
+                        sel.calificacion_nivel === 'CRITICO' && "bg-red-100 text-red-800",
+                        sel.calificacion_nivel === 'NUEVO' && "bg-gray-100 text-gray-700"
+                      )}>
+                        {sel.calificacion_nivel || 'NUEVO'}
+                      </span>
+                      <span className="text-[10px] text-gray-400">
+                        ({sel.calificacion_total_viajes || 0} viajes)
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
             <select 
               value={remito.chofer_id === null ? '' : remito.chofer_id}
               onChange={e => {
@@ -1747,9 +1849,9 @@ export function RemitoEdit() {
               className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none transition-all text-sm"
             >
               <option value="">Seleccionar chofer...</option>
-              {catalogs.choferes.map(c => (
+              {catalogs.choferes.map((c: any) => (
                 <option key={c.id} value={c.id}>
-                  {c.nombre} {c.dni ? `(DNI: ${c.dni})` : ''}
+                  {c.nombre} {c.dni ? `(DNI: ${c.dni})` : ''} {c.calificacion_promedio_estrellas ? `[⭐ ${c.calificacion_promedio_estrellas}]` : ''}
                 </option>
               ))}
               <option value="0" className="font-bold text-brand-600">+ Nuevo Chofer...</option>
@@ -3382,6 +3484,192 @@ export function RemitoEdit() {
           </div>
         </div>
       )}
+
+      {/* MODAL DE AUDITORÍA DETALLADA DE CALIFICACIÓN Y TAREAS */}
+      {showCalificacionModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-3xl w-full max-h-[85vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-amber-50/50 via-white to-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-100 text-amber-700 rounded-xl">
+                  <Star className="w-6 h-6 fill-amber-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    Auditoría de Calificación del Viaje
+                  </h3>
+                  <p className="text-xs text-gray-500">
+                    Remito #{remito.ref} • Pedido: {remito.pedido}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <div className="flex items-center gap-1 justify-end font-black text-gray-900 text-lg">
+                    <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
+                    <span>{remito.calificacion_estrellas}</span>
+                    <span className="text-xs text-gray-400 font-semibold">/ 5.0</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 font-semibold">
+                    Score total: {remito.calificacion_score} / 100 pts
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowCalificacionModal(false)}
+                  className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1">
+              {/* 3 Pilares del Score */}
+              <div>
+                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">
+                  Puntajes Ponderados por Dimensión
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Pilar 1: Cumplimiento */}
+                  <div className="p-4 rounded-xl border border-blue-200 bg-blue-50/50">
+                    <div className="text-xs font-bold text-blue-900 flex items-center justify-between">
+                      <span>Cumplimiento Tareas</span>
+                      <span className="text-[10px] bg-blue-200/70 text-blue-900 px-1.5 py-0.5 rounded">Máx: 55 pts</span>
+                    </div>
+                    <div className="text-2xl font-black text-blue-950 mt-1">
+                      {remito.calificacion_desglose?.cumplimiento?.puntos ?? 0} pts
+                    </div>
+                    <p className="text-[11px] text-blue-700 mt-1">
+                      {remito.calificacion_desglose?.cumplimiento?.tareas_cumplidas ?? 0} de {remito.calificacion_desglose?.cumplimiento?.tareas_totales ?? 0} tareas ({remito.calificacion_desglose?.cumplimiento?.score_pct ?? 0}%)
+                    </p>
+                    <p className="text-[10px] text-blue-600 mt-0.5 font-medium">
+                      Críticas: {remito.calificacion_desglose?.cumplimiento?.criticas_cumplidas ?? 0}/{remito.calificacion_desglose?.cumplimiento?.criticas_totales ?? 0}
+                    </p>
+                  </div>
+
+                  {/* Pilar 2: Autonomía */}
+                  <div className="p-4 rounded-xl border border-emerald-200 bg-emerald-50/50">
+                    <div className="text-xs font-bold text-emerald-900 flex items-center justify-between">
+                      <span>Autonomía Digital</span>
+                      <span className="text-[10px] bg-emerald-200/70 text-emerald-900 px-1.5 py-0.5 rounded">Máx: 30 pts</span>
+                    </div>
+                    <div className="text-2xl font-black text-emerald-950 mt-1">
+                      {remito.calificacion_desglose?.autonomia?.puntos ?? 0} pts
+                    </div>
+                    <p className="text-[11px] text-emerald-700 mt-1">
+                      {remito.calificacion_desglose?.autonomia?.recordatorios_count ?? 0} recordatorios emitidos
+                    </p>
+                    <p className="text-[10px] text-emerald-600 mt-0.5 font-medium">
+                      Efectividad: {remito.calificacion_desglose?.autonomia?.score_pct ?? 0}%
+                    </p>
+                  </div>
+
+                  {/* Pilar 3: Escalamiento */}
+                  <div className="p-4 rounded-xl border border-purple-200 bg-purple-50/50">
+                    <div className="text-xs font-bold text-purple-900 flex items-center justify-between">
+                      <span>Contención IA</span>
+                      <span className="text-[10px] bg-purple-200/70 text-purple-900 px-1.5 py-0.5 rounded">Máx: 15 pts</span>
+                    </div>
+                    <div className="text-2xl font-black text-purple-950 mt-1">
+                      {remito.calificacion_desglose?.escalamiento?.puntos ?? 0} pts
+                    </div>
+                    <p className="text-[11px] text-purple-700 mt-1">
+                      {remito.calificacion_desglose?.escalamiento?.escalado ? 'Escaló a operador humano' : '100% IA autónoma'}
+                    </p>
+                    <p className="text-[10px] text-purple-600 mt-0.5 font-medium">
+                      {remito.calificacion_desglose?.escalamiento?.escalado ? 'Penalización aplicada' : 'Puntaje completo'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tareas del protocolo en este remito */}
+              <div>
+                <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-3">
+                  Detalle de Cumplimiento de Tareas de Este Viaje
+                </h4>
+                {checklist.filter(t => t.asignada_a_chofer !== false && t.estado !== 'NO_REALIZABLE').length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">No hay tareas asignadas para este remito.</p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {checklist
+                      .filter(t => t.asignada_a_chofer !== false && t.estado !== 'NO_REALIZABLE')
+                      .map((t, idx) => {
+                        const cumplida = t.done || t.estado === 'REPORTADO_CHOFER' || t.estado === 'COMPLETADO' || !!t.chofer_realizo;
+                        const isCritica = !!t.requiere_foto || ['PESAJE_TARA', 'PESAJE_BRUTO'].includes(t.tipo_tarea || '') || (t.tarea || '').toLowerCase().includes('firmado');
+
+                        return (
+                          <div 
+                            key={idx} 
+                            className={`p-2.5 rounded-lg border text-xs flex items-start gap-2 ${
+                              cumplida 
+                                ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950' 
+                                : 'bg-rose-50/70 border-rose-200 text-rose-950'
+                            }`}
+                          >
+                            {cumplida ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="font-semibold truncate">{t.tarea || t.tarea_template}</span>
+                                {isCritica && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-200 text-amber-900 border border-amber-300 shrink-0 flex items-center gap-0.5">
+                                    <Zap className="w-2.5 h-2.5" /> Crítica
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center justify-between text-[10px] mt-0.5 text-gray-500">
+                                <span>
+                                  {cumplida ? '✅ Cumplida por chofer' : `❌ Omitida (${t.estado || 'PENDIENTE'})`}
+                                </span>
+                                {t.valor_reportado_chofer && (
+                                  <span className="font-mono text-gray-700 bg-white/80 px-1 rounded border border-gray-200">
+                                    Valor: {t.valor_reportado_chofer}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowCalificacionModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Asignación Manual de Pedidos / OC */}
+      <ModalAsignacionRemito
+        isOpen={showAsignarModal}
+        onClose={() => setShowAsignarModal(false)}
+        remitoId={Number(id)}
+        remitoRef={remito.ref}
+        cantidadTotal={remito.cantidad_total}
+        onSuccess={async () => {
+          await fetchContext();
+          setShowSuccess(false);
+        }}
+      />
 
       </div>
     </div>

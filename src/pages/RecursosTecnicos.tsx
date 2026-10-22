@@ -15,8 +15,11 @@ import {
   MessageSquare,
   Edit2,
   Check,
-  X
+  X,
+  Star,
+  Sliders
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 
 export interface MetadataItem {
@@ -55,6 +58,9 @@ export interface RemitoInfoData {
   metadata_extraida: Record<string, unknown> | null;
   protocolo_control: ProtocoloTask[] | null;
   choferes: { nombre_completo: string | null } | { nombre_completo: string | null }[] | null;
+  calificacion_score?: number | null;
+  calificacion_estrellas?: number | null;
+  calificacion_desglose?: any;
 }
 
 export interface SimResultData {
@@ -79,6 +85,11 @@ export function RecursosTecnicos() {
   const [simResult, setSimResult] = useState<SimResultData | null>(null);
   const [customMessage, setCustomMessage] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const navigate = useNavigate();
+  const [reevaluatingScore, setReevaluatingScore] = useState(false);
+  const [reevaluatingBatch, setReevaluatingBatch] = useState(false);
+  const [batchResult, setBatchResult] = useState<any | null>(null);
+  const [activeConfig, setActiveConfig] = useState<any | null>(null);
 
   const [metadataLabels, setMetadataLabels] = useState<Record<string, string>>({});
   const [editingKey, setEditingKey] = useState<string | null>(null);
@@ -87,6 +98,21 @@ export function RecursosTecnicos() {
 
   // Verificar si es el usuario hzerdan@gmail.com
   const isAuthorized = user?.email === 'hzerdan@gmail.com';
+
+  const fetchActiveConfig = async () => {
+    try {
+      const { data } = await supabase
+        .from('calificacion_config')
+        .select('*')
+        .eq('activo', true)
+        .order('id', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (data) setActiveConfig(data);
+    } catch (err: unknown) {
+      console.error("Error fetching calificacion_config:", err);
+    }
+  };
 
   const fetchMetadataLabels = async () => {
     try {
@@ -106,9 +132,8 @@ export function RecursosTecnicos() {
     }
   };
 
-
-
   useEffect(() => {
+    fetchActiveConfig();
     if (isAuthorized) {
       fetchMetadataLabels();
     }
@@ -142,7 +167,7 @@ export function RecursosTecnicos() {
     try {
       const { data, error } = await supabase
         .from('remitos')
-        .select('id, remito_ref_externa, mision_estado, tiene_incidencias_carga, chofer_id, metadata_extraida, protocolo_control, choferes(nombre_completo)')
+        .select('id, remito_ref_externa, mision_estado, tiene_incidencias_carga, chofer_id, metadata_extraida, protocolo_control, choferes(nombre_completo), calificacion_score, calificacion_estrellas, calificacion_desglose')
         .eq('id', Number(remitoId))
         .maybeSingle();
 
@@ -200,6 +225,75 @@ export function RecursosTecnicos() {
       setMessage({ type: 'error', text: 'Error al restablecer la misión: ' + errMsg });
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handleReevaluarRemito = async () => {
+    if (!remitoInfo) return;
+    setReevaluatingScore(true);
+    setMessage(null);
+    try {
+      const { error } = await supabase.rpc('reevaluar_calificaciones', {
+        p_remito_id: remitoInfo.id
+      });
+      if (error) throw error;
+      
+      // Refrescar datos del remito actual
+      const { data: updatedData } = await supabase
+        .from('remitos')
+        .select('calificacion_score, calificacion_estrellas, calificacion_desglose')
+        .eq('id', remitoInfo.id)
+        .single();
+
+      if (updatedData) {
+        setRemitoInfo(prev => prev ? ({ ...prev, ...updatedData }) : null);
+      }
+
+      setMessage({ 
+        type: 'success', 
+        text: `Calificación recalculada para Remito #${remitoInfo.id}: ⭐ ${updatedData?.calificacion_estrellas || 0} (${updatedData?.calificacion_score || 0} pts)` 
+      });
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setMessage({ type: 'error', text: 'Error al recalcular calificación: ' + errMsg });
+    } finally {
+      setReevaluatingScore(false);
+    }
+  };
+
+  const handleReevaluarBatch = async () => {
+    const confirmBatch = window.confirm(
+      '¿Deseas ejecutar la reevaluación masiva de TODOS los remitos, choferes y transportistas con la fórmula activa?'
+    );
+    if (!confirmBatch) return;
+
+    setReevaluatingBatch(true);
+    setBatchResult(null);
+    setMessage(null);
+    try {
+      const { data, error } = await supabase.rpc('reevaluar_calificaciones');
+      if (error) throw error;
+      setBatchResult(data);
+      setMessage({
+        type: 'success',
+        text: `Reevaluación masiva completada: ${data?.remitos_procesados || 0} remitos, ${data?.choferes_procesados || 0} choferes y ${data?.transportistas_procesados || 0} transportistas actualizados.`
+      });
+      // Si hay remito abierto, refrescarlo
+      if (remitoInfo) {
+        const { data: updatedData } = await supabase
+          .from('remitos')
+          .select('calificacion_score, calificacion_estrellas, calificacion_desglose')
+          .eq('id', remitoInfo.id)
+          .single();
+        if (updatedData) {
+          setRemitoInfo(prev => prev ? ({ ...prev, ...updatedData }) : null);
+        }
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      setMessage({ type: 'error', text: 'Error en reevaluación masiva: ' + errMsg });
+    } finally {
+      setReevaluatingBatch(false);
     }
   };
 
@@ -440,10 +534,10 @@ export function RecursosTecnicos() {
       </header>
 
       {/* Grid de Dos Columnas (Split-View) */}
-      {remitoInfo && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-in fade-in duration-300">
-          
-          {/* Columna Izquierda: Datos del Remito (8/12) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start animate-in fade-in duration-300">
+        
+        {/* Columna Izquierda: Datos del Remito (8/12) */}
+        {remitoInfo ? (
           <div className="lg:col-span-8 flex flex-col bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-[calc(100vh-220px)]">
             
             {/* Header del visualizador y filtro rápido */}
@@ -702,6 +796,49 @@ export function RecursosTecnicos() {
               </table>
             </div>
           </div>
+        ) : (
+          <div className="lg:col-span-8 flex flex-col bg-white p-8 rounded-2xl shadow-sm border border-gray-100 min-h-[440px] justify-center items-center text-center space-y-5">
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-500 shadow-xs">
+              <Star className="w-8 h-8 fill-amber-400" />
+            </div>
+            <div className="max-w-md space-y-2">
+              <h3 className="text-base font-bold text-gray-900">Panel de Diagnóstico Técnico y Calificaciones</h3>
+              <p className="text-xs text-gray-500 leading-relaxed">
+                Ingresa el ID numérico de un remito en el buscador superior para auditar su metadata, el checklist del protocolo de control y probar el cronjob de inactividad.
+              </p>
+            </div>
+            {activeConfig && (
+              <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 max-w-lg w-full text-left space-y-2.5 text-xs">
+                <div className="flex justify-between items-center border-b border-gray-200/60 pb-2">
+                  <span className="font-bold text-gray-800 flex items-center gap-1.5">
+                    <Sliders className="w-3.5 h-3.5 text-brand-600" />
+                    Fórmula Activa: {activeConfig.nombre}
+                  </span>
+                  <button
+                    onClick={() => navigate('/calificacion-config')}
+                    className="text-[11px] font-bold text-brand-600 hover:text-brand-800 hover:underline cursor-pointer"
+                  >
+                    Ajustar Pesos →
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2 pt-1 text-center">
+                  <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                    <p className="text-[10px] text-gray-500">Cumplimiento Tareas</p>
+                    <p className="text-sm font-black text-brand-600">{activeConfig.peso_cumplimiento_tareas}%</p>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                    <p className="text-[10px] text-gray-500">Autonomía Chofer</p>
+                    <p className="text-sm font-black text-indigo-600">{activeConfig.peso_autonomia_recordatorios}%</p>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-lg border border-gray-100 shadow-2xs">
+                    <p className="text-[10px] text-gray-500">Sin Escalamiento</p>
+                    <p className="text-sm font-black text-emerald-600">{activeConfig.peso_sin_escalamiento}%</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
           {/* Columna Derecha: Acciones / Herramientas (4/12) */}
           <div className="lg:col-span-4 space-y-6">
@@ -723,11 +860,11 @@ export function RecursosTecnicos() {
               <button
                 type="button"
                 onClick={handleResetMision}
-                disabled={resetting}
+                disabled={resetting || !remitoInfo}
                 className="w-full py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${resetting ? 'animate-spin' : ''}`} />
-                {resetting ? 'Restableciendo...' : 'Restablecer Misión'}
+                {resetting ? 'Restableciendo...' : remitoInfo ? 'Restablecer Misión' : 'Restablecer Misión (Requiere Remito)'}
               </button>
             </section>
 
@@ -784,7 +921,7 @@ export function RecursosTecnicos() {
                   <button
                     type="button"
                     onClick={handleSimulateCron}
-                    disabled={simulating}
+                    disabled={simulating || !remitoInfo}
                     className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 border border-gray-200"
                   >
                     <Play className={`w-3.5 h-3.5 ${simulating ? 'animate-pulse' : ''}`} />
@@ -814,9 +951,82 @@ export function RecursosTecnicos() {
               </div>
             </section>
 
+            {/* Herramienta 3: Motor de Calificaciones */}
+            <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between space-y-4">
+              <div className="space-y-3">
+                <div className="border-b border-gray-100 pb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Star className="w-5 h-5 text-amber-500 fill-amber-400" />
+                    <h2 className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                      Motor de Calificaciones
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/calificacion-config')}
+                    className="text-[10px] text-brand-600 hover:text-brand-800 font-bold flex items-center gap-1 hover:underline cursor-pointer"
+                  >
+                    <Sliders className="w-3 h-3" /> Configurar Pesos
+                  </button>
+                </div>
+                <p className="text-[11px] text-gray-500 leading-relaxed">
+                  Calcula o reevalúa la puntuación (1 a 5 estrellas) basada en cumplimiento de tareas, autonomía sin recordatorios y ausencia de escalamiento.
+                </p>
+
+                {remitoInfo && remitoInfo.calificacion_score !== undefined && remitoInfo.calificacion_score !== null && (
+                  <div className="bg-amber-50/60 rounded-xl p-3 border border-amber-200/60 space-y-1.5 text-[11px] text-amber-950">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold flex items-center gap-1">
+                        ⭐ {remitoInfo.calificacion_estrellas} / 5.0
+                      </span>
+                      <span className="font-bold text-amber-800 bg-white px-2 py-0.5 rounded text-[10px] border border-amber-200">
+                        {remitoInfo.calificacion_score} pts
+                      </span>
+                    </div>
+                    {remitoInfo.calificacion_desglose && (
+                      <div className="text-[10px] text-amber-800 space-y-0.5 pt-1 border-t border-amber-200/40">
+                        <p>• Tareas: {remitoInfo.calificacion_desglose.cumplimiento?.puntos} pts ({remitoInfo.calificacion_desglose.cumplimiento?.score_pct}%)</p>
+                        <p>• Autonomía: {remitoInfo.calificacion_desglose.autonomia?.puntos} pts ({remitoInfo.calificacion_desglose.autonomia?.recordatorios_count} avisos)</p>
+                        <p>• Escalamiento: {remitoInfo.calificacion_desglose.escalamiento?.puntos} pts ({remitoInfo.calificacion_desglose.escalamiento?.escalado ? 'Escalado' : 'Sin alertas'})</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {batchResult && (
+                  <div className="bg-emerald-50 rounded-xl p-3 border border-emerald-200 text-[11px] text-emerald-800 space-y-1">
+                    <p className="font-bold">✓ Reevaluación Masiva:</p>
+                    <p>• {batchResult.remitos_procesados} remitos procesados</p>
+                    <p>• {batchResult.choferes_procesados} choferes actualizados</p>
+                    <p>• {batchResult.transportistas_procesados} transportistas actualizados</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleReevaluarRemito}
+                  disabled={reevaluatingScore || !remitoInfo}
+                  className="w-full py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  <Star className={`w-3.5 h-3.5 ${reevaluatingScore ? 'animate-spin' : ''}`} />
+                  {reevaluatingScore ? 'Calculando...' : 'Reevaluar Este Remito'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReevaluarBatch}
+                  disabled={reevaluatingBatch}
+                  className="w-full py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-lg text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${reevaluatingBatch ? 'animate-spin' : ''}`} />
+                  {reevaluatingBatch ? 'Reevaluando Historial...' : 'Reevaluar Historial Completo'}
+                </button>
+              </div>
+            </section>
+
           </div>
         </div>
-      )}
       </div>
     </div>
   );

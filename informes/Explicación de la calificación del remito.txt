@@ -1,0 +1,156 @@
+He generado un informe visual detallado en HTML para que puedas abrirlo y compartirlo directamente:
+
+📄 Abrir Informe HTML de Auditoría - Remito #79
+
+A continuación te explico paso a paso cada una de tus dudas con los números exactos extraídos de la base de datos para este viaje de PABLO DIAZ:
+
+1. ¿Cómo es que 7/15 da 37.5% en vez de 46.7%? (Ponderación Crítica)
+
+Si el cálculo fuera un promedio plano donde todas las tareas valen lo mismo, efectivamente 
+7
+÷
+15
+=
+46.67
+%
+7÷15=46.67%.
+
+Sin embargo, el sistema utiliza Ponderación por Riesgo Operativo:
+
+Tareas Estándar (avisos de llegada, confirmación de papeles, etc.): Tienen peso = 1.0 punto.
+Tareas Críticas ⚡ (fotos de control de calidad, fotos de carga, pesajes y remito firmado): Tienen el doble de valor (peso = 2.0 puntos).
+Desglose de Puntos Ponderados en el Remito #79:
+
+Puntos Posibles del Viaje (Denominador):
+
+9 Tareas Críticas 
+×
+2.0
+=
+18.0
+ puntos
+×2.0=18.0 puntos
+6 Tareas Estándar 
+×
+1.0
+=
+6.0
+ puntos
+×1.0=6.0 puntos
+Total Posible Ponderado: 
+18.0
++
+6.0
+=
+24.0
+ puntos
+18.0+6.0=24.0 puntos
+
+Puntos Realmente Cumplidos por el Chofer (Numerador):
+
+El chofer cumplió 5 tareas estándar: 
+5
+×
+1.0
+=
+5.0
+ puntos
+5×1.0=5.0 puntos
+Pero omitió 7 tareas críticas (las 5 fotos de carga, la foto de calidad de azúcar y la tara). Solo cumplió 2 críticas (pesaje de camión lleno y foto de remito firmado): 
+2
+×
+2.0
+=
+4.0
+ puntos
+2×2.0=4.0 puntos
+Total Cumplido Ponderado: 
+5.0
++
+4.0
+=
+9.0
+ puntos
+5.0+4.0=9.0 puntos
+% Cumplimiento
+=
+9.0
+ pts cumplidos
+24.0
+ pts posibles
+×
+100
+=
+37.5
+%
+% Cumplimiento=
+24.0 pts posibles
+9.0 pts cumplidos
+	​
+
+×100=37.5%
+
+En conclusión: Aunque hizo casi la mitad de las tareas en cantidad (7 de 15), como se salteó la mayoría de las más importantes y riesgosas para la empresa (las fotos y el pesaje previo), su efectividad real cae del 46.7% al 37.5%.
+
+2. ¿Cómo se llega a la puntuación de 2.53 ⭐ (50.63 pts)?
+
+La calificación total se evalúa sobre 100 puntos máximos, divididos en 3 dimensiones:
+
+Dimensión	Puntos Máximos	Desempeño del Chofer en el Remito #79	Puntos Obtenidos
+1. Cumplimiento de Protocolo	55 pts	Obtuvo el 37.5% del protocolo ponderado (
+37.5
+%
+×
+55
+37.5%×55)	20.63 pts
+2. Autonomía Digital	30 pts	El bot no tuvo que insistirle con recordatorios (100%)	30.00 pts
+3. Sin Escalamiento / Incidencias	15 pts	Requirió intervención humana de operadores por alertas	0.00 pts
+SCORE FINAL (0 a 100)	100 pts	Suma total (
+20.63
++
+30.00
++
+0.00
+20.63+30.00+0.00)	50.63 pts
+Conversión a Estrellas (Escala 1 a 5):
+
+El sistema divide el puntaje sobre 100 entre 20 para llevarlo a la escala de 5 estrellas: 
+Estrellas
+=
+Score Final
+20
+=
+50.63
+20
+=
+2.5315
+≈
+2.53
+ ⭐
+Estrellas=
+20
+Score Final
+	​
+
+=
+20
+50.63
+	​
+
+=2.5315≈2.53 ⭐
+
+3. ¿Qué son los "Avisos = 0"?
+
+Los Avisos son la cantidad de recordatorios automáticos y reintentos por inactividad que el bot de WhatsApp tuvo que enviarle al chofer porque este no respondía o demoraba en enviar la información requerida.
+
+Avisos = 0: Significa que el bot no tuvo que insistirle repetidamente con mensajes de alarma de inactividad mientras el canal estuvo activo.
+Impacto en el Score: Al tener 0 avisos de insistencia, no recibió penalizaciones y se llevó los 30 puntos completos de Autonomía Digital. (Si hubiera tenido avisos, se restan 15 puntos por cada aviso, y si agota 3 o más reintentos se restan 40 puntos adicionales).
+4. ¿Qué significa "Escalado: Sí (Intervención humana)"?
+
+Esta dimensión premia los viajes que son 100% autónomos entre el chofer y el bot sin demandar tiempo de los operadores de la empresa.
+
+En el Remito #79 figura "Escalado: Sí" porque:
+
+Tuvo tiene_incidencias_carga = true.
+Se dispararon alertas automáticas de escalamiento hacia los operadores de guardia (IDs 19332 a 19337) debido a la omisión de pesajes en origen y saltos de protocolo.
+Como un operador humano tuvo que tomar el caso o intervenir manualmente para destrabar el viaje, la dimensión de Sin Escalamiento otorgó 0 puntos (en lugar de los 15 puntos de un viaje totalmente desatendido).

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, LogOut, Truck, X, LayoutDashboard, Database, ChevronDown, ChevronRight, ClipboardCheck, Wrench } from 'lucide-react';
+import { MessageSquare, LogOut, Truck, X, LayoutDashboard, Database, ChevronDown, ChevronRight, ClipboardCheck, Wrench, BarChart3 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { cn } from '../../lib/utils';
 
@@ -13,6 +13,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
     const { pathname } = useLocation();
     const { signOut, user } = useAuth();
 
+    const [isDashboardsOpen, setIsDashboardsOpen] = useState(pathname.startsWith('/dashboards'));
     const [isMaestrosOpen, setIsMaestrosOpen] = useState(false);
 
     const navLinks = [
@@ -20,6 +21,11 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: 'Monitor de Instancias', path: '/monitor', icon: LayoutDashboard, disabled: false },
         { name: 'Monitor de Remitos', path: '/remitos', icon: Truck, disabled: false },
         { name: 'Inspecciones Documentales', path: '/inspecciones', icon: ClipboardCheck, disabled: false },
+    ];
+
+    const dashboardsLinks = [
+        { name: 'Rendimiento Choferes', path: '/dashboards/choferes', disabled: false },
+        { name: 'Control OCs y Pedidos', path: '/dashboards/operaciones', disabled: false },
     ];
 
     const maestrosLinks = [
@@ -36,6 +42,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: 'Estados de Misión', path: '/mision-estados', disabled: false },
         { name: 'Tipos de Misión', path: '/mision-tipos', disabled: false },
         { name: 'Políticas Logística', path: '/logistica-politicas', disabled: false },
+        { name: 'Políticas Calificación', path: '/calificacion-config', disabled: false },
     ];
 
     return (
@@ -101,6 +108,43 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                             </Link>
                         );
                     })}
+
+                    {/* Dashboards Collapsible Menu */}
+                    <div>
+                        <button
+                            onClick={() => setIsDashboardsOpen(!isDashboardsOpen)}
+                            className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium rounded-xl text-gray-700 hover:bg-gray-100 transition-colors"
+                        >
+                            <div className="flex items-center">
+                                <BarChart3 className="mr-3 flex-shrink-0 h-5 w-5 text-gray-400 group-hover:text-gray-500" />
+                                Dashboards
+                            </div>
+                            {isDashboardsOpen ? <ChevronDown className="h-4 w-4 text-gray-400" /> : <ChevronRight className="h-4 w-4 text-gray-400" />}
+                        </button>
+
+                        {isDashboardsOpen && (
+                            <div className="pl-11 pr-4 py-1 flex flex-col space-y-1">
+                                {dashboardsLinks.map((link) => {
+                                    const isActive = pathname === link.path;
+                                    return (
+                                        <Link
+                                            key={link.name}
+                                            to={link.path}
+                                            onClick={() => onClose()}
+                                            className={cn(
+                                                "block px-3 py-2 text-sm font-medium rounded-lg transition-colors",
+                                                isActive
+                                                    ? "bg-brand-50 text-brand-700 font-semibold"
+                                                    : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                                            )}
+                                        >
+                                            {link.name}
+                                        </Link>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
 
                     {/* Maestros Collapsible Menu */}
                     <div>

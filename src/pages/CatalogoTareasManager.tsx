@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, Edit2, Trash2, Search, X, Loader2, ClipboardList, ToggleLeft, ToggleRight, Eye, EyeOff, Camera, Bell, Clock, Sliders } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, X, Loader2, ClipboardList, ToggleLeft, ToggleRight, Eye, EyeOff, Camera, Bell, Clock, Sliders, Zap } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { MisionEstadoDef } from './MisionEstadosManager';
 
@@ -11,6 +11,7 @@ export interface TareaControl {
   orden_sugerido: number | null;
   requiere_foto: boolean | null;
   requiere_aviso: boolean | null;
+  es_critica?: boolean;
   estado: string;
   estado_id: number | null;
   tipo_dato_esperado: string | null;
@@ -31,6 +32,7 @@ interface FormData {
   orden_sugerido: string;
   requiere_foto: boolean;
   requiere_aviso: boolean;
+  es_critica: boolean;
   estado_id: string;
   tipo_dato_esperado: string;
   mensaje_template: string;
@@ -44,6 +46,7 @@ const initialFormData: FormData = {
   orden_sugerido: '',
   requiere_foto: false,
   requiere_aviso: false,
+  es_critica: false,
   estado_id: '',
   tipo_dato_esperado: 'check',
   mensaje_template: '',
@@ -118,6 +121,7 @@ export function CatalogoTareasManager() {
         orden_sugerido: tarea.orden_sugerido?.toString() || '',
         requiere_foto: !!tarea.requiere_foto,
         requiere_aviso: !!tarea.requiere_aviso,
+        es_critica: !!tarea.es_critica,
         estado_id: tarea.estado_id?.toString() || '',
         tipo_dato_esperado: tarea.tipo_dato_esperado || 'check',
         mensaje_template: tarea.mensaje_template || '',
@@ -145,6 +149,7 @@ export function CatalogoTareasManager() {
         orden_sugerido: formData.orden_sugerido ? parseInt(formData.orden_sugerido) : null,
         requiere_foto: formData.requiere_foto,
         requiere_aviso: formData.requiere_aviso,
+        es_critica: formData.es_critica,
         estado_id: formData.estado_id ? parseInt(formData.estado_id) : null,
         tipo_dato_esperado: formData.tipo_dato_esperado,
         mensaje_template: formData.mensaje_template.trim() || null,
@@ -174,6 +179,22 @@ export function CatalogoTareasManager() {
       showToast('error', 'Error al guardar la tarea.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleCritica = async (tarea: TareaControl) => {
+    const nuevaCritica = !tarea.es_critica;
+    try {
+      const { error } = await supabase
+        .from('catalogo_tareas_control')
+        .update({ es_critica: nuevaCritica })
+        .eq('id', tarea.id);
+      if (error) throw error;
+      showToast('success', `Tarea marcada como ${nuevaCritica ? 'Crítica ⚡' : 'Estándar'}.`);
+      fetchData();
+    } catch (err) {
+      console.error('Error toggling critica:', err);
+      showToast('error', 'Error al actualizar criticidad.');
     }
   };
 
@@ -286,6 +307,7 @@ export function CatalogoTareasManager() {
                 <th className="p-4 font-bold text-gray-500 text-xs uppercase tracking-wider">Tipo Dato</th>
                 <th className="p-4 font-bold text-gray-500 text-xs uppercase tracking-wider w-16 text-center">Foto</th>
                 <th className="p-4 font-bold text-gray-500 text-xs uppercase tracking-wider w-16 text-center">Aviso</th>
+                <th className="p-4 font-bold text-gray-500 text-xs uppercase tracking-wider w-24 text-center">Criticidad</th>
                 <th className="p-4 font-bold text-gray-500 text-xs uppercase tracking-wider w-36 text-center">Estado</th>
                 <th className="p-4 font-bold text-gray-500 text-xs uppercase tracking-wider w-28 text-right">Acciones</th>
               </tr>
@@ -293,7 +315,7 @@ export function CatalogoTareasManager() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-gray-500">
+                  <td colSpan={9} className="p-8 text-center text-gray-500">
                     <div className="flex justify-center items-center gap-2">
                       <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
                       <span>Cargando catálogo...</span>
@@ -302,7 +324,7 @@ export function CatalogoTareasManager() {
                 </tr>
               ) : filteredTareas.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-gray-500">
+                  <td colSpan={9} className="p-8 text-center text-gray-500">
                     No se encontraron tareas registradas en este filtro.
                   </td>
                 </tr>
@@ -336,6 +358,22 @@ export function CatalogoTareasManager() {
                     </td>
                     <td className="p-4 text-center">
                       {t.requiere_aviso ? <Bell className="w-4 h-4 text-amber-500 mx-auto" /> : <span className="text-gray-300">-</span>}
+                    </td>
+                    <td className="p-4 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleCritica(t)}
+                        className={cn(
+                          "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold transition border cursor-pointer",
+                          t.es_critica 
+                            ? "bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200" 
+                            : "bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200 hover:text-gray-700"
+                        )}
+                        title={t.es_critica ? "Crítica: Multiplica su ponderación en la evaluación del chofer según lo establecido en las políticas y pesos de calificación. Clic para cambiar a Estándar." : "Estándar: Ponderación base 1.0. Clic para marcar como Crítica."}
+                      >
+                        <Zap className={cn("w-3 h-3", t.es_critica ? "text-amber-600 fill-amber-500" : "text-gray-400")} />
+                        <span>{t.es_critica ? 'Crítica' : 'Estándar'}</span>
+                      </button>
                     </td>
                     <td className="p-4 text-center">
                       <button
@@ -559,6 +597,40 @@ export function CatalogoTareasManager() {
                     <div className="flex items-center gap-2">
                       <Bell className={cn("w-4 h-4", formData.requiere_aviso ? "text-amber-600" : "text-gray-400")} />
                       <span className="text-xs text-gray-700 group-hover:text-gray-900 transition">Requiere aviso/notificación</span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-3 cursor-pointer group pt-2 border-t border-gray-200" title="Multiplica su ponderación en la evaluación del chofer según lo establecido en las políticas y pesos de calificación.">
+                    <div className={cn(
+                      "w-10 h-6 rounded-full transition-colors relative shrink-0 mt-0.5",
+                      formData.es_critica ? "bg-amber-500" : "bg-gray-300"
+                    )}>
+                      <div className={cn(
+                        "absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform",
+                        formData.es_critica ? "translate-x-4" : "translate-x-0"
+                      )} />
+                    </div>
+                    <input
+                      type="checkbox"
+                      className="hidden"
+                      checked={formData.es_critica}
+                      onChange={(e) => setFormData({...formData, es_critica: e.target.checked})}
+                    />
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <Zap className={cn("w-4 h-4", formData.es_critica ? "text-amber-500 fill-amber-500" : "text-gray-400")} />
+                        <span className="text-xs font-bold text-gray-800 group-hover:text-gray-900 transition">
+                          ⚡ Tarea Crítica
+                        </span>
+                        {formData.es_critica && (
+                          <span className="text-[10px] bg-amber-100 text-amber-900 font-bold px-1.5 py-0.2 rounded">
+                            Activo
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        Multiplica su ponderación en la evaluación del chofer según lo establecido en las políticas y pesos de calificación.
+                      </p>
                     </div>
                   </label>
                 </div>

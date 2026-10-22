@@ -15,13 +15,16 @@ import {
   Lock, 
   RotateCcw,
   Eye,
-  Plus
+  Plus,
+  Link2,
+  Unlink
 } from 'lucide-react';
 import type { RemitoActivo } from '../types/remito';
 import { CargarRemitoLargoModal } from './Remitos/components/CargarRemitoLargoModal';
+import { ModalAsignacionRemito } from '../components/ModalAsignacionRemito';
 
 type ToastType = 'info' | 'error';
-type EstadoFilterType = 'ACTIVOS' | 'FINALIZADOS' | 'TODOS';
+type EstadoFilterType = 'ACTIVOS' | 'SIN_VINCULAR' | 'FINALIZADOS' | 'TODOS';
 
 export function RemitosList() {
   const [remitos, setRemitos] = useState<RemitoActivo[]>([]);
@@ -29,6 +32,13 @@ export function RemitosList() {
   const [error, setError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<{ type: ToastType; text: string } | null>(null);
   const [isCargarLargoOpen, setIsCargarLargoOpen] = useState(false);
+  const [sinVincularCount, setSinVincularCount] = useState<number>(0);
+  const [asignarModalData, setAsignarModalData] = useState<{
+    isOpen: boolean;
+    remitoId: number;
+    remitoRef: string;
+    cantidadTotal?: number | null;
+  } | null>(null);
 
   // Filters state
   const [estadoFilter, setEstadoFilter] = useState<EstadoFilterType>('ACTIVOS');
@@ -53,6 +63,15 @@ export function RemitosList() {
 
       if (error) throw error;
       setRemitos(data || []);
+
+      // Obtener conteo actualizado de remitos sin vincular para el badge del filtro
+      const { count: sinVincCount } = await supabase
+        .from('remitos')
+        .select('id', { count: 'exact', head: true })
+        .eq('estado_asignacion', 'PENDIENTE')
+        .neq('mision_estado', 'MISION_COMPLETADA');
+
+      setSinVincularCount(sinVincCount || 0);
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : 'Error desconocido';
       setError(errMsg || 'Error al cargar los remitos.');
@@ -244,40 +263,60 @@ export function RemitosList() {
             <span>Cargar Remito Largo</span>
           </button>
 
-          {/* Filter Tabs: Activos | Finalizados | Todos */}
-          <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0 border border-gray-200">
-          <button
-            onClick={() => setEstadoFilter('ACTIVOS')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-              estadoFilter === 'ACTIVOS'
-                ? 'bg-white text-brand-700 shadow-sm font-semibold'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Activos
-          </button>
-          <button
-            onClick={() => setEstadoFilter('FINALIZADOS')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-1.5 ${
-              estadoFilter === 'FINALIZADOS'
-                ? 'bg-emerald-600 text-white shadow-sm font-semibold'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            Finalizados
-          </button>
-          <button
-            onClick={() => setEstadoFilter('TODOS')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-              estadoFilter === 'TODOS'
-                ? 'bg-white text-gray-900 shadow-sm font-semibold'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Todos
-          </button>
-        </div>
+          {/* Filter Tabs: Activos | Sin Vincular | Finalizados | Todos */}
+          <div className="flex items-center bg-gray-100 p-1 rounded-xl shrink-0 border border-gray-200 gap-0.5">
+            <button
+              onClick={() => setEstadoFilter('ACTIVOS')}
+              className={`px-3 sm:px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                estadoFilter === 'ACTIVOS'
+                  ? 'bg-white text-brand-700 shadow-sm font-semibold'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Activos
+            </button>
+            <button
+              onClick={() => setEstadoFilter('SIN_VINCULAR')}
+              className={`px-3 sm:px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-1.5 ${
+                estadoFilter === 'SIN_VINCULAR'
+                  ? 'bg-amber-500 text-white shadow-sm font-semibold'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Unlink className="w-3.5 h-3.5" />
+              <span>Sin Vincular</span>
+              {sinVincularCount > 0 && (
+                <span className={`px-1.5 py-0.2 rounded-full text-xs font-bold leading-none ${
+                  estadoFilter === 'SIN_VINCULAR'
+                    ? 'bg-white text-amber-800'
+                    : 'bg-amber-100 text-amber-800'
+                }`}>
+                  {sinVincularCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setEstadoFilter('FINALIZADOS')}
+              className={`px-3 sm:px-4 py-2 text-sm font-medium rounded-lg transition-all flex items-center gap-1.5 ${
+                estadoFilter === 'FINALIZADOS'
+                  ? 'bg-emerald-600 text-white shadow-sm font-semibold'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Finalizados</span>
+            </button>
+            <button
+              onClick={() => setEstadoFilter('TODOS')}
+              className={`px-3 sm:px-4 py-2 text-sm font-medium rounded-lg transition-all ${
+                estadoFilter === 'TODOS'
+                  ? 'bg-white text-gray-900 shadow-sm font-semibold'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Todos
+            </button>
+          </div>
       </div>
     </div>
 
@@ -354,6 +393,8 @@ export function RemitosList() {
           <p className="text-gray-500 text-lg">
             {estadoFilter === 'FINALIZADOS'
               ? 'No se encontraron remitos finalizados con los criterios ingresados.'
+              : estadoFilter === 'SIN_VINCULAR'
+              ? 'No hay remitos pendientes de asignación. ¡Todos los remitos están vinculados!'
               : 'No hay remitos que coincidan con la búsqueda.'}
           </p>
           {hasActiveFilters && (
@@ -492,7 +533,30 @@ export function RemitosList() {
                       })}
                     </ul>
                   ) : (
-                    <p className="text-sm text-gray-400 italic">Ningún pedido vinculado</p>
+                    <div className="flex flex-col gap-2 p-2.5 bg-amber-50/60 border border-amber-200/80 rounded-lg">
+                      <p className="text-xs text-amber-800 font-semibold flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Sin pedidos vinculados</span>
+                      </p>
+                      {!isFinalizado && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAsignarModalData({
+                              isOpen: true,
+                              remitoId: remito.id,
+                              remitoRef: remito.nro_remito,
+                              cantidadTotal: remito.cantidad_total || null
+                            });
+                          }}
+                          className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-brand-600 hover:bg-brand-700 text-white rounded-lg text-xs font-bold transition shadow-2xs cursor-pointer"
+                        >
+                          <Link2 className="w-3.5 h-3.5" />
+                          <span>Asignar Pedido / OC</span>
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -545,6 +609,21 @@ export function RemitosList() {
           fetchRemitos();
         }}
       />
+
+      {/* Modal de Asignación Manual de Pedido / OC */}
+      {asignarModalData?.isOpen && (
+        <ModalAsignacionRemito
+          isOpen={asignarModalData.isOpen}
+          onClose={() => setAsignarModalData(null)}
+          remitoId={asignarModalData.remitoId}
+          remitoRef={asignarModalData.remitoRef}
+          cantidadTotal={asignarModalData.cantidadTotal ?? null}
+          onSuccess={() => {
+            showToast('info', `Remito #${asignarModalData.remitoRef} asignado exitosamente`);
+            fetchRemitos();
+          }}
+        />
+      )}
     </div>
   );
 }

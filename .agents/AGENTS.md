@@ -49,6 +49,7 @@ No repetir valores descartados empíricamente para el intervalo de reconexión I
 ### 3. Uso Exclusivo de Supabase CLI de Scoop (Prohibido npx)
 * Para cualquier operación de base de datos o migraciones que requiera el CLI de Supabase (`supabase db push`, `supabase migration new`, `supabase db pull`, etc.), el agente **debe invocar directamente el comando `supabase`** instalado en el sistema operativo mediante **Scoop** (`supabase <subcomando>`).
 * **Queda terminantemente prohibido** ejecutar `npx supabase ...`. Debe utilizarse siempre el binario global de Scoop.
+* **Creación de Migraciones en Windows**: Al ejecutar `supabase migration new <nombre>`, se debe enviar siempre un pipe vacío (`"" | supabase migration new <nombre>`). De lo contrario, la CLI en PowerShell mantiene STDIN abierto esperando SQL y queda colgada en background sin devolver el nombre del archivo generado. Una vez creado el archivo vacío, se debe escribir su contenido con la herramienta nativa `write_to_file` indicando `Overwrite: true`.
 
 ## ⚠️ Eficiencia y Uso Estricto de Herramientas Nativas (Prohibición de Terminal/Python Innecesarios)
 

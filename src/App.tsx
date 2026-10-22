@@ -23,6 +23,9 @@ import { InspeccionesKanbanPage } from './pages/Inspecciones/InspeccionesKanbanP
 import { RecursosTecnicos } from './pages/RecursosTecnicos';
 import { MisionEstadosManager } from './pages/MisionEstadosManager';
 import { MisionTiposManager } from './pages/MisionTiposManager';
+import { CalificacionConfigManager } from './pages/CalificacionConfigManager';
+import { ChoferesDashboard } from './pages/Dashboards/ChoferesDashboard';
+import { OperacionesDashboard } from './pages/Dashboards/Operaciones/OperacionesDashboard';
 
 const PublicInspectPage = lazy(() => import('./pages/PublicInspect/PublicInspectPage'));
 const PublicValidarPagoPage = lazy(() => import('./pages/PublicValidarPago/PublicValidarPagoPage'));
@@ -78,6 +81,9 @@ function App() {
             <Route path="/mision-estados" element={<MisionEstadosManager />} />
             <Route path="/mision-tipos" element={<MisionTiposManager />} />
             <Route path="/logistica-politicas" element={<LogisticaPoliticasManager />} />
+            <Route path="/calificacion-config" element={<CalificacionConfigManager />} />
+            <Route path="/dashboards/choferes" element={<ChoferesDashboard />} />
+            <Route path="/dashboards/operaciones" element={<OperacionesDashboard />} />
             <Route path="/inspecciones" element={<InspeccionesKanbanPage />} />
             <Route path="/recursos-tecnicos" element={<RecursosTecnicos />} />
           </Route>

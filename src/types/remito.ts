@@ -19,6 +19,7 @@ export interface RemitoActivo {
   estado_asignacion?: string;
   mision_estado?: string;
   created_at?: string;
+  cantidad_total?: number | null;
   instancias_vinculadas: PedidoVinculado[];
 }
 
