@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../../../lib/supabase';
 import type { 
   OperacionItem, 
@@ -63,6 +63,23 @@ export function OperacionesDashboard() {
     return `${hoy.getFullYear()}-${pad(hoy.getMonth() + 1)}-${pad(hoy.getDate())}`;
   });
 
+  // Referencias a los inputs nativos para abrir el selector de calendario directamente al hacer clic
+  const fechaDesdeRef = useRef<HTMLInputElement>(null);
+  const fechaHastaRef = useRef<HTMLInputElement>(null);
+
+  const openDatePicker = (ref: React.RefObject<HTMLInputElement | null>) => {
+    if (!ref.current) return;
+    if ('showPicker' in HTMLInputElement.prototype && typeof ref.current.showPicker === 'function') {
+      try {
+        ref.current.showPicker();
+        return;
+      } catch (e) {
+        // Fallback si el navegador lo bloquea
+      }
+    }
+    ref.current.focus();
+  };
+
   // Estados de carga y datos
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -122,8 +139,9 @@ export function OperacionesDashboard() {
     } else if (preset === 'YTD') {
       setFechaDesde(`${hoy.getFullYear()}-01-01`);
     } else if (preset === 'ALL') {
-      setFechaDesde('');
-      setFechaHasta('');
+      // Histórico completo: desde el inicio de registros hasta hoy
+      setFechaDesde('2024-01-01');
+      setFechaHasta(toYMD(hoy));
     }
   };
 
@@ -618,7 +636,7 @@ export function OperacionesDashboard() {
                 onClick={() => handlePresetChange(p)}
                 className={cn(
                   "px-2.5 py-1 rounded-md transition-all",
-                  datePreset === p
+                  (datePreset === p || (p === 'ALL' && datePreset === 'CUSTOM'))
                     ? "bg-white text-gray-900 shadow-sm font-bold"
                     : "text-slate-500 hover:text-slate-900"
                 )}
@@ -628,40 +646,60 @@ export function OperacionesDashboard() {
             ))}
           </div>
 
-          {/* Inputs de Fecha formateados como DD/MM/YYYY */}
-          <div className="flex items-center gap-2 text-xs bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
-            <Calendar className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            
+          {/* Inputs de Fecha formateados como DD/MM/YYYY con apertura instantánea de calendario */}
+          <div className="flex items-center gap-1.5 text-xs bg-slate-50 p-1 rounded-xl border border-slate-200 shadow-sm">
             {/* Fecha Desde */}
-            <div className="relative inline-flex items-center cursor-pointer group">
-              <span className="font-semibold text-slate-700 group-hover:text-brand-600 transition-colors">
+            <div 
+              onClick={() => openDatePicker(fechaDesdeRef)}
+              className="relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100/80 border border-slate-200/80 hover:border-brand-300 transition-all cursor-pointer group shadow-xs"
+              title="Hacé clic para cambiar la fecha inicial (Desde)"
+            >
+              <Calendar className="w-3.5 h-3.5 text-slate-400 group-hover:text-brand-600 transition-colors shrink-0" />
+              <span className="font-semibold text-slate-700 group-hover:text-brand-600 transition-colors select-none">
                 {fechaDesde ? formatDateDDMMYYYY(fechaDesde) : 'DD/MM/YYYY'}
               </span>
               <input
+                ref={fechaDesdeRef}
                 type="date"
                 value={fechaDesde}
                 onChange={(e) => {
                   setFechaDesde(e.target.value);
                   setDatePreset('CUSTOM');
                 }}
+                onClick={(e) => {
+                  try {
+                    (e.currentTarget as any).showPicker?.();
+                  } catch {}
+                }}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 title="Seleccionar fecha desde"
               />
             </div>
 
-            <span className="text-slate-400 font-bold select-none">→</span>
+            <span className="text-slate-400 font-bold select-none px-0.5">→</span>
 
             {/* Fecha Hasta */}
-            <div className="relative inline-flex items-center cursor-pointer group">
-              <span className="font-semibold text-slate-700 group-hover:text-brand-600 transition-colors">
+            <div 
+              onClick={() => openDatePicker(fechaHastaRef)}
+              className="relative inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100/80 border border-slate-200/80 hover:border-brand-300 transition-all cursor-pointer group shadow-xs"
+              title="Hacé clic para cambiar la fecha final (Hasta)"
+            >
+              <Calendar className="w-3.5 h-3.5 text-slate-400 group-hover:text-brand-600 transition-colors shrink-0" />
+              <span className="font-semibold text-slate-700 group-hover:text-brand-600 transition-colors select-none">
                 {fechaHasta ? formatDateDDMMYYYY(fechaHasta) : 'DD/MM/YYYY'}
               </span>
               <input
+                ref={fechaHastaRef}
                 type="date"
                 value={fechaHasta}
                 onChange={(e) => {
                   setFechaHasta(e.target.value);
                   setDatePreset('CUSTOM');
+                }}
+                onClick={(e) => {
+                  try {
+                    (e.currentTarget as any).showPicker?.();
+                  } catch {}
                 }}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 title="Seleccionar fecha hasta"
