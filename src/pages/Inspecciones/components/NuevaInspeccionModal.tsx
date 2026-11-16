@@ -334,6 +334,29 @@ export function NuevaInspeccionModal({ isOpen, onClose, onCreated, usuarioActor 
       setToast({ type: 'success', text: 'Inspección creada exitosamente.' });
       onCreated();
       onClose();
+
+      // Plus de inmediatez en segundo plano (fire-and-forget, sin bloquear la creación de la inspección)
+      const fechaPactadaDate = new Date(form.fechaPactada);
+      const now = new Date();
+      const in24h = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      if (newInspId && form.inspectorId && fechaPactadaDate > now && fechaPactadaDate <= in24h) {
+        supabase
+          .rpc('enviar_alerta_inspector', {
+            p_inspeccion_id: newInspId,
+            p_tipo_alerta: 'RECORDATORIO_PREVIO_24H',
+            p_usuario_actor: usuarioActor,
+          })
+          .then(
+            ({ error: alertErr }) => {
+              if (alertErr) {
+                console.warn('Alerta inmediata en background (el cron de 10 min la respaldará si hubo timeout):', alertErr);
+              }
+            },
+            (err: any) => {
+              console.warn('Despacho asíncrono no crítico:', err);
+            }
+          );
+      }
     } catch (err: any) {
       console.error('Error creating inspection:', err);
       setToast({ type: 'error', text: `Error: ${err.message || 'Error desconocido'}` });
