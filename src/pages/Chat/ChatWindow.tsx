@@ -1,12 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { Conversation } from './ChatLayout';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
     ChevronLeft, Bot, User, ClipboardList, CheckSquare, Square, 
     AlertTriangle, Truck, Calendar, Scale, AlertCircle, 
-    Loader2, X
+    Loader2, X, LocateFixed
 } from 'lucide-react';
 import { MessageBubble } from './MessageBubble';
 import type { ChatMessage } from './MessageBubble';
@@ -16,19 +17,24 @@ import { differenceInCalendarDays, startOfDay, format } from 'date-fns';
 
 function getMessageDateLabel(dateString: string): string {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    const today = new Date();
-    const diffDays = differenceInCalendarDays(startOfDay(today), startOfDay(date));
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return '';
+        const today = new Date();
+        const diffDays = differenceInCalendarDays(startOfDay(today), startOfDay(date));
 
-    if (diffDays === 0) {
-        return 'Hoy';
-    } else if (diffDays === 1) {
-        return 'Ayer';
-    } else if (diffDays > 1 && diffDays <= 7) {
-        const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-        return dayNames[date.getDay()];
-    } else {
-        return format(date, 'dd-MM-yyyy');
+        if (diffDays === 0) {
+            return 'Hoy';
+        } else if (diffDays === 1) {
+            return 'Ayer';
+        } else if (diffDays > 1 && diffDays <= 7) {
+            const dayNames = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            return dayNames[date.getDay()];
+        } else {
+            return format(date, 'dd-MM-yyyy');
+        }
+    } catch {
+        return '';
     }
 }
 
@@ -39,6 +45,8 @@ interface ChatWindowProps {
 
 export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
     const { user, personalAcId } = useAuth();
+    const [searchParams] = useSearchParams();
+    const queryRemitoId = searchParams.get('remito_id');
 
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [loading, setLoading] = useState(true);
@@ -52,6 +60,8 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
     const [floatingBadgeText, setFloatingBadgeText] = useState('');
     const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const isProgrammaticScroll = useRef(false);
+    const initialScrollDone = useRef(false);
+    const [highlightedRemitoId, setHighlightedRemitoId] = useState<number | null>(null);
 
     // States for logistics tracking
     const [activeRemito, setActiveRemito] = useState<any | null>(null);
@@ -146,6 +156,34 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
         }, 800);
     }, []);
 
+    const scrollToRemito = useCallback((remitoId: number) => {
+        if (!remitoId) return;
+
+        setTimeout(() => {
+            const container = scrollContainerRef.current;
+            if (!container) return;
+
+            const dividerEl = container.querySelector<HTMLElement>(`#remito-start-${remitoId}`);
+            const msgEl = container.querySelector<HTMLElement>(`[data-remito-id="${remitoId}"]`);
+            const target = dividerEl || msgEl;
+
+            if (target) {
+                isProgrammaticScroll.current = true;
+                const topPos = target.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop - 20;
+                container.scrollTo({ top: Math.max(0, topPos), behavior: 'smooth' });
+
+                setHighlightedRemitoId(remitoId);
+                if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+                scrollTimeoutRef.current = setTimeout(() => {
+                    isProgrammaticScroll.current = false;
+                    setHighlightedRemitoId(null);
+                }, 2500);
+            } else {
+                console.warn(`No se encontró mensaje o separador para el remito ${remitoId}`);
+            }
+        }, 80);
+    }, []);
+
     const fetchRemitoData = useCallback(async () => {
         if (conversation.participant_role !== 'chofer' || !conversation.participant_id) {
             setActiveRemito(null);
@@ -169,7 +207,10 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
             setRemitosList(list || []);
 
             let active = null;
-            if (conversation.remito_actual_id) {
+            if (queryRemitoId) {
+                active = list?.find((r: any) => String(r.id) === String(queryRemitoId));
+            }
+            if (!active && conversation.remito_actual_id) {
                 active = list?.find((r: any) => r.id === conversation.remito_actual_id);
             }
             if (!active && list && list.length > 0) {
@@ -183,7 +224,7 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
         } finally {
             setLoadingRemito(false);
         }
-    }, [conversation.participant_role, conversation.participant_id, conversation.remito_actual_id, selectedRemitoId]);
+    }, [conversation.participant_role, conversation.participant_id, conversation.remito_actual_id, selectedRemitoId, queryRemitoId]);
 
     useEffect(() => {
         fetchLugares();
@@ -230,9 +271,8 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
             }
         } finally {
             setLoading(false);
-            scrollToBottom();
         }
-    }, [conversation.id, scrollToBottom]);
+    }, [conversation.id]);
 
     useEffect(() => {
         setLoading(true);
@@ -267,8 +307,17 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
     }, [conversation.id, conversation.estado_atencion, fetchMessages]);
 
     useEffect(() => {
-        scrollToBottom();
-    }, [messages, scrollToBottom]);
+        if (loading || messages.length === 0) return;
+
+        if (!initialScrollDone.current) {
+            initialScrollDone.current = true;
+            if (queryRemitoId) {
+                scrollToRemito(Number(queryRemitoId));
+            } else {
+                scrollToBottom();
+            }
+        }
+    }, [loading, messages, queryRemitoId, scrollToRemito, scrollToBottom]);
 
     useEffect(() => {
         return () => {
@@ -672,26 +721,52 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                                     const prevMsg = index > 0 ? filteredMessages[index - 1] : null;
                                     
                                     // Visual separator when date changes
-                                    const showDateSeparator = !prevMsg || 
-                                        differenceInCalendarDays(startOfDay(new Date(msg.created_at)), startOfDay(new Date(prevMsg.created_at))) > 0;
+                                    const showDateSeparator = !prevMsg || (() => {
+                                        try {
+                                            const d1 = new Date(msg.created_at);
+                                            const d2 = new Date(prevMsg.created_at);
+                                            if (isNaN(d1.getTime()) || isNaN(d2.getTime())) return false;
+                                            return differenceInCalendarDays(startOfDay(d1), startOfDay(d2)) > 0;
+                                        } catch {
+                                            return false;
+                                        }
+                                    })();
                                     
                                     // Visual divider when remito_id changes
-                                    const showRemitoDivider = !!(prevMsg && prevMsg.remito_id !== msg.remito_id && (prevMsg.remito_id || msg.remito_id));
+                                    const isRemitoStart = !!msg.remito_id && (!prevMsg || prevMsg.remito_id !== msg.remito_id);
+                                    const showRemitoDivider = isRemitoStart || !!(prevMsg && prevMsg.remito_id && !msg.remito_id);
                                     
                                     const showTail = index === 0 || showDateSeparator || showRemitoDivider || filteredMessages[index - 1].sender_role !== msg.sender_role;
                                     const dateLabel = getMessageDateLabel(msg.created_at);
                                     
                                     const currentRemitoRef = msg.remito_id ? remitosList.find(r => r.id === msg.remito_id)?.remito_ref_externa : null;
+                                    const isHighlighted = msg.remito_id ? (highlightedRemitoId === msg.remito_id) : false;
+                                    const isCurrentSelected = msg.remito_id ? (selectedRemitoId === msg.remito_id) : false;
 
                                     return (
-                                        <div key={msg.id} data-date={dateLabel} className="w-full flex flex-col items-stretch message-item">
+                                        <div 
+                                            key={msg.id} 
+                                            id={`msg-${msg.id}`}
+                                            data-date={dateLabel} 
+                                            data-remito-id={msg.remito_id || ''}
+                                            className="w-full flex flex-col items-stretch message-item"
+                                        >
                                             {showRemitoDivider && (
-                                                <div className="flex justify-center my-4 select-none animate-fade-in">
-                                                    <div className="bg-emerald-50 text-emerald-800 text-[10px] sm:text-xs px-4 py-1.5 rounded-full shadow-xs border border-emerald-200/50 font-medium tracking-wide flex items-center gap-1.5">
-                                                        <Truck className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+                                                <div 
+                                                    id={msg.remito_id && isRemitoStart ? `remito-start-${msg.remito_id}` : undefined}
+                                                    className="flex justify-center my-4 select-none animate-fade-in"
+                                                >
+                                                    <div className={`text-[10px] sm:text-xs px-4 py-1.5 rounded-full shadow-xs border font-medium tracking-wide flex items-center gap-1.5 transition-all duration-500 ${
+                                                        isHighlighted
+                                                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg ring-4 ring-emerald-300 ring-opacity-80 scale-105 font-bold'
+                                                            : isCurrentSelected
+                                                                ? 'bg-emerald-100 text-emerald-900 border-emerald-300 shadow-xs font-semibold'
+                                                                : 'bg-emerald-50 text-emerald-800 border-emerald-200/50'
+                                                    }`}>
+                                                        <Truck className={`w-3.5 h-3.5 shrink-0 ${isHighlighted ? 'text-white' : 'text-emerald-600'}`} />
                                                         <span>
                                                             {msg.remito_id 
-                                                                ? `Seguimiento iniciado · Remito #${currentRemitoRef}` 
+                                                                ? `Seguimiento iniciado · Remito #${currentRemitoRef || msg.remito_id}` 
                                                                 : 'Conversación fuera de seguimiento de remito'}
                                                         </span>
                                                     </div>
@@ -744,7 +819,20 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
 
                         {/* Remito Dropdown Selector */}
                         <div className="p-4 border-b border-gray-100 space-y-2">
-                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Remito Asociado</label>
+                            <div className="flex items-center justify-between">
+                                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Remito Asociado</label>
+                                {selectedRemitoId && (
+                                    <button
+                                        type="button"
+                                        onClick={() => scrollToRemito(selectedRemitoId)}
+                                        className="text-[10px] font-semibold text-emerald-600 hover:text-emerald-700 hover:underline flex items-center gap-1 cursor-pointer transition-colors"
+                                        title="Posicionar chat al inicio de este remito"
+                                    >
+                                        <LocateFixed className="w-3 h-3" />
+                                        <span>Ver en chat</span>
+                                    </button>
+                                )}
+                            </div>
                             {loadingRemito ? (
                                 <div className="text-xs text-gray-500 animate-pulse py-1 flex items-center gap-1.5">
                                     <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
@@ -755,28 +843,57 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                             ) : (
                                 <select
                                     value={selectedRemitoId || ''}
-                                    onChange={(e) => setSelectedRemitoId(Number(e.target.value))}
+                                    onChange={(e) => {
+                                        const id = Number(e.target.value);
+                                        setSelectedRemitoId(id);
+                                        scrollToRemito(id);
+                                    }}
                                     className="w-full text-sm border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-gray-700"
                                 >
-                                    {remitosList.map(r => (
-                                        <option key={r.id} value={r.id}>
-                                            #{r.remito_ref_externa} ({r.created_at ? format(new Date(r.created_at), 'dd/MM/yy') : ''})
-                                        </option>
-                                    ))}
+                                    {remitosList.map(r => {
+                                        let dateStr = '';
+                                        if (r.created_at) {
+                                            try {
+                                                const d = new Date(r.created_at);
+                                                if (!isNaN(d.getTime())) {
+                                                    dateStr = format(d, 'dd/MM/yy');
+                                                }
+                                            } catch {
+                                                dateStr = '';
+                                            }
+                                        }
+                                        return (
+                                            <option key={r.id} value={r.id}>
+                                                #{r.remito_ref_externa} {dateStr ? `(${dateStr})` : ''}
+                                            </option>
+                                        );
+                                    })}
                                 </select>
                             )}
 
                             {/* Filter Checkbox */}
                             {selectedRemitoId && (
-                                <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
-                                    <input
-                                        type="checkbox"
-                                        checked={!showAllMessages}
-                                        onChange={(e) => setShowAllMessages(!e.target.checked)}
-                                        className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
-                                    />
-                                    <span className="text-xs font-semibold text-gray-600">Filtrar chat por este remito</span>
-                                </label>
+                                <div className="space-y-2 pt-1">
+                                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={!showAllMessages}
+                                            onChange={(e) => setShowAllMessages(!e.target.checked)}
+                                            className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                                        />
+                                        <span className="text-xs font-semibold text-gray-600">Filtrar chat solo por este remito</span>
+                                    </label>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => scrollToRemito(selectedRemitoId)}
+                                        className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-3 py-1.5 rounded-lg transition-all w-full justify-center cursor-pointer shadow-2xs hover:shadow-xs active:scale-[0.98]"
+                                        title="Posicionar chat al inicio de la conversación de este remito"
+                                    >
+                                        <LocateFixed className="w-3.5 h-3.5 text-emerald-600" />
+                                        <span>Ir al inicio en el chat</span>
+                                    </button>
+                                </div>
                             )}
                         </div>
 
@@ -794,7 +911,14 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                                         <span>
                                             <strong>Carga estimada:</strong>{' '}
                                             {selectedRemito.fecha_hora_estimada_carga
-                                                ? format(new Date(selectedRemito.fecha_hora_estimada_carga), 'dd/MM/yyyy HH:mm')
+                                                ? (() => {
+                                                    try {
+                                                        const d = new Date(selectedRemito.fecha_hora_estimada_carga);
+                                                        return isNaN(d.getTime()) ? 'No informada' : format(d, 'dd/MM/yyyy HH:mm');
+                                                    } catch {
+                                                        return 'No informada';
+                                                    }
+                                                })()
                                                 : 'No informada'}
                                         </span>
                                     </div>
@@ -806,7 +930,7 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                                             {lugaresPesaje.find(l => l.id === selectedRemito.tara_pesaje_lugar_id)?.nombre || 'No asignada'}
                                             {taraTask?.valor_reportado_chofer && taraTask.estado === 'REPORTADO_CHOFER' && (
                                                 <span className="ml-1 text-[8px] font-bold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 animate-pulse">
-                                                    Chofer: {taraTask.valor_reportado_chofer} (Por aprobar)
+                                                    Chofer: {String(taraTask.valor_reportado_chofer)} (Por aprobar)
                                                 </span>
                                             )}
                                         </span>
@@ -823,7 +947,7 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                                                 }
                                                 {brutoTask?.valor_reportado_chofer && brutoTask.estado === 'REPORTADO_CHOFER' && (
                                                     <span className="ml-1 text-[8px] font-bold px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 animate-pulse">
-                                                        Chofer: {brutoTask.valor_reportado_chofer} (Por aprobar)
+                                                        Chofer: {String(brutoTask.valor_reportado_chofer)} (Por aprobar)
                                                     </span>
                                                 )}
                                             </span>
@@ -865,9 +989,9 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                                                                 <span className="text-[8px] text-gray-400 bg-gray-100 px-1 py-0.2 rounded border border-gray-200">Reclama Foto</span>
                                                             )}
                                                         </div>
-                                                        {item.valor_reportado_chofer && (
+                                                        {item.valor_reportado_chofer !== null && item.valor_reportado_chofer !== undefined && item.valor_reportado_chofer !== '' && (
                                                             <div className="mt-1">
-                                                                {item.valor_reportado_chofer.startsWith('http') ? (
+                                                                {typeof item.valor_reportado_chofer === 'string' && item.valor_reportado_chofer.startsWith('http') ? (
                                                                     <a 
                                                                         href={item.valor_reportado_chofer} 
                                                                         target="_blank" 
@@ -876,9 +1000,13 @@ export function ChatWindow({ conversation, onBack }: ChatWindowProps) {
                                                                     >
                                                                         📷 Ver Foto Adjunta
                                                                     </a>
+                                                                ) : typeof item.valor_reportado_chofer === 'boolean' ? (
+                                                                    <span className="text-[9px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-100 font-medium inline-block">
+                                                                        ✓ Confirmado
+                                                                    </span>
                                                                 ) : (
                                                                     <span className="text-[9px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-100 font-medium inline-block">
-                                                                        Valor: <strong>{item.valor_reportado_chofer}</strong>
+                                                                        Valor: <strong>{String(item.valor_reportado_chofer)}</strong>
                                                                     </span>
                                                                 )}
                                                             </div>
