@@ -119,10 +119,10 @@ export function TransportistasManager() {
     try {
       setSaving(true);
       const payload = {
-        razon_social: formData.razon_social,
-        cuit: formData.cuit,
-        telefono_general: formData.telefono_general,
-        email_general: formData.email_general,
+        razon_social: formData.razon_social.trim(),
+        cuit: formData.cuit.trim() || null,
+        telefono_general: formData.telefono_general.trim() || null,
+        email_general: formData.email_general.trim() || null,
         contacto_principal_id: formData.contacto_principal_id || null,
         estado: 'ACTIVO'
       };
@@ -143,9 +143,9 @@ export function TransportistasManager() {
       showToast('success', 'Transportista guardado exitosamente.');
       handleCloseModal();
       fetchData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving data:', err);
-      showToast('error', 'Error al guardar el transportista.');
+      showToast('error', err?.message || 'Error al guardar el transportista.');
     } finally {
       setSaving(false);
     }

@@ -33,13 +33,15 @@ import {
   CheckCircle2,
   Lock,
   Star,
-  Link2
+  Link2,
+  Camera
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { WhatsAppModal } from '../components/WhatsAppModal';
 import { DateTimePicker } from '../components/DateTimePicker';
 import { SeccionPagoAnticipado } from '../components/SeccionPagoAnticipado';
 import { ModalAsignacionRemito } from '../components/ModalAsignacionRemito';
+import { ModalGaleriaDocumentacion } from '../components/ModalGaleriaDocumentacion';
 
 interface RemitoState {
   id: number | null;
@@ -228,6 +230,8 @@ export function RemitoEdit() {
   const [isSavingOverride, setIsSavingOverride] = useState(false);
   const [showCalificacionModal, setShowCalificacionModal] = useState(false);
   const [showAsignarModal, setShowAsignarModal] = useState(false);
+  const [showGaleriaModal, setShowGaleriaModal] = useState(false);
+  const [mediaCount, setMediaCount] = useState<number | null>(null);
 
   const [overrideForm, setOverrideForm] = useState({
     espera_respuesta_minutos: '' as string | number,
@@ -497,6 +501,27 @@ export function RemitoEdit() {
           enviar_recordatorios_carga: policyRes.data.enviar_recordatorios_carga,
           escalar_sin_respuesta: policyRes.data.escalar_sin_respuesta,
         }));
+      }
+
+      // 5. Cargar conteo de documentación gráfica (evidencias del chofer)
+      try {
+        const { data: mediaData } = await supabase
+          .from('conversation_messages')
+          .select('media_urls')
+          .eq('remito_id', Number(id))
+          .not('media_urls', 'is', null);
+
+        let totalMedia = 0;
+        if (mediaData) {
+          mediaData.forEach((m: any) => {
+            if (Array.isArray(m.media_urls)) {
+              totalMedia += m.media_urls.filter((u: any) => u && typeof u === 'string' && u.trim().length > 0).length;
+            }
+          });
+        }
+        setMediaCount(totalMedia);
+      } catch (mediaErr) {
+        console.warn('Error counting remito media:', mediaErr);
       }
 
     } catch (err) {
@@ -1373,6 +1398,27 @@ export function RemitoEdit() {
                 <X className="w-5 h-5" />
               </button>
               <h1 className="text-2xl font-bold text-gray-800">Remito #{remito.ref}</h1>
+
+              {/* Botón de Documentación Gráfica / Evidencias */}
+              <button
+                type="button"
+                onClick={() => setShowGaleriaModal(true)}
+                className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-full text-xs shadow-xs cursor-pointer transition text-indigo-700 font-semibold"
+                title="Ver fotos y videos enviados por el chofer para este remito"
+              >
+                <Camera className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Fotos / Evidencias</span>
+                {mediaCount !== null && (
+                  <span className={cn(
+                    "px-1.5 py-0.2 rounded-full text-[10px] font-bold",
+                    mediaCount > 0 
+                      ? "bg-indigo-600 text-white" 
+                      : "bg-gray-200 text-gray-600"
+                  )}>
+                    {mediaCount}
+                  </span>
+                )}
+              </button>
               {remito.calificacion_estrellas && (
                 <button 
                   type="button"
@@ -2418,14 +2464,25 @@ export function RemitoEdit() {
               <h2 className="text-lg font-bold text-gray-800">Protocolo de Control de la Misión</h2>
               <p className="text-xs text-gray-500">Gestión de tareas, pesajes y auditoría operativa por cada hito de la hoja de ruta.</p>
             </div>
-            <button 
-              type="button" 
-              onClick={() => setShowWpModal(true)}
-              className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors shadow-sm cursor-pointer animate-none"
-            >
-              <MessageSquare className="w-4 h-4" />
-              Enviar por WhatsApp
-            </button>
+            <div className="flex items-center gap-2">
+              <button 
+                type="button" 
+                onClick={() => setShowGaleriaModal(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold hover:bg-indigo-100 transition-colors shadow-sm cursor-pointer"
+                title="Ver fotos y videos de comprobantes recibidos del chofer"
+              >
+                <Camera className="w-4 h-4 text-indigo-600" />
+                <span>Ver Evidencias {mediaCount !== null && `(${mediaCount})`}</span>
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setShowWpModal(true)}
+                className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors shadow-sm cursor-pointer animate-none"
+              >
+                <MessageSquare className="w-4 h-4" />
+                Enviar por WhatsApp
+              </button>
+            </div>
           </div>
           
           {/* Observaciones Generales en la parte superior del protocolo de control */}
@@ -3669,6 +3726,16 @@ export function RemitoEdit() {
           await fetchContext();
           setShowSuccess(false);
         }}
+      />
+
+      {/* Modal de Galería de Documentación Gráfica / Evidencias */}
+      <ModalGaleriaDocumentacion
+        isOpen={showGaleriaModal}
+        onClose={() => setShowGaleriaModal(false)}
+        remitoId={Number(id)}
+        remitoRef={remito.ref}
+        choferNombre={catalogs.choferes.find((c: any) => c.id === remito.chofer_id)?.nombre_completo}
+        onCountChange={(count) => setMediaCount(count)}
       />
 
       </div>
