@@ -38,6 +38,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
         { name: 'Depósitos', path: '/depositos', disabled: false },
         { name: 'Personal AC', path: '/personal', disabled: false },
         { name: 'Plantillas Documentales', path: '/plantillas', disabled: false },
+        { name: 'Plantillas Disclaimer', path: '/disclaimers', disabled: false },
         { name: 'Catálogo Tareas', path: '/catalogo-tareas', disabled: false },
         { name: 'Estados de Misión', path: '/mision-estados', disabled: false },
         { name: 'Tipos de Misión', path: '/mision-tipos', disabled: false },

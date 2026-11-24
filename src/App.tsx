@@ -17,6 +17,7 @@ import { ArticulosManager } from './pages/ArticulosManager';
 import { DepositosManager } from './pages/DepositosManager';
 import PersonalManager from './components/PersonalManager';
 import { PlantillasManager } from './pages/PlantillasManager';
+import { DisclaimersManager } from './pages/DisclaimersManager';
 import { CatalogoTareasManager } from './pages/CatalogoTareasManager';
 import { LogisticaPoliticasManager } from './pages/LogisticaPoliticasManager';
 import { InspeccionesKanbanPage } from './pages/Inspecciones/InspeccionesKanbanPage';
@@ -77,6 +78,7 @@ function App() {
             <Route path="/articulos" element={<ArticulosManager />} />
             <Route path="/depositos" element={<DepositosManager />} />
             <Route path="/plantillas" element={<PlantillasManager />} />
+            <Route path="/disclaimers" element={<DisclaimersManager />} />
             <Route path="/catalogo-tareas" element={<CatalogoTareasManager />} />
             <Route path="/mision-estados" element={<MisionEstadosManager />} />
             <Route path="/mision-tipos" element={<MisionTiposManager />} />

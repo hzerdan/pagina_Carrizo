@@ -42,6 +42,7 @@ import { DateTimePicker } from '../components/DateTimePicker';
 import { SeccionPagoAnticipado } from '../components/SeccionPagoAnticipado';
 import { ModalAsignacionRemito } from '../components/ModalAsignacionRemito';
 import { ModalGaleriaDocumentacion } from '../components/ModalGaleriaDocumentacion';
+import { SeccionDisclaimerCliente } from '../components/SeccionDisclaimerCliente';
 
 interface RemitoState {
   id: number | null;
@@ -87,6 +88,12 @@ interface RemitoState {
   calificacion_desglose?: any | null;
   calificacion_updated_at?: string | null;
   tiene_asignacion?: boolean;
+  disclaimer_template_id?: number | null;
+  disclaimer_emails_destino?: string[] | null;
+  disclaimer_cc_personal_ids?: number[] | null;
+  disclaimer_fecha_programada?: string | null;
+  disclaimer_enviado_at?: string | null;
+  disclaimer_enviado_por?: string | null;
 }
 
 export interface LogisticaPolitica {
@@ -233,6 +240,14 @@ export function RemitoEdit() {
   const [showGaleriaModal, setShowGaleriaModal] = useState(false);
   const [mediaCount, setMediaCount] = useState<number | null>(null);
 
+  const [clienteData, setClienteData] = useState<{
+    razon_social: string;
+    email_general?: string;
+    email_secundario_1?: string;
+    email_secundario_2?: string;
+  } | null>(null);
+  const [personalAcList, setPersonalAcList] = useState<any[]>([]);
+
   const [overrideForm, setOverrideForm] = useState({
     espera_respuesta_minutos: '' as string | number,
     umbral_carga_larga_minutos: '' as string | number,
@@ -331,7 +346,23 @@ export function RemitoEdit() {
         calificacion_desglose: ctx.remito?.calificacion_desglose || null,
         calificacion_updated_at: ctx.remito?.calificacion_updated_at || null,
         tiene_asignacion: (ctx.pedidos && ctx.pedidos.length > 0) || ctx.remito?.estado_asignacion === 'ASIGNADO',
+        disclaimer_template_id: ctx.remito?.disclaimer_template_id || null,
+        disclaimer_emails_destino: ctx.remito?.disclaimer_emails_destino || null,
+        disclaimer_cc_personal_ids: ctx.remito?.disclaimer_cc_personal_ids || null,
+        disclaimer_fecha_programada: ctx.remito?.disclaimer_fecha_programada || null,
+        disclaimer_enviado_at: ctx.remito?.disclaimer_enviado_at || null,
+        disclaimer_enviado_por: ctx.remito?.disclaimer_enviado_por || null,
       });
+
+      if (ctx.pedidos && ctx.pedidos.length > 0) {
+        setClienteData({
+          razon_social: ctx.pedidos[0].cliente || '',
+          email_general: ctx.pedidos[0].cliente_email_general || '',
+          email_secundario_1: ctx.pedidos[0].cliente_email_secundario_1 || '',
+          email_secundario_2: ctx.pedidos[0].cliente_email_secundario_2 || '',
+        });
+      }
+      setPersonalAcList(ctx.catalogos?.personal_ac || []);
 
       const { data: mtData } = await supabase.from('mision_tipos').select('*').eq('estado', 'ACTIVO');
       if (mtData) setMisionTipos(mtData);
@@ -2878,6 +2909,26 @@ export function RemitoEdit() {
               })}
             </div>
           </section>
+
+        {/* Sección: Aviso y Disclaimer de Recepción al Cliente */}
+        <SeccionDisclaimerCliente
+          remitoId={Number(id)}
+          remitoRef={remito.ref}
+          choferNombre={resolvedChoferNombre || ''}
+          camionPatente={searchCamion || ''}
+          depositoDescargaNombre={depositos.find(d => d.id === remito.deposito_descarga_id)?.nombre || 'Depósito de Descarga'}
+          cliente={clienteData}
+          personalAcList={personalAcList}
+          initialDisclaimerData={{
+            disclaimer_template_id: remito.disclaimer_template_id,
+            disclaimer_emails_destino: remito.disclaimer_emails_destino,
+            disclaimer_cc_personal_ids: remito.disclaimer_cc_personal_ids,
+            disclaimer_fecha_programada: remito.disclaimer_fecha_programada,
+            disclaimer_enviado_at: remito.disclaimer_enviado_at,
+            disclaimer_enviado_por: remito.disclaimer_enviado_por,
+          }}
+          onUpdateSuccess={fetchContext}
+        />
 
         {/* Sección D: Configuración de Seguimiento */}
         <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-6">

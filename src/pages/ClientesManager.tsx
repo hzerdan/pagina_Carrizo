@@ -9,6 +9,8 @@ export interface Cliente {
   cuit: string;
   telefono_general: string;
   email_general: string;
+  email_secundario_1?: string | null;
+  email_secundario_2?: string | null;
   contacto_principal_id: string | null;
   estado: string;
 }
@@ -19,6 +21,8 @@ interface FormData {
   cuit: string;
   telefono_general: string;
   email_general: string;
+  email_secundario_1: string;
+  email_secundario_2: string;
   contacto_principal_id: string;
 }
 
@@ -27,6 +31,8 @@ const initialFormData: FormData = {
   cuit: '',
   telefono_general: '',
   email_general: '',
+  email_secundario_1: '',
+  email_secundario_2: '',
   contacto_principal_id: '',
 };
 
@@ -98,6 +104,8 @@ export function ClientesManager() {
         cuit: cliente.cuit || '',
         telefono_general: cliente.telefono_general || '',
         email_general: cliente.email_general || '',
+        email_secundario_1: cliente.email_secundario_1 || '',
+        email_secundario_2: cliente.email_secundario_2 || '',
         contacto_principal_id: cliente.contacto_principal_id || '',
       });
       await fetchContactosParaSelect(cliente.id);
@@ -123,6 +131,8 @@ export function ClientesManager() {
         cuit: formData.cuit,
         telefono_general: formData.telefono_general,
         email_general: formData.email_general,
+        email_secundario_1: formData.email_secundario_1.trim() || null,
+        email_secundario_2: formData.email_secundario_2.trim() || null,
         contacto_principal_id: formData.contacto_principal_id || null,
         estado: 'ACTIVO'
       };
@@ -227,7 +237,23 @@ export function ClientesManager() {
                   <tr key={c.id} className="border-b hover:bg-gray-50">
                     <td className="p-4 font-medium text-gray-900">{c.razon_social}</td>
                     <td className="p-4 text-gray-600">{c.cuit || '-'}</td>
-                    <td className="p-4 text-gray-600">{c.email_general || '-'}</td>
+                    <td className="p-4 text-gray-600">
+                      <div>{c.email_general || '-'}</div>
+                      {(c.email_secundario_1 || c.email_secundario_2) && (
+                        <div className="flex gap-1 mt-1">
+                          {c.email_secundario_1 && (
+                            <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200" title={c.email_secundario_1}>
+                              E2: {c.email_secundario_1}
+                            </span>
+                          )}
+                          {c.email_secundario_2 && (
+                            <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-200" title={c.email_secundario_2}>
+                              E3: {c.email_secundario_2}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
                     <td className="p-4 text-gray-600">{c.telefono_general || '-'}</td>
                     <td className="p-4 text-right">
                       <div className="flex justify-end gap-2">
@@ -325,12 +351,13 @@ export function ClientesManager() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Email General</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email Principal (General)</label>
                       <input
                         type="email"
                         className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         value={formData.email_general}
                         onChange={(e) => setFormData({...formData, email_general: e.target.value})}
+                        placeholder="ejemplo@cliente.com"
                       />
                     </div>
                     <div>
@@ -341,6 +368,34 @@ export function ClientesManager() {
                         value={formData.telefono_general}
                         onChange={(e) => setFormData({...formData, telefono_general: e.target.value})}
                       />
+                    </div>
+                  </div>
+
+                  <div className="p-3 bg-blue-50/60 rounded-lg border border-blue-100 space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-blue-800">
+                      Emails Adicionales para Avisos y Disclaimers de Entrega
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Email Secundario 1</label>
+                        <input
+                          type="email"
+                          className="w-full px-3 py-2 text-sm bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={formData.email_secundario_1}
+                          onChange={(e) => setFormData({...formData, email_secundario_1: e.target.value})}
+                          placeholder="recepcion@cliente.com"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Email Secundario 2</label>
+                        <input
+                          type="email"
+                          className="w-full px-3 py-2 text-sm bg-white border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={formData.email_secundario_2}
+                          onChange={(e) => setFormData({...formData, email_secundario_2: e.target.value})}
+                          placeholder="planta_descarga@cliente.com"
+                        />
+                      </div>
                     </div>
                   </div>
                   
