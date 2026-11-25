@@ -20,6 +20,8 @@ export interface RemitoActivo {
   mision_estado?: string;
   created_at?: string;
   cantidad_total?: number | null;
+  es_flete_corto?: boolean;
+  parent_remito_id?: number | null;
   instancias_vinculadas: PedidoVinculado[];
 }
 

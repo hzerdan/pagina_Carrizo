@@ -426,6 +426,17 @@ export function RemitosList() {
                       <span className="inline-block px-2.5 py-1 text-xs font-semibold bg-brand-100 text-brand-700 rounded-full">
                         #{remito.nro_remito}
                       </span>
+                      {remito.es_flete_corto && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-full" title="Flete Corto de Acopio">
+                          <Link2 className="w-3 h-3 text-amber-600" />
+                          Corto
+                        </span>
+                      )}
+                      {remito.parent_remito_id && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded" title={`Vinculado a Remito Padre #${remito.parent_remito_id}`}>
+                          Padre #{remito.parent_remito_id}
+                        </span>
+                      )}
                       <button
                         onClick={(e) => handleOpenRemitoDoc(e, remito.id)}
                         disabled={loadingDocs.has(`remito-${remito.id}`)}

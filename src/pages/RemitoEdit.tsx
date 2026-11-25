@@ -60,6 +60,7 @@ interface RemitoState {
   fecha_hora_estimada_carga: string | null;
   debe_pasar_por_reembolse: boolean;
   es_flete_corto: boolean;
+  parent_remito_id?: number | null;
   cantidad_total: number | null;
   fecha_probable_entrega: string | null;
   mi_sobre_proveedor_preparado: boolean;
@@ -164,6 +165,7 @@ export function RemitoEdit() {
     fecha_hora_estimada_carga: null,
     debe_pasar_por_reembolse: false,
     es_flete_corto: false,
+    parent_remito_id: null,
     cantidad_total: null,
     fecha_probable_entrega: null,
     mi_sobre_proveedor_preparado: false,
@@ -239,6 +241,10 @@ export function RemitoEdit() {
   const [showAsignarModal, setShowAsignarModal] = useState(false);
   const [showGaleriaModal, setShowGaleriaModal] = useState(false);
   const [mediaCount, setMediaCount] = useState<number | null>(null);
+
+  // Estados para vinculación flete corto y remito troncal/padre
+  const [parentRemitosList, setParentRemitosList] = useState<any[]>([]);
+  const [childRemitos, setChildRemitos] = useState<any[]>([]);
 
   const [clienteData, setClienteData] = useState<{
     razon_social: string;
@@ -318,6 +324,7 @@ export function RemitoEdit() {
         fecha_hora_estimada_carga: ctx.remito?.fecha_hora_estimada_carga || null,
         debe_pasar_por_reembolse: ctx.remito?.debe_pasar_por_reembolse || false,
         es_flete_corto: ctx.remito?.es_flete_corto || false,
+        parent_remito_id: ctx.remito?.parent_remito_id || null,
         cantidad_total: ctx.remito?.cantidad_total !== undefined ? ctx.remito?.cantidad_total : null,
         fecha_probable_entrega: ctx.remito?.fecha_probable_entrega || null,
         mi_sobre_proveedor_preparado: ctx.remito?.mi_sobre_proveedor_preparado || false,
@@ -363,6 +370,26 @@ export function RemitoEdit() {
         });
       }
       setPersonalAcList(ctx.catalogos?.personal_ac || []);
+
+      // Cargar remitos hijos si este remito es padre / troncal
+      const { data: childrenData } = await supabase
+        .from('remitos')
+        .select('id, remito_ref_externa, cantidad_total, deposito_carga_id, deposito_descarga_id, chofer_id, estado_asignacion')
+        .eq('parent_remito_id', Number(id));
+      if (childrenData) {
+        setChildRemitos(childrenData);
+      }
+
+      // Cargar remitos candidatos a padre (ordenados descendente)
+      const { data: parentsData } = await supabase
+        .from('remitos')
+        .select('id, remito_ref_externa, cantidad_total, deposito_carga_id, deposito_descarga_id, chofer_id, camion_id, acoplado_id, metadata_extraida')
+        .neq('id', Number(id))
+        .order('id', { ascending: false })
+        .limit(50);
+      if (parentsData) {
+        setParentRemitosList(parentsData);
+      }
 
       const { data: mtData } = await supabase.from('mision_tipos').select('*').eq('estado', 'ACTIVO');
       if (mtData) setMisionTipos(mtData);
@@ -666,16 +693,37 @@ export function RemitoEdit() {
   }, [brutoLugarObj, pesaje.bruto.momento, remito.deposito_carga_id, remito.deposito_descarga_id, depositos]);
 
   const instruccionesData = useMemo(() => {
-    const pesajeText = `Pesaje:\n1. Hacer Tara (${pesaje.tara.momento}) en ${resolvedTaraStr}.\n2. Pesar Bruto (${pesaje.bruto.momento}) en ${resolvedBrutoStr}.`;
+    const isParentWithChildren = childRemitos.length > 0;
+    const isFleteCorto = remito.es_flete_corto;
+
+    let pesajeLabelTara = `Hacer Tara (${pesaje.tara.momento})`;
+    if (isParentWithChildren) {
+      pesajeLabelTara = `Pesaje de Entrada (con carga de Remito Corto) (${pesaje.tara.momento})`;
+    } else if (isFleteCorto) {
+      pesajeLabelTara = `Hacer Tara Inicial (${pesaje.tara.momento})`;
+    }
+
+    let pesajeLabelBruto = `Pesar Bruto (${pesaje.bruto.momento})`;
+    if (isParentWithChildren) {
+      pesajeLabelBruto = `Pesar Bruto Final (${pesaje.bruto.momento})`;
+    }
+
+    const pesajeText = `Pesaje:\n1. ${pesajeLabelTara} en ${resolvedTaraStr}.\n2. ${pesajeLabelBruto} en ${resolvedBrutoStr}.`;
     
     const driverTasks = displayedChecklist.filter(t => t.asignada_a_chofer);
-    const checklistText = driverTasks.map(t => `   [${t.done ? 'X' : ' '}] ${t.tarea}`).join('\n');
+    const checklistText = driverTasks.map(t => {
+      let taskName = t.tarea;
+      if (isParentWithChildren && t.tipo_tarea === 'PESAJE_TARA') {
+        taskName = taskName.replace(/Hacer Tara/i, 'Pesaje de Entrada (con carga previa)');
+      }
+      return `   [${t.done ? 'X' : ' '}] ${taskName}`;
+    }).join('\n');
     const cargaText = driverTasks.length > 0 ? `Proceso de carga:\n${checklistText}` : '';
 
     const savedText = cargaText ? `${pesajeText}\n\n${cargaText}` : pesajeText;
 
     return { pesajeText, cargaText, savedText, hasInspector: !!remito.inspector_id };
-  }, [pesaje.tara.momento, resolvedTaraStr, pesaje.bruto.momento, resolvedBrutoStr, displayedChecklist, remito.inspector_id]);
+  }, [pesaje.tara.momento, resolvedTaraStr, pesaje.bruto.momento, resolvedBrutoStr, displayedChecklist, remito.inspector_id, childRemitos.length, remito.es_flete_corto]);
 
   const instruccionesGeneradas = instruccionesData.savedText;
 
@@ -831,6 +879,28 @@ export function RemitoEdit() {
     } catch (err: any) {
       console.error(err);
       alert("Error al crear el depósito: " + err.message);
+    }
+  };
+
+  const handleSelectParentRemito = (pId: number | null) => {
+    if (!pId) {
+      setRemito(prev => ({ ...prev, parent_remito_id: null }));
+      return;
+    }
+    const foundParent = parentRemitosList.find(p => p.id === pId);
+    if (foundParent) {
+      setRemito(prev => ({
+        ...prev,
+        parent_remito_id: pId,
+        // Auto-completar lugar de descarga del flete corto con el lugar de carga del remito padre
+        deposito_descarga_id: foundParent.deposito_carga_id || prev.deposito_descarga_id,
+        // Sugerir chofer y camión del padre si el remito corto no los tiene asignados aún
+        chofer_id: prev.chofer_id || foundParent.chofer_id || null,
+        camion_id: prev.camion_id || foundParent.camion_id || null,
+        acoplado_id: prev.acoplado_id || foundParent.acoplado_id || null,
+      }));
+    } else {
+      setRemito(prev => ({ ...prev, parent_remito_id: pId }));
     }
   };
 
@@ -1169,6 +1239,7 @@ export function RemitoEdit() {
         fecha_hora_estimada_carga: remito.fecha_hora_estimada_carga,
         debe_pasar_por_reembolse: remito.debe_pasar_por_reembolse,
         es_flete_corto: remito.es_flete_corto,
+        parent_remito_id: remito.parent_remito_id ? Number(remito.parent_remito_id) : null,
         fecha_probable_entrega: remito.fecha_probable_entrega,
         mi_sobre_proveedor_preparado: remito.mi_sobre_proveedor_preparado,
         mi_sobre_cliente_preparado: remito.mi_sobre_cliente_preparado,
@@ -2219,13 +2290,67 @@ export function RemitoEdit() {
                 <button 
                   type="button"
                   id="toggle-flete-corto"
-                  onClick={() => setRemito({...remito, es_flete_corto: !remito.es_flete_corto})}
+                  onClick={() => {
+                    const nextVal = !remito.es_flete_corto;
+                    setRemito(prev => ({
+                      ...prev,
+                      es_flete_corto: nextVal,
+                      parent_remito_id: nextVal ? prev.parent_remito_id : null
+                    }));
+                  }}
                   className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${remito.es_flete_corto ? 'bg-emerald-500' : 'bg-gray-200'}`}
                 >
                   <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${remito.es_flete_corto ? 'translate-x-5' : 'translate-x-0'}`} />
                 </button>
                 <span className="text-sm font-bold text-gray-700">¿Es flete corto?</span>
               </div>
+
+              {/* Selector de Remito Troncal / Padre si es flete corto */}
+              {remito.es_flete_corto && (
+                <div className="mt-1 p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+                  <label className="text-xs font-bold text-blue-900 flex items-center gap-2">
+                    <Link2 className="w-4 h-4 text-blue-600" />
+                    Vincular a Remito Troncal / Padre
+                  </label>
+                  <select
+                    id="select-parent-remito"
+                    value={remito.parent_remito_id || ''}
+                    onChange={e => handleSelectParentRemito(e.target.value ? Number(e.target.value) : null)}
+                    className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="">-- Sin vincular a remito padre --</option>
+                    {parentRemitosList.map((pr: any) => {
+                      const depCarga = depositos.find(d => d.id === pr.deposito_carga_id)?.nombre || 'Sin depósito de carga';
+                      return (
+                        <option key={pr.id} value={pr.id}>
+                          Remito #{pr.remito_ref_externa} ({pr.cantidad_total || 0} TN - Carga: {depCarga})
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {remito.parent_remito_id && (
+                    <p className="text-xs text-blue-700">
+                      ℹ️ El <strong>Depósito de Descarga</strong> de este flete corto se auto-sincroniza con el punto de carga del remito padre.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Si es Remito Troncal (tiene hijos asociados) */}
+              {childRemitos.length > 0 && (
+                <div className="mt-1 p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-1">
+                  <div className="text-xs font-bold text-emerald-900 flex items-center gap-2">
+                    <Link2 className="w-4 h-4 text-emerald-600" />
+                    Remito Troncal / Consolidador
+                  </div>
+                  <p className="text-xs text-emerald-800">
+                    Consolida carga previa de {childRemitos.length} Flete(s) Corto(s):{' '}
+                    <span className="font-semibold">
+                      {childRemitos.map(c => `#${c.remito_ref_externa} (${c.cantidad_total || 0} TN)`).join(', ')}
+                    </span>
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Checklists de Estado 4 de Documentación */}
@@ -2303,7 +2428,13 @@ export function RemitoEdit() {
               <div className="flex items-center justify-between gap-2 mb-4">
                 <div className="flex items-center gap-2">
                   <Scale className="w-5 h-5 text-blue-500" />
-                  <h3 className="font-bold text-gray-800">Pesaje Tara (Vacío)</h3>
+                  <h3 className="font-bold text-gray-800">
+                    {childRemitos.length > 0
+                      ? 'Pesaje de Entrada (con carga de Remito Corto)'
+                      : remito.es_flete_corto
+                      ? 'Pesaje Tara Inicial (Vacío)'
+                      : 'Pesaje Tara (Vacío)'}
+                  </h3>
                 </div>
                 {taraCoLocationInfo && (
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${taraCoLocationInfo.esMismoPredio ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-blue-100 text-blue-800 border border-blue-200'}`}>
@@ -2397,7 +2528,9 @@ export function RemitoEdit() {
               <div className="flex items-center justify-between gap-2 mb-4">
                 <div className="flex items-center gap-2">
                   <Package className="w-5 h-5 text-emerald-500" />
-                  <h3 className="font-bold text-gray-800">Pesaje Bruto (Lleno)</h3>
+                  <h3 className="font-bold text-gray-800">
+                    {childRemitos.length > 0 ? 'Pesaje Bruto Final (Consolidado)' : 'Pesaje Bruto (Lleno)'}
+                  </h3>
                 </div>
                 {brutoCoLocationInfo && (
                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold ${brutoCoLocationInfo.esMismoPredio ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-200'}`}>
@@ -2487,6 +2620,95 @@ export function RemitoEdit() {
             </div>
           </div>
         </section>
+
+        {/* Trazabilidad y Pesajes Consolidados (si es Padre o Flete Corto con Padre) */}
+        {(childRemitos.length > 0 || (remito.es_flete_corto && remito.parent_remito_id)) && (
+          <section className="bg-gradient-to-r from-blue-50/70 via-indigo-50/50 to-emerald-50/70 p-6 rounded-xl shadow-sm border border-indigo-100 space-y-4">
+            <div className="flex items-center justify-between gap-3 border-b border-indigo-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Link2 className="w-5 h-5 text-indigo-600" />
+                <h2 className="text-sm font-bold uppercase tracking-wider text-indigo-900">
+                  {childRemitos.length > 0 
+                    ? 'Trazabilidad de Consolidación (Remito Troncal y Fletes Cortos)' 
+                    : 'Trazabilidad de Acopio (Flete Corto vinculado a Remito Troncal)'}
+                </h2>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                {childRemitos.length > 0 ? `Padre de ${childRemitos.length} Remito(s)` : `Hijo de Remito #${parentRemitosList.find(p => p.id === remito.parent_remito_id)?.remito_ref_externa || remito.parent_remito_id}`}
+              </span>
+            </div>
+
+            {childRemitos.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-xs text-gray-600">
+                  Este remito consolida carga en su punto de origen (<strong>{depositos.find(d => d.id === remito.deposito_carga_id)?.nombre || 'Depósito Carga'}</strong>) antes de partir hacia el destino final:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {childRemitos.map((c, idx) => {
+                    const origenCargaHijo = depositos.find(d => d.id === c.deposito_carga_id)?.nombre || 'Origen';
+                    return (
+                      <div key={c.id || idx} className="bg-white p-3 rounded-lg border border-indigo-100 shadow-xs space-y-1">
+                        <span className="text-[11px] font-bold text-indigo-600">Flete Corto #{c.remito_ref_externa}</span>
+                        <div className="text-xs text-gray-700">
+                          <strong>Carga:</strong> {c.cantidad_total || 0} TN
+                        </div>
+                        <div className="text-[11px] text-gray-500 truncate" title={`Desde: ${origenCargaHijo}`}>
+                          📍 Desde: {origenCargaHijo}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="bg-white p-3 rounded-lg border border-emerald-200 bg-emerald-50/30 shadow-xs space-y-1">
+                    <span className="text-[11px] font-bold text-emerald-700">Carga Troncal</span>
+                    <div className="text-xs text-gray-700">
+                      <strong>Total Remito:</strong> {remito.cantidad_total || 0} TN
+                    </div>
+                    <div className="text-[11px] text-emerald-800 font-semibold truncate">
+                      🏢 Carga en: {depositos.find(d => d.id === remito.deposito_carga_id)?.nombre || 'Origen'}
+                    </div>
+                  </div>
+                </div>
+                <div className="p-3 bg-white/80 rounded-lg border border-indigo-100 text-xs text-indigo-900 space-y-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <Scale className="w-4 h-4 text-indigo-600" />
+                    Regla de Auditoría de Pesaje por Diferencia:
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11.5px] text-gray-700">
+                    <div className="p-2 bg-indigo-50/50 rounded">
+                      <span className="font-semibold text-indigo-800">1. Neto Flete Corto:</span>
+                      <br />Bruto Corto - Tara Corto
+                    </div>
+                    <div className="p-2 bg-blue-50/50 rounded">
+                      <span className="font-semibold text-blue-800">2. Control en Tránsito:</span>
+                      <br />Entrada Troncal ≈ Bruto Corto
+                    </div>
+                    <div className="p-2 bg-emerald-50/50 rounded">
+                      <span className="font-semibold text-emerald-800">3. Neto Troncal:</span>
+                      <br />Bruto Salida - Entrada Troncal
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {remito.es_flete_corto && remito.parent_remito_id && (
+              <div className="p-3 bg-white rounded-lg border border-blue-200 text-xs text-blue-900 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold flex items-center gap-1.5">
+                    <Truck className="w-4 h-4 text-blue-600" />
+                    Misión de Traslado y Acopio
+                  </span>
+                  <span className="text-[11px] font-semibold text-blue-700">
+                    Destino: {depositos.find(d => d.id === remito.deposito_descarga_id)?.nombre || 'Punto de Carga Troncal'}
+                  </span>
+                </div>
+                <p className="text-gray-600 text-[11.5px]">
+                  Al finalizar la entrega en este destino, el chofer completará este flete corto y el sistema vinculará fluidamente la misión al Remito Troncal principal.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Sección C: Checklist e Instrucciones */}
         <section className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-6">

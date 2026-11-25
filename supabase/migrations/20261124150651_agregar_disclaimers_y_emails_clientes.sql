@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS public.disclaimer_templates (
 
 ALTER TABLE public.disclaimer_templates ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Permitir acceso total a usuarios autenticados" ON public.disclaimer_templates;
+
 CREATE POLICY "Permitir acceso total a usuarios autenticados" 
 ON public.disclaimer_templates 
 FOR ALL 

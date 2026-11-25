@@ -28,7 +28,7 @@ export interface ModalAsignacionRemitoProps {
 interface OpcionCandidata {
   letra: string;
   id: number;
-  tipo: 'PEDIDO' | 'OC';
+  tipo: 'PEDIDO' | 'OC' | 'FLETE_CORTO';
   ref: string;
   saldo: number;
   entidad: string;
@@ -555,9 +555,11 @@ export function ModalAsignacionRemito({
                                   "px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
                                   opt.tipo === 'PEDIDO' 
                                     ? "bg-blue-100 text-blue-800 border border-blue-200" 
+                                    : opt.tipo === 'FLETE_CORTO'
+                                    ? "bg-amber-100 text-amber-800 border border-amber-300"
                                     : "bg-emerald-100 text-emerald-800 border border-emerald-200"
                                 )}>
-                                  {opt.tipo}
+                                  {opt.tipo === 'FLETE_CORTO' ? 'Flete Corto' : opt.tipo}
                                 </span>
                                 {opt.esReembolse && (
                                   <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200 flex items-center gap-1 shadow-2xs">
@@ -569,7 +571,7 @@ export function ModalAsignacionRemito({
                                 </span>
                               </div>
                               <p className="text-xs text-gray-500 mt-0.5 truncate" title={opt.entidad}>
-                                {opt.tipo === 'PEDIDO' ? 'Cliente:' : 'Proveedor:'} <strong className="text-gray-700">{opt.entidad}</strong>
+                                {opt.tipo === 'PEDIDO' ? 'Cliente:' : opt.tipo === 'FLETE_CORTO' ? 'Traslado:' : 'Proveedor:'} <strong className="text-gray-700">{opt.entidad}</strong>
                               </p>
                             </div>
                           </div>
